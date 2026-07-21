@@ -67,16 +67,25 @@ jobs:
               if($LASTEXITCODE -ne 0) {exit $LASTEXITCODE}
           }
 
-          # Work around an upstream bug in the stable-34.0 nextcloud-client
-          # blueprint: createPackage() uses os.path.join without importing os,
-          # which aborts NSIS packaging with "name 'os' is not defined".
+          # The stable-34.0 nextcloud-client blueprint hardcodes the installer
+          # identity (product name, install dir, shortcuts, executable, company)
+          # to Nextcloud, independent of our NEXTCLOUD.cmake source branding.
+          # Rewrite it to Souvera so the installer installs alongside Nextcloud
+          # and is fully branded. Also fixes an upstream bug where createPackage()
+          # uses os.path.join without importing os.
           $bp = "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\etc\blueprints\locations\craft-blueprints-nextcloud\nextcloud-client\nextcloud-client.py"
           if (Test-Path $bp) {
               $c = Get-Content -Raw $bp
-              if ($c -notmatch "(?m)^import os") {
-                  "import os`r`n" + $c | Set-Content -NoNewline $bp
-                  Write-Host "Patched nextcloud-client.py: added 'import os'"
-              }
+              if ($c -notmatch "(?m)^import os") { $c = "import os`r`n" + $c }
+              $c = $c -replace 'self\.description = "Nextcloud Desktop Client"', 'self.description = "Souvera Workspace Desktop Client"'
+              $c = $c -replace 'self\.displayName = "Nextcloud"', 'self.displayName = "Souvera Workspace"'
+              $c = $c -replace 'self\.webpage = "https://nextcloud.com"', 'self.webpage = "https://souvera.work"'
+              $c = $c -replace 'self\.defines\["appname"\] = "nextcloud"', 'self.defines["appname"] = "souvera"' + "`r`n        " + 'self.defines["productname"] = "Souvera Workspace"'
+              $c = $c -replace 'self\.defines\["company"\] = "Nextcloud GmbH"', 'self.defines["company"] = "Host-On Service Provider GmbH"'
+              $c = $c -replace 'self\.applicationExecutable = "nextcloud"', 'self.applicationExecutable = "souvera"'
+              Set-Content -NoNewline $bp $c
+              Write-Host "== Patched blueprint =="
+              Get-Content $bp | Select-String -Pattern 'displayName|appname|productname|company|applicationExecutable|^import os'
           } else {
               Write-Host "WARNING: blueprint not found at $bp"
           }
