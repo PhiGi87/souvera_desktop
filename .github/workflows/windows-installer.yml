@@ -91,7 +91,7 @@ jobs:
               $c = $c -replace 'self\.defines\["appname"\] = "nextcloud"', ('self.defines["appname"] = "souvera"' + "`r`n        " + 'self.defines["productname"] = "Souvera Workspace"')
               $c = $c -replace 'self\.defines\["company"\] = "Nextcloud GmbH"', 'self.defines["company"] = "Host-On Service Provider GmbH"'
               $c = $c -replace 'self\.applicationExecutable = "nextcloud"', 'self.applicationExecutable = "souvera"'
-              Set-Content -NoNewline $bp $c
+              [System.IO.File]::WriteAllText($bp, $c)
               Write-Host "== Patched blueprint =="
               Get-Content $bp | Select-String -Pattern 'displayName|appname|productname|company|applicationExecutable|^import os'
           } else {
