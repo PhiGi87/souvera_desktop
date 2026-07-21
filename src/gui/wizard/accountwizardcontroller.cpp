@@ -668,7 +668,7 @@ QString AccountWizardController::normalizeServerUrlInput(const QString &serverUr
     value = value.left(value.indexOf('/'_L1) == -1 ? value.length() : value.indexOf('/'_L1));
     value = value.left(value.indexOf('?'_L1) == -1 ? value.length() : value.indexOf('?'_L1));
 
-    const auto dotDomain = '.'_L1 + souveraDomain;
+    const QString dotDomain = '.'_L1 + souveraDomain;
     if (value.endsWith(dotDomain)) {
         value.chop(dotDomain.length());
     }
