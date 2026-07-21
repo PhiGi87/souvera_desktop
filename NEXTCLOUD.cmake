@@ -19,7 +19,7 @@ endif()
 set( APPLICATION_CONFIG_NAME "${APPLICATION_EXECUTABLE}" )
 set( APPLICATION_DOMAIN     "souvera.work" )
 set( APPLICATION_VENDOR     "Host-On Service Provider GmbH" )
-set( APPLICATION_UPDATE_URL "" CACHE STRING "URL for updater" )
+set( APPLICATION_UPDATE_URL "https://updates.souvera.work/desktop/" CACHE STRING "URL for updater" )
 
 # Souvera Workspace: accounts are restricted to workspaces reachable at
 # https://<slug>.<APPLICATION_SOUVERA_DOMAIN>. In the setup wizard the user only
