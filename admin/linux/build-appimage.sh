@@ -7,6 +7,8 @@ set -xe
 
 export APPNAME=${APPNAME:-Nextcloud}
 export EXECUTABLE_NAME=${EXECUTABLE_NAME:-nextcloud}
+# Icon base name as installed into hicolor (matches APPLICATION_ICON_NAME).
+export ICON_NAME=${ICON_NAME:-Nextcloud}
 export BUILD_UPDATER=${BUILD_UPDATER:-OFF}
 export BUILDNR=${BUILDNR:-0000}
 export DESKTOP_CLIENT_ROOT=${DESKTOP_CLIENT_ROOT:-/home/user}
@@ -86,7 +88,7 @@ rm ./${APPIMAGE_NAME}
 cp -r ./squashfs-root ./linuxdeploy-squashfs-root
 
 export LD_LIBRARY_PATH=${QT_BASE_DIR}/lib:/app/usr/lib64:/app/usr/lib:/usr/local/lib/x86_64-linux-gnu:/usr/local/lib:/usr/local/lib64
-./linuxdeploy-squashfs-root/AppRun --desktop-file=${DESKTOP_FILE} --icon-file=usr/share/icons/hicolor/512x512/apps/Nextcloud.png --executable=usr/bin/${EXECUTABLE_NAME} --appdir=AppDir
+./linuxdeploy-squashfs-root/AppRun --desktop-file=${DESKTOP_FILE} --icon-file=usr/share/icons/hicolor/512x512/apps/${ICON_NAME}.png --executable=usr/bin/${EXECUTABLE_NAME} --appdir=AppDir
 
 # Use linuxdeploy-plugin-qt to deploy qt dependencies
 export APPIMAGE_NAME=linuxdeploy-plugin-qt-x86_64.AppImage
@@ -105,7 +107,7 @@ export QML_SOURCES_PATHS=${DESKTOP_CLIENT_ROOT}/src/gui
 	--library=/usr/lib64/libOpenGL.so.0 --library=/usr/lib64/libGLX.so.0 --library=/usr/lib64/libEGL.so.1 --library=/usr/lib64/libGLdispatch.so.0 --library=/usr/lib64/libdrm.so.2 --library=/usr/lib64/libgbm.so.1 \
 	--library=/root/linux-gcc-x86_64/lib/libuuid.so.1 --library=/root/linux-gcc-x86_64/lib/libgpg-error.so.0 --library=/root/linux-gcc-x86_64/lib/libz.so.1 --library=/root/linux-gcc-x86_64/lib/libpcre2-8.so.0 --library=/root/linux-gcc-x86_64/lib/libexpat.so.1 \
 	--library=/root/linux-gcc-x86_64/lib/libfreetype.so.6 --library=/root/linux-gcc-x86_64/lib/libglib-2.0.so.0 --library=/root/linux-gcc-x86_64/lib/libsoftokn3.so \
-	--icon-file=usr/share/icons/hicolor/512x512/apps/Nextcloud.png --executable=usr/bin/${EXECUTABLE_NAME} --appdir=AppDir --output appimage
+	--icon-file=usr/share/icons/hicolor/512x512/apps/${ICON_NAME}.png --executable=usr/bin/${EXECUTABLE_NAME} --appdir=AppDir --output appimage
 
 # Workaround issue #103 and #7231
 export APPIMAGETOOL=appimagetool-x86_64.AppImage

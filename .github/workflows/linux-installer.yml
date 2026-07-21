@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 Host-On Service Provider GmbH (Souvera)
+# SPDX-License-Identifier: GPL-2.0-or-later
+name: Linux Installer (Souvera)
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - souvera-branding
+jobs:
+  build:
+    name: Build Linux AppImage
+    runs-on: ubuntu-latest
+    container: ghcr.io/nextcloud/continuous-integration-client-appimage-qt6:client-appimage-el8-6.10.2-4
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 1
+
+      - name: Configure, compile and package AppImage
+        id: build-appimage
+        run: |
+            BUILDNR=${GITHUB_RUN_ID} \
+            VERSION_SUFFIX=${GITHUB_REF_NAME} \
+            BUILD_UPDATER=ON \
+            DESKTOP_CLIENT_ROOT=`pwd` \
+            APPNAME="Souvera Workspace" \
+            EXECUTABLE_NAME=souvera \
+            ICON_NAME=Souvera \
+            QT_BASE_DIR=/root/linux-gcc-x86_64 \
+            /bin/bash -c "./admin/linux/build-appimage.sh"
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Souvera-Workspace-Linux
+          path: ${{ steps.build-appimage.outputs.APPIMAGE_NAME }}
+          compression-level: 0
+          if-no-files-found: warn
+          retention-days: 14

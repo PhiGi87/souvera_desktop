@@ -16,7 +16,7 @@ WizardStyledWindow {
 
     property int userIndex: -1
     property var currentUser: null
-    readonly property string headline: qsTr("Nextcloud Assistant")
+    readonly property string headline: qsTr("Souvera Workspace Assistant")
     readonly property bool hasAssistantConversation: currentUser !== null
         && (currentUser.assistantMessages.length > 0
             || currentUser.assistantResponse.length > 0

@@ -1,0 +1,112 @@
+# SPDX-FileCopyrightText: 2026 Host-On Service Provider GmbH (Souvera)
+# SPDX-License-Identifier: GPL-2.0-or-later
+name: macOS Installer (Souvera)
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - souvera-branding
+jobs:
+  build:
+    name: Build macOS disk image
+    runs-on: macos-15
+    timeout-minutes: 180
+    env:
+      CRAFT_TARGET: macos-clang-arm64
+      CRAFT_MASTER_LOCATION: ${{ github.workspace }}/CraftMaster
+      CRAFT_MASTER_CONFIG: ${{ github.workspace }}/craftmaster.ini
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.12'
+
+      - name: Select Xcode 16.3
+        run: sudo xcode-select -s /Applications/Xcode_16.3.app/Contents/Developer
+
+      - name: Install Homebrew dependencies
+        run: brew install homebrew/cask/inkscape
+
+      - name: Install Craft Master with Nextcloud Client deps
+        run: |
+          git clone -q --depth=1 https://invent.kde.org/packaging/craftmaster.git "$CRAFT_MASTER_LOCATION"
+          craft() { python "$CRAFT_MASTER_LOCATION/CraftMaster.py" --config "$CRAFT_MASTER_CONFIG" --target "$CRAFT_TARGET" -c "$@"; }
+          craft --add-blueprint-repository "https://github.com/nextcloud/craft-blueprints-kde.git|stable-34.0|"
+          craft --add-blueprint-repository "https://github.com/nextcloud/craft-blueprints-nextcloud.git|stable-34.0|"
+          craft craft
+          craft --install-deps nextcloud-client
+
+      - name: Compile
+        run: |
+          craft() { python "$CRAFT_MASTER_LOCATION/CraftMaster.py" --config "$CRAFT_MASTER_CONFIG" --target "$CRAFT_TARGET" -c "$@"; }
+          craft --src-dir "${{ github.workspace }}" nextcloud-client
+
+      - name: Package disk image (DMG)
+        id: package
+        continue-on-error: true
+        run: |
+          craft() { python "$CRAFT_MASTER_LOCATION/CraftMaster.py" --config "$CRAFT_MASTER_CONFIG" --target "$CRAFT_TARGET" -c "$@"; }
+
+          # Rebrand the upstream nextcloud-client blueprint's packaged identity to
+          # Souvera (product name, app name, company, executable) and fix the
+          # missing `import os` in createPackage(). Independent of NEXTCLOUD.cmake.
+          BP="${{ github.workspace }}/$CRAFT_TARGET/etc/blueprints/locations/craft-blueprints-nextcloud/nextcloud-client/nextcloud-client.py"
+          if [ -f "$BP" ]; then
+            python3 - "$BP" <<'PY'
+import sys, re
+p = sys.argv[1]
+c = open(p, encoding="utf-8").read()
+if not re.search(r"(?m)^import os", c):
+    c = "import os\n" + c
+c = c.replace('self.description = "Nextcloud Desktop Client"', 'self.description = "Souvera Workspace Desktop Client"')
+c = c.replace('self.displayName = "Nextcloud"', 'self.displayName = "Souvera Workspace"')
+c = c.replace('self.webpage = "https://nextcloud.com"', 'self.webpage = "https://souvera.work"')
+c = c.replace('self.defines["appname"] = "nextcloud"', 'self.defines["appname"] = "souvera"\n        self.defines["productname"] = "Souvera Workspace"')
+c = c.replace('self.defines["company"] = "Nextcloud GmbH"', 'self.defines["company"] = "Host-On Service Provider GmbH"')
+c = c.replace('self.applicationExecutable = "nextcloud"', 'self.applicationExecutable = "souvera"')
+open(p, "w", encoding="utf-8").write(c)
+print("== Patched blueprint ==")
+for line in c.splitlines():
+    if any(k in line for k in ("displayName", "appname", "productname", '["company"]', "applicationExecutable", "import os")):
+        print(line.strip())
+PY
+          else
+            echo "WARNING: blueprint not found at $BP"
+          fi
+
+          craft --package nextcloud-client
+
+      - name: Collect installer artifacts
+        run: |
+          OUT="${{ github.workspace }}/souvera-artifacts"
+          mkdir -p "$OUT"
+          # Prefer the DMG/PKG produced by craft --package; exclude craft caches.
+          found=0
+          while IFS= read -r f; do
+            case "$f" in
+              *"/download/"*|*"/build/"*|*"/cache/"*) continue;;
+            esac
+            cp "$f" "$OUT"/ && found=1
+          done < <(find "${{ github.workspace }}" \( -name '*.dmg' -o -name '*.pkg' \) -size +1M 2>/dev/null)
+
+          if [ "$found" -eq 0 ]; then
+            echo "No DMG/PKG produced; packaging app bundle as fallback."
+            APP=$(find "${{ github.workspace }}/$CRAFT_TARGET" -maxdepth 3 -name 'Souvera*.app' -o -name 'nextcloud*.app' 2>/dev/null | head -1)
+            if [ -n "$APP" ]; then
+              ( cd "$(dirname "$APP")" && zip -qry "$OUT/Souvera-Workspace-macOS-app.zip" "$(basename "$APP")" )
+            fi
+          fi
+
+          echo "== Collected artifacts =="
+          ls -lh "$OUT"
+
+      - name: Upload disk image
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Souvera-Workspace-macOS
+          path: souvera-artifacts/**
+          if-no-files-found: warn
+          retention-days: 14

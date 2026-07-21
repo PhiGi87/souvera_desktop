@@ -44,8 +44,14 @@ void LegalNotice::changeEvent(QEvent *e)
 
 void LegalNotice::customizeStyle()
 {
-    QString notice = tr("<p>Copyright 2017-2026 Nextcloud GmbH<br />"
-                        "Copyright 2012-2023 ownCloud GmbH</p>");
+    QString notice = tr("<p>Copyright 2026 Host-On Service Provider GmbH (Souvera)</p>");
+
+    // The Souvera Workspace client is based on the Nextcloud desktop client,
+    // which is licensed under the GPL. The upstream copyright notices below must
+    // be retained for license compliance.
+    notice += tr("<p>Based on the Nextcloud Desktop Client<br />"
+                 "Copyright 2017-2026 Nextcloud GmbH<br />"
+                 "Copyright 2012-2023 ownCloud GmbH</p>");
 
     notice += tr("<p>Licensed under the GNU General Public License (GPL) Version 2.0 or any later version.</p>");
 
