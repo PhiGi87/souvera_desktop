@@ -6,6 +6,15 @@ on:
   push:
     branches:
       - souvera-branding
+    paths:
+      - 'src/**'
+      - 'theme/**'
+      - 'admin/**'
+      - 'CMakeLists.txt'
+      - 'NEXTCLOUD.cmake'
+      - 'config.h.in'
+      - 'craftmaster.ini'
+      - '.github/workflows/linux-installer.yml'
 jobs:
   build:
     name: Build Linux AppImage

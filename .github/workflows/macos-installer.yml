@@ -6,6 +6,15 @@ on:
   push:
     branches:
       - souvera-branding
+    paths:
+      - 'src/**'
+      - 'theme/**'
+      - 'admin/**'
+      - 'CMakeLists.txt'
+      - 'NEXTCLOUD.cmake'
+      - 'config.h.in'
+      - 'craftmaster.ini'
+      - '.github/workflows/macos-installer.yml'
 jobs:
   build:
     name: Build macOS disk image
@@ -55,24 +64,15 @@ jobs:
           # missing `import os` in createPackage(). Independent of NEXTCLOUD.cmake.
           BP="${{ github.workspace }}/$CRAFT_TARGET/etc/blueprints/locations/craft-blueprints-nextcloud/nextcloud-client/nextcloud-client.py"
           if [ -f "$BP" ]; then
-            python3 - "$BP" <<'PY'
-import sys, re
-p = sys.argv[1]
-c = open(p, encoding="utf-8").read()
-if not re.search(r"(?m)^import os", c):
-    c = "import os\n" + c
-c = c.replace('self.description = "Nextcloud Desktop Client"', 'self.description = "Souvera Workspace Desktop Client"')
-c = c.replace('self.displayName = "Nextcloud"', 'self.displayName = "Souvera Workspace"')
-c = c.replace('self.webpage = "https://nextcloud.com"', 'self.webpage = "https://souvera.work"')
-c = c.replace('self.defines["appname"] = "nextcloud"', 'self.defines["appname"] = "souvera"\n        self.defines["productname"] = "Souvera Workspace"')
-c = c.replace('self.defines["company"] = "Nextcloud GmbH"', 'self.defines["company"] = "Host-On Service Provider GmbH"')
-c = c.replace('self.applicationExecutable = "nextcloud"', 'self.applicationExecutable = "souvera"')
-open(p, "w", encoding="utf-8").write(c)
-print("== Patched blueprint ==")
-for line in c.splitlines():
-    if any(k in line for k in ("displayName", "appname", "productname", '["company"]', "applicationExecutable", "import os")):
-        print(line.strip())
-PY
+            grep -q '^import os' "$BP" || perl -0pi -e 's/\A/import os\n/' "$BP"
+            perl -0pi -e 's/self\.description = "Nextcloud Desktop Client"/self.description = "Souvera Workspace Desktop Client"/' "$BP"
+            perl -0pi -e 's/self\.displayName = "Nextcloud"/self.displayName = "Souvera Workspace"/' "$BP"
+            perl -0pi -e 's{self\.webpage = "https://nextcloud\.com"}{self.webpage = "https://souvera.work"}' "$BP"
+            perl -0pi -e 's/self\.defines\["appname"\] = "nextcloud"/self.defines["appname"] = "souvera"\n        self.defines["productname"] = "Souvera Workspace"/' "$BP"
+            perl -0pi -e 's/self\.defines\["company"\] = "Nextcloud GmbH"/self.defines["company"] = "Host-On Service Provider GmbH"/' "$BP"
+            perl -0pi -e 's/self\.applicationExecutable = "nextcloud"/self.applicationExecutable = "souvera"/' "$BP"
+            echo "== Patched blueprint =="
+            grep -nE 'displayName|appname|productname|"company"|applicationExecutable|^import os' "$BP"
           else
             echo "WARNING: blueprint not found at $BP"
           fi
