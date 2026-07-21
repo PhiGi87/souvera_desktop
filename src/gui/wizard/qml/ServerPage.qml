@@ -35,7 +35,7 @@ Item {
         }
 
         EnforcedPlainTextLabel {
-            text: qsTr("Enter the link to your %1 web interface from the browser or the link to a folder shared with you.").arg(root.controller.appName)
+            text: qsTr("Enter only your workspace slug — the part before .souvera.work in your %1 address.").arg(root.controller.appName)
             color: root.hintTextColor
             font.pixelSize: Style.pixelSize + 2
             Layout.fillWidth: true
@@ -64,6 +64,14 @@ Item {
                     selectByMouse: true
                     onTextEdited: root.controller.serverUrl = text
                     onAccepted: root.controller.submitServerUrl()
+                }
+
+                EnforcedPlainTextLabel {
+                    visible: !root.controller.overrideServerSelectionRequired
+                    text: ".souvera.work"
+                    color: root.hintTextColor
+                    font.pixelSize: Style.pixelSize + 3
+                    Layout.alignment: Qt.AlignVCenter
                 }
 
                 BasicControls.ComboBox {
@@ -193,7 +201,7 @@ Item {
                 EnforcedPlainTextLabel {
                     id: serverAddressLabel
                     anchors.centerIn: parent
-                    text: qsTr("Server address")
+                    text: qsTr("Workspace slug")
                     color: root.hintTextColor
                     font.pixelSize: Style.pixelSize
                 }

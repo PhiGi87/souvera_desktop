@@ -889,7 +889,8 @@ QString Theme::userIDHint() const
 
 QString Theme::wizardUrlHint() const
 {
-    return QString();
+    // Souvera Workspace: the setup wizard only asks for the workspace slug.
+    return QStringLiteral("your-workspace");
 }
 
 QString Theme::quotaBaseFolder() const

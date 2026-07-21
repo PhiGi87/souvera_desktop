@@ -5,6 +5,7 @@
 
 #include "wizard/accountwizardcontroller.h"
 
+#include "config.h"
 #include "account.h"
 #include "accountmanager.h"
 #include "clientproxy.h"
@@ -46,6 +47,7 @@
 #include <QNetworkReply>
 #include <QNetworkProxy>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QSslConfiguration>
 #include <QSslCertificate>
 #include <QStorageInfo>
@@ -640,26 +642,42 @@ bool AccountWizardController::clientCertificateValid() const
 
 QString AccountWizardController::normalizeServerUrlInput(const QString &serverUrl, const QString &davPath)
 {
-    auto result = serverUrl.simplified();
-    if (!result.isEmpty() && !result.contains("://"_L1)) {
-        result.prepend("https://"_L1);
-    }
-    if (result.endsWith("index.php"_L1)) {
-        result.chop(9);
+    Q_UNUSED(davPath)
+
+    // Souvera Workspace: users enter only a workspace slug. Any input (bare slug,
+    // host or full URL) is reduced to a validated slug and the full server URL is
+    // derived as https://<slug>.<APPLICATION_SOUVERA_DOMAIN>. An empty string is
+    // returned when the input is not a valid Souvera Workspace slug, which lets the
+    // caller reject the URL with a helpful error message.
+#ifndef APPLICATION_SOUVERA_DOMAIN
+#define APPLICATION_SOUVERA_DOMAIN "souvera.work"
+#endif
+    static const QString souveraDomain = QStringLiteral(APPLICATION_SOUVERA_DOMAIN).trimmed().toLower();
+    static const QRegularExpression slugRegex(QStringLiteral("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"));
+
+    auto value = serverUrl.simplified().toLower();
+    if (value.isEmpty()) {
+        return {};
     }
 
-    auto cleanedDavPath = davPath;
-    if (!cleanedDavPath.isEmpty() && result.endsWith(cleanedDavPath)) {
-        result.chop(cleanedDavPath.length());
+    if (value.startsWith("https://"_L1)) {
+        value = value.mid(8);
+    } else if (value.startsWith("http://"_L1)) {
+        value = value.mid(7);
     }
-    if (cleanedDavPath.endsWith('/'_L1)) {
-        cleanedDavPath.chop(1);
-        if (!cleanedDavPath.isEmpty() && result.endsWith(cleanedDavPath)) {
-            result.chop(cleanedDavPath.length());
-        }
+    value = value.left(value.indexOf('/'_L1) == -1 ? value.length() : value.indexOf('/'_L1));
+    value = value.left(value.indexOf('?'_L1) == -1 ? value.length() : value.indexOf('?'_L1));
+
+    const auto dotDomain = '.'_L1 + souveraDomain;
+    if (value.endsWith(dotDomain)) {
+        value.chop(dotDomain.length());
     }
 
-    return result;
+    if (!slugRegex.match(value).hasMatch()) {
+        return {};
+    }
+
+    return "https://"_L1 + value + '.'_L1 + souveraDomain;
 }
 
 void AccountWizardController::submitServerUrl()
@@ -676,7 +694,7 @@ void AccountWizardController::submitServerUrl()
     auto normalizedServerUrl = normalizeServerUrlInput(_serverUrl);
     const auto url = QUrl(normalizedServerUrl, QUrl::StrictMode);
     if (!url.isValid() || url.host().isEmpty()) {
-        setErrorText(tr("Server address does not seem to be valid"));
+        setErrorText(tr("Please enter a valid workspace slug"));
         return;
     }
 

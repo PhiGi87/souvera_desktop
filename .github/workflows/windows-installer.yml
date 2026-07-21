@@ -1,0 +1,98 @@
+# SPDX-FileCopyrightText: 2026 Host-On Service Provider GmbH (Souvera)
+# SPDX-License-Identifier: GPL-2.0-or-later
+name: Windows Installer (Souvera)
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - souvera-branding
+jobs:
+  build:
+    name: Build Windows installer
+    runs-on: windows-2022
+    env:
+      CRAFT_TARGET: windows-msvc2022_64-cl
+      CRAFT_MASTER_LOCATION: ${{ github.workspace }}\CraftMaster
+      CRAFT_MASTER_CONFIG: ${{ github.workspace }}\craftmaster.ini
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Craft Master with Nextcloud Client deps
+        shell: pwsh
+        run: |
+          & cmd /C "git clone -q --depth=1 https://invent.kde.org/packaging/craftmaster.git ${{ env.CRAFT_MASTER_LOCATION }} 2>&1"
+
+          function craft() {
+              python "${{ env.CRAFT_MASTER_LOCATION }}\CraftMaster.py" --config "${{ env.CRAFT_MASTER_CONFIG }}" --target ${{ env.CRAFT_TARGET }} -c $args
+              if($LASTEXITCODE -ne 0) {exit $LASTEXITCODE}
+          }
+
+          craft --add-blueprint-repository "https://github.com/nextcloud/craft-blueprints-kde.git|stable-34.0|"
+          craft --add-blueprint-repository "https://github.com/nextcloud/craft-blueprints-nextcloud.git|stable-34.0|"
+          craft craft
+          craft --install-deps nextcloud-client
+
+      - name: Install Inkscape (for icon rendering)
+        shell: pwsh
+        run: choco install inkscape -y
+
+      - name: Setup PATH
+        shell: pwsh
+        run: |
+          echo "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Compile
+        shell: pwsh
+        run: |
+          function craft() {
+              python "${{ env.CRAFT_MASTER_LOCATION }}\CraftMaster.py" --config "${{ env.CRAFT_MASTER_CONFIG }}" --target ${{ env.CRAFT_TARGET }} -c $args
+              if($LASTEXITCODE -ne 0) {exit $LASTEXITCODE}
+          }
+
+          craft --src-dir ${{ github.workspace }} nextcloud-client
+
+      - name: Package installer (NSIS)
+        id: package
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          function craft() {
+              python "${{ env.CRAFT_MASTER_LOCATION }}\CraftMaster.py" --config "${{ env.CRAFT_MASTER_CONFIG }}" --target ${{ env.CRAFT_TARGET }} -c $args
+              if($LASTEXITCODE -ne 0) {exit $LASTEXITCODE}
+          }
+
+          craft --package nextcloud-client
+
+      - name: Collect installer artifacts
+        shell: pwsh
+        run: |
+          $out = "${{ github.workspace }}\souvera-artifacts"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+          # 1) Any NSIS / 7z package produced by `craft --package`
+          $pkgs = Get-ChildItem -Path "${{ github.workspace }}" -Recurse -Include *setup*.exe,*Setup*.exe,nextcloud-*.exe,souvera-*.exe,*.7z -ErrorAction SilentlyContinue |
+                  Where-Object { $_.FullName -notmatch "\\build\\" -and $_.Length -gt 1MB }
+          foreach ($p in $pkgs) { Copy-Item $p.FullName -Destination $out -Force }
+
+          # 2) Reliable fallback: portable build of the deployed app (souvera.exe + Qt + dep DLLs)
+          $bin = "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\bin"
+          if (Test-Path "$bin\souvera.exe") {
+              Compress-Archive -Path "$bin\*" -DestinationPath "$out\Souvera-Workspace-portable.zip" -Force
+          }
+
+          Write-Host "== Collected artifacts =="
+          Get-ChildItem $out | Format-Table Name,Length
+
+      - name: Upload installer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Souvera-Workspace-Windows
+          path: souvera-artifacts/**
+          if-no-files-found: warn
+          retention-days: 14
