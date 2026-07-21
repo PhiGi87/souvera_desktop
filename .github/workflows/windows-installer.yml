@@ -68,7 +68,6 @@ jobs:
 
       - name: Package installer (NSIS)
         id: package
-        continue-on-error: true
         shell: pwsh
         run: |
           function craft() {
@@ -89,7 +88,7 @@ jobs:
               $c = $c -replace 'self\.description = "Nextcloud Desktop Client"', 'self.description = "Souvera Workspace Desktop Client"'
               $c = $c -replace 'self\.displayName = "Nextcloud"', 'self.displayName = "Souvera Workspace"'
               $c = $c -replace 'self\.webpage = "https://nextcloud.com"', 'self.webpage = "https://souvera.work"'
-              $c = $c -replace 'self\.defines\["appname"\] = "nextcloud"', 'self.defines["appname"] = "souvera"' + "`r`n        " + 'self.defines["productname"] = "Souvera Workspace"'
+              $c = $c -replace 'self\.defines\["appname"\] = "nextcloud"', ('self.defines["appname"] = "souvera"' + "`r`n        " + 'self.defines["productname"] = "Souvera Workspace"')
               $c = $c -replace 'self\.defines\["company"\] = "Nextcloud GmbH"', 'self.defines["company"] = "Host-On Service Provider GmbH"'
               $c = $c -replace 'self\.applicationExecutable = "nextcloud"', 'self.applicationExecutable = "souvera"'
               Set-Content -NoNewline $bp $c
@@ -114,14 +113,8 @@ jobs:
                   Where-Object { $_.FullName -notmatch "\\(build|download|cache|dev-utils|msys)\\" -and $_.Length -gt 1MB }
           foreach ($p in $pkgs) { Copy-Item $p.FullName -Destination $out -Force }
 
-          # 2) Fallback only if no installer was produced: portable build of the
-          #    deployed app (souvera.exe + Qt + dependency DLLs).
           if (-not (Get-ChildItem $out -Filter *.exe -ErrorAction SilentlyContinue)) {
-              Write-Host "No installer found - packaging portable build as fallback."
-              $bin = "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\bin"
-              if (Test-Path "$bin\souvera.exe") {
-                  Compress-Archive -Path "$bin\*" -DestinationPath "$out\Souvera-Workspace-portable.zip" -Force
-              }
+              throw "No NSIS installer was produced by craft --package."
           }
 
           Write-Host "== Collected artifacts =="
