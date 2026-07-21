@@ -67,6 +67,20 @@ jobs:
               if($LASTEXITCODE -ne 0) {exit $LASTEXITCODE}
           }
 
+          # Work around an upstream bug in the stable-34.0 nextcloud-client
+          # blueprint: createPackage() uses os.path.join without importing os,
+          # which aborts NSIS packaging with "name 'os' is not defined".
+          $bp = "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\etc\blueprints\locations\craft-blueprints-nextcloud\nextcloud-client\nextcloud-client.py"
+          if (Test-Path $bp) {
+              $c = Get-Content -Raw $bp
+              if ($c -notmatch "(?m)^import os") {
+                  "import os`r`n" + $c | Set-Content -NoNewline $bp
+                  Write-Host "Patched nextcloud-client.py: added 'import os'"
+              }
+          } else {
+              Write-Host "WARNING: blueprint not found at $bp"
+          }
+
           craft --package nextcloud-client
 
       - name: Collect installer artifacts
@@ -75,15 +89,21 @@ jobs:
           $out = "${{ github.workspace }}\souvera-artifacts"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-          # 1) Any NSIS / 7z package produced by `craft --package`
-          $pkgs = Get-ChildItem -Path "${{ github.workspace }}" -Recurse -Include *setup*.exe,*Setup*.exe,nextcloud-*.exe,souvera-*.exe,*.7z -ErrorAction SilentlyContinue |
-                  Where-Object { $_.FullName -notmatch "\\build\\" -and $_.Length -gt 1MB }
+          # 1) NSIS installer produced by `craft --package`. Match setup executables
+          #    only, and exclude Craft's download/cache/build trees so we don't drag
+          #    in dependency .7z archives.
+          $pkgs = Get-ChildItem -Path "${{ github.workspace }}" -Recurse -Include *setup*.exe,*Setup*.exe,nextcloud-*.exe,souvera-*.exe -ErrorAction SilentlyContinue |
+                  Where-Object { $_.FullName -notmatch "\\(build|download|cache|dev-utils|msys)\\" -and $_.Length -gt 1MB }
           foreach ($p in $pkgs) { Copy-Item $p.FullName -Destination $out -Force }
 
-          # 2) Reliable fallback: portable build of the deployed app (souvera.exe + Qt + dep DLLs)
-          $bin = "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\bin"
-          if (Test-Path "$bin\souvera.exe") {
-              Compress-Archive -Path "$bin\*" -DestinationPath "$out\Souvera-Workspace-portable.zip" -Force
+          # 2) Fallback only if no installer was produced: portable build of the
+          #    deployed app (souvera.exe + Qt + dependency DLLs).
+          if (-not (Get-ChildItem $out -Filter *.exe -ErrorAction SilentlyContinue)) {
+              Write-Host "No installer found - packaging portable build as fallback."
+              $bin = "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\bin"
+              if (Test-Path "$bin\souvera.exe") {
+                  Compress-Archive -Path "$bin\*" -DestinationPath "$out\Souvera-Workspace-portable.zip" -Force
+              }
           }
 
           Write-Host "== Collected artifacts =="
