@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2023 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-FileCopyrightText: 2023 Souvera (Host-On Service Provider GmbH)
  * SPDX-FileCopyrightText: 2017 The Qt Company Ltd.
  * SPDX-License-Identifier: LicenseRef-TheQtCompanyCommercialUsage OR LGPL-3.0-or-later OR GPL-2.0-or-later OR GPL-3.0-or-later
  */

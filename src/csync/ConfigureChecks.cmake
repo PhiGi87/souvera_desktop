@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2024 Nextcloud GmbH and Nextcloud contributors
+# SPDX-FileCopyrightText: 2024 Souvera (Host-On Service Provider GmbH)
 # SPDX-FileCopyrightText: 2017 ownCloud GmbH
 # SPDX-License-Identifier: LGPL-2.1-or-later
 include(CheckIncludeFile)

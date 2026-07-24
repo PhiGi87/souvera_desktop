@@ -1,5 +1,5 @@
 # Find WiX Toolset
-# SPDX-FileCopyrightText: 2020 Nextcloud GmbH and Nextcloud contributors
+# SPDX-FileCopyrightText: 2020 Souvera (Host-On Service Provider GmbH)
 # SPDX-License-Identifier: GPL-2.0-or-later
 if(NOT DEFINED ENV{WIX})
     # Example: WIX=C:\Program Files (x86)\WiX Toolset v3.11\

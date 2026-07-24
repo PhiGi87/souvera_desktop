@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 Nextcloud GmbH and Nextcloud contributors
+# SPDX-FileCopyrightText: 2021 Souvera (Host-On Service Provider GmbH)
 # SPDX-License-Identifier: GPL-2.0-or-later
 if (WIN32)
     add_definitions(-D_WIN32_WINNT=_WIN32_WINNT_WIN10)

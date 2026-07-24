@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Nextcloud GmbH and Nextcloud contributors
+# SPDX-FileCopyrightText: 2022 Souvera (Host-On Service Provider GmbH)
 # SPDX-License-Identifier: GPL-2.0-or-later
 include(GenerateIconsUtils)
 

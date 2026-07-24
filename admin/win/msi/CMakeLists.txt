@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2020 Nextcloud GmbH and Nextcloud contributors
+# SPDX-FileCopyrightText: 2020 Souvera (Host-On Service Provider GmbH)
 # SPDX-License-Identifier: GPL-2.0-or-later
 if(CMAKE_SIZEOF_VOID_P MATCHES 4)
     set(MSI_BUILD_ARCH x86)

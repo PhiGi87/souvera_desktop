@@ -1,5 +1,5 @@
 # MSI package scripts, helper DLL and migration tools
-# SPDX-FileCopyrightText: 2020 Nextcloud GmbH and Nextcloud contributors
+# SPDX-FileCopyrightText: 2020 Souvera (Host-On Service Provider GmbH)
 # SPDX-License-Identifier: GPL-2.0-or-later
 if(BUILD_WIN_MSI)
     add_subdirectory(msi)

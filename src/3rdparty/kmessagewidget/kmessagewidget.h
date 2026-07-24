@@ -1,6 +1,6 @@
 /* This file is part of the KDE libraries
  *
- * SPDX-FileCopyrightText: 2019 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-FileCopyrightText: 2019 Souvera (Host-On Service Provider GmbH)
  * SPDX-FileCopyrightText: 2011 Aurélien Gâteau <agateau@kde.org>
  * SPDX-FileCopyrightText: 2014 Dominik Haumann <dhaumann@kde.org>
  * SPDX-License-Identifier: LGPL-2.0-or-later

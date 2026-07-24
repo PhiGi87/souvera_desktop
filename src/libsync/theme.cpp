@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2016 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-FileCopyrightText: 2016 Souvera (Host-On Service Provider GmbH)
  * SPDX-FileCopyrightText: 2012 ownCloud GmbH
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -137,7 +137,7 @@ QString Theme::statusHeaderText(SyncResult::Status status) const
 
 bool Theme::isBranded() const
 {
-    return (appNameGUI() != QStringLiteral("Nextcloud") && NEXTCLOUD_DEV == 0);
+    return (appNameGUI() != QStringLiteral("Souvera Workspace") && NEXTCLOUD_DEV == 0);
 }
 
 QString Theme::appNameGUI() const

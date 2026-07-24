@@ -1,7 +1,7 @@
 /*
  * cynapses libc functions
  *
- * SPDX-FileCopyrightText: 2020 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-FileCopyrightText: 2020 Souvera (Host-On Service Provider GmbH)
  * SPDX-FileCopyrightText: 2012 ownCloud GmbH
  * SPDX-FileCopyrightText: 2012-2013 by Dominik Schmidt <dev@dominik-schmidt.de>
  * SPDX-FileCopyrightText: 2008-2013 by Andreas Schneider <asn@cryptomilk.org>

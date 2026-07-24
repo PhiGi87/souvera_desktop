@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2017 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-FileCopyrightText: 2017 Souvera (Host-On Service Provider GmbH)
  * SPDX-FileCopyrightText: 2016 ownCloud GmbH
  * SPDX-License-Identifier: GPL-2.0-or-later
  */

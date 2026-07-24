@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  - SPDX-FileCopyrightText: 2020 Nextcloud GmbH and Nextcloud contributors
+  - SPDX-FileCopyrightText: 2020 Souvera (Host-On Service Provider GmbH)
   - SPDX-License-Identifier: GPL-2.0-or-later
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
