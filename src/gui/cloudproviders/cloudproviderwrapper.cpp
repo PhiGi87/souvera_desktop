@@ -233,7 +233,7 @@ GMenuModel* CloudProviderWrapper::getMenuModel() {
     g_object_weak_ref(reinterpret_cast<GObject*>(_mainMenu), mainMenuWasDeleted, this);
 
     section = g_menu_new();
-    item = addMenuItem(tr("Open %1 Desktop", "Open Nextcloud main window. Placeholer will be the application name. Please keep it.").arg(APPLICATION_NAME), "cloudprovider.openmaindialog");
+    item = addMenuItem(tr("Open %1 Desktop", "Open Souvera Workspace main window. Placeholder will be the application name. Please keep it.").arg(APPLICATION_NAME), "cloudprovider.openmaindialog");
     g_menu_append_item(section, item);
     g_clear_object (&item);
     g_menu_append_section(_mainMenu, nullptr, G_MENU_MODEL(section));

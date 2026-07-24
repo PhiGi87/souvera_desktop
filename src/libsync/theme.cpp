@@ -80,7 +80,7 @@ bool isWindows11OrGreater() {
 
 namespace OCC {
 
-Q_LOGGING_CATEGORY(lcTheme, "nextcloud.gui.theme", QtInfoMsg)
+Q_LOGGING_CATEGORY(lcTheme, "souvera.gui.theme", QtInfoMsg)
 
 Theme *Theme::_instance = nullptr;
 
@@ -486,7 +486,7 @@ QString Theme::helpUrl() const
 #ifdef APPLICATION_HELP_URL
     return QString::fromLatin1(APPLICATION_HELP_URL);
 #else
-    return QString::fromLatin1("https://docs.nextcloud.com/server/latest/user_manual/en/desktop/index.html");
+    return QString::fromLatin1("https://docs.souvera.work/desktop/");
 #endif
 }
 
@@ -624,7 +624,7 @@ QString Theme::gitSHA1() const
     const QString githubPrefix(QLatin1String(
         "https://github.com/nextcloud/desktop/commit/"));
     const QString gitSha1(QLatin1String(GIT_SHA1));
-    devString = QCoreApplication::translate("nextcloudTheme::aboutInfo()",
+    devString = QCoreApplication::translate("souveraTheme::aboutInfo()",
         "<p><small>Built from Git revision <a href=\"%1\">%2</a>"
         " on %3, %4 using Qt %5, %6</small></p>")
                     .arg(githubPrefix + gitSha1)
@@ -639,7 +639,6 @@ QString Theme::gitSHA1() const
 
 QString Theme::aboutInfo() const
 {
-    //: Example text: "<p>Nextcloud Desktop Client</p>"   (%1 is the application name)
     auto devString = developerStringInfo();
                       
 

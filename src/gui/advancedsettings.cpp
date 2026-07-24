@@ -127,7 +127,7 @@ bool createDebugArchive(const QString &filename)
     const auto entries = createDebugArchiveFileList();
 
     const auto tempDir = QDir::temp();
-    const auto tempFilePath = tempDir.filePath(QStringLiteral("nextcloud-debug-archive-temp.zip"));
+    const auto tempFilePath = tempDir.filePath(QStringLiteral("souvera-debug-archive-temp.zip"));
 
     KZip zip(tempFilePath);
 

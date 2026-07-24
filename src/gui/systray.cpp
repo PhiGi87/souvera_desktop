@@ -587,7 +587,7 @@ void Systray::setupContextMenu()
     if (AccountManager::instance()->accounts().isEmpty()) {
         _contextMenu->addAction(tr("Add account"), this, &Systray::openAccountWizard);
     } else {
-        _contextMenu->addAction(tr("Open %1 Desktop", "Open Nextcloud main window. Placeholer will be the application name. Please keep it.").arg(APPLICATION_NAME), this, [this]{ showActivitiesWindow(); });
+        _contextMenu->addAction(tr("Open %1 Desktop", "Open Souvera Workspace main window. Placeholder will be the application name. Please keep it.").arg(APPLICATION_NAME), this, [this]{ showActivitiesWindow(); });
     }
 
     auto pauseAction = _contextMenu->addAction(tr("Pause sync"), this, &Systray::slotPauseAllFolders);

@@ -94,7 +94,7 @@ void Flow2AuthWidget::startProviderSignup(const QUrl &signupUrl)
     _ui.errorLabel->clear();
     _ui.label->setText(tr("Complete your provider signup in your browser"));
     _ui.statusLabel->setText(tr("Please complete the provider signup in your browser. "
-                                "After the completion, confirm to open the Nextcloud application popup in your browser."));
+                                 "After the completion, confirm to open the Souvera Workspace application popup in your browser."));
     stopSpinner(true);
 
     if (!Utility::openBrowser(_externalUrl)) {

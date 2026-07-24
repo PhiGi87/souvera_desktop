@@ -22,7 +22,7 @@ ProviderSignupPage::ProviderSignupPage(QWidget *parent)
 
 void ProviderSignupPage::initializePage()
 {
-    _flow2AuthWidget->startProviderSignup(QUrl(QStringLiteral("https://nextcloud.com/sign-up/?flow=V3")));
+    _flow2AuthWidget->startProviderSignup(QUrl(QStringLiteral("https://souvera.work/sign-up/")));
     _flow2AuthWidget->slotStyleChanged();
 }
 

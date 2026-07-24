@@ -81,7 +81,7 @@ public:
      * @brief isBranded indicates if the current application is branded
      *
      * By default, it is considered branded if the APPLICATION_NAME is
-     * different from "Nextcloud".
+     * different from "Nextcloud" or a dev build.
      *
      * @return true if branded, false otherwise
      */
@@ -232,7 +232,7 @@ public:
     * If the function is overridden to return an empty string the action is removed from
     * the menu.
     *
-    * Defaults to Nextclouds client documentation website.
+    * Defaults to the Souvera Workspace documentation website.
     */
     [[nodiscard]] QString helpUrl() const;
 

@@ -894,7 +894,7 @@ void Application::setupLogging()
     logger->setLogDebug(true);
 #endif
 
-    logger->enterNextLogFile(QStringLiteral("nextcloud.log"), OCC::Logger::LogType::Log);
+    logger->enterNextLogFile(QStringLiteral("souvera.log"), OCC::Logger::LogType::Log);
     logger->enterNextLogFile(QStringLiteral("permanent_delete.log"), OCC::Logger::LogType::DeleteLog);
 
     qCInfo(lcApplication) << "##################" << _theme->appName()

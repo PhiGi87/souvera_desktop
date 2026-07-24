@@ -25,7 +25,7 @@ set( APPLICATION_UPDATE_URL "https://updates.souvera.work/desktop/" CACHE STRING
 # https://<slug>.<APPLICATION_SOUVERA_DOMAIN>. In the setup wizard the user only
 # enters the workspace slug and the full server URL is derived from it.
 set( APPLICATION_SOUVERA_DOMAIN "souvera.work" CACHE STRING "Souvera Workspace base domain used to build https://<slug>.<domain>" )
-set( APPLICATION_HELP_URL   "" CACHE STRING "URL for the help menu" )
+set( APPLICATION_HELP_URL   "https://docs.souvera.work/desktop/" CACHE STRING "URL for the help menu" )
 
 # Default macOS builds (Nextcloud + NextcloudDev) use the Icon Composer (.icon)
 # format for the app icon. That format can only be compiled by a recent enough

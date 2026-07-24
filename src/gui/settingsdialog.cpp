@@ -156,7 +156,7 @@ SettingsDialog::SettingsDialog(ownCloudGui *gui, QWidget *parent)
 
     setObjectName("Settings"); // required as group for saveGeometry call
 
-    //: This name refers to the application name e.g Nextcloud
+    //: This name refers to the application name e.g. Souvera Workspace
     setWindowTitle(tr("%1 Settings").arg(Theme::instance()->appNameGUI()));
 
     connect(AccountManager::instance(), &AccountManager::accountAdded,

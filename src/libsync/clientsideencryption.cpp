@@ -1991,7 +1991,7 @@ std::pair<QByteArray, PKey> ClientSideEncryption::generateCSR(PKey keyPair,
         {"C", "DE"},
         {"ST", "Baden-Wuerttemberg"},
         {"L", "Stuttgart"},
-        {"O","Nextcloud"},
+        {"O","Souvera"},
         {"CN", cnArray.constData()}
     };
 

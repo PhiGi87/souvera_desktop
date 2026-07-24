@@ -1757,8 +1757,8 @@ void Folder::registerFolderWatcher()
     }
     connect(_folderWatcher.data(), &FolderWatcher::filesLockImposed, this, &Folder::slotFilesLockImposed, Qt::UniqueConnection);
     _folderWatcher->init(path());
-    _folderWatcher->startNotificatonTest(path() + QLatin1String(".nextcloudsync.log"));
-    _folderWatcher->performSetPermissionsTest(path() + QLatin1String(".nextcloudpermissions.log"));
+    _folderWatcher->startNotificatonTest(path() + QLatin1String(".souverasync.log"));
+    _folderWatcher->performSetPermissionsTest(path() + QLatin1String(".souverapermissions.log"));
     connect(_engine.data(), &SyncEngine::lockFileDetected, _folderWatcher.data(), &FolderWatcher::slotLockFileDetectedExternally);
 }
 

@@ -962,12 +962,12 @@ void AccountWizardController::copyLoginLink()
 
 void AccountWizardController::openSignup()
 {
-    Utility::openBrowser(QUrl(u"https://nextcloud.com/sign-up/?flow=V3"_s));
+    Utility::openBrowser(QUrl(u"https://souvera.work/sign-up/"_s));
 }
 
 void AccountWizardController::openSelfHostedServerGuide()
 {
-    Utility::openBrowser(QUrl(QStringLiteral("https://docs.nextcloud.com/server/latest/admin_manual/installation/#installation")));
+    Utility::openBrowser(QUrl(QStringLiteral("https://docs.souvera.work/admin/installation/")));
 }
 
 void AccountWizardController::openProxySettings()

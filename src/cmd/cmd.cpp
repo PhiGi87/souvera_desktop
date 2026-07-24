@@ -175,7 +175,7 @@ void help()
     std::cout << "  --exclude-anchored [file]  Exclude list file, always anchored at the" << std::endl;
     std::cout << "                         sync root regardless of the file's own name" << std::endl;
     std::cout << "                         (use this if --exclude patterns aren't matching," << std::endl;
-    std::cout << "                         see nextcloud/desktop#2916, #7682)" << std::endl;
+    std::cout << "                         see the desktop client issue tracker for details)" << std::endl;
     std::cout << "  --unsyncedfolders [file]    File containing the list of unsynced remote folders (selective sync)" << std::endl;
     std::cout << "  --user, -u [name]      Use [name] as the login name" << std::endl;
     std::cout << "  --password, -p [pass]  Use [pass] as password" << std::endl;

@@ -277,7 +277,7 @@ void ownCloudGui::slotSyncStateChange(Folder *folder)
         || result.status() == SyncResult::Problem
         || result.status() == SyncResult::SyncAbortRequested
         || result.status() == SyncResult::Error) {
-        Logger::instance()->enterNextLogFile(QStringLiteral("nextcloud.log"), OCC::Logger::LogType::Log);
+        Logger::instance()->enterNextLogFile(QStringLiteral("souvera.log"), OCC::Logger::LogType::Log);
     }
 }
 
@@ -493,7 +493,7 @@ void ownCloudGui::slotComputeOverallSyncStatus()
                                                                        folder->syncResult().hasUnresolvedConflicts(),
                                                                        folder->syncPaused(),
                                                                        folder->syncEngine().progressInfo());
-            //: Example text: "Nextcloud: Syncing 25MB (3 minutes left)"   (%1 is the folder name to be synced, %2 a status message for that folder)
+            //: Example text: "Souvera Workspace: Syncing 25MB (3 minutes left)"   (%1 is the folder name to be synced, %2 a status message for that folder)
             allStatusStrings += tr("%1: %2").arg(folder->shortGuiLocalPath(), folderMessage);
         }
 #ifdef BUILD_FILE_PROVIDER_MODULE
