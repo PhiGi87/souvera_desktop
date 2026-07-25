@@ -71,6 +71,8 @@
 #include "foregroundbackground_interface.h"
 #endif
 
+#include "souvera/SouveraMainWindow.h"
+
 #ifdef BUILD_FILE_PROVIDER_MODULE
 #include "libsync/networkjobs.h"
 #include "macOS/fileprovider.h"
@@ -121,6 +123,9 @@ ownCloudGui::ownCloudGui(Application *parent)
 
     connect(_tray.data(), &Systray::shutdown,
         this, &QCoreApplication::quit);
+
+    connect(_tray.data(), &Systray::openWorkspace,
+        this, &ownCloudGui::slotShowSouveraWorkspace);
 
     ProgressDispatcher *pd = ProgressDispatcher::instance();
     connect(pd, &ProgressDispatcher::progressInfo, this,
@@ -235,7 +240,17 @@ void ownCloudGui::slotOpenSettingsDialog()
 
 void ownCloudGui::slotOpenMainDialog()
 {
-    _tray->showActivitiesWindow();
+    if (_mainWindow.isNull()) {
+        _mainWindow = new SouveraMainWindow;
+    }
+    _mainWindow->showNormal();
+    _mainWindow->raise();
+    _mainWindow->activateWindow();
+}
+
+void ownCloudGui::slotShowSouveraWorkspace()
+{
+    slotOpenMainDialog();
 }
 
 void ownCloudGui::slotTrayClicked(QSystemTrayIcon::ActivationReason reason)

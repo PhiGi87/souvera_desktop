@@ -119,6 +119,7 @@ signals:
     void isOpenChanged();
 
     void hideSettingsDialog();
+    void openWorkspace();
 
 public slots:
     void openUrlInBrowser(const QUrl &url) const;

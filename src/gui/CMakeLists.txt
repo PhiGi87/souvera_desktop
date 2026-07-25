@@ -268,6 +268,30 @@ set(client_SRCS
     wizard/linklabel.cpp
     integration/fileactionsmodel.h
     integration/fileactionsmodel.cpp
+    souvera/SouveraMainWindow.h
+    souvera/SouveraMainWindow.cpp
+    souvera/mail/MailPanel.h
+    souvera/mail/MailPanel.cpp
+    souvera/mail/MailAccount.h
+    souvera/mail/MailAccount.cpp
+    souvera/mail/MailFolderModel.h
+    souvera/mail/MailFolderModel.cpp
+    souvera/mail/MailMessageModel.h
+    souvera/mail/MailMessageModel.cpp
+    souvera/talk/TalkPanel.h
+    souvera/talk/TalkPanel.cpp
+    souvera/talk/TalkOcsApi.h
+    souvera/talk/TalkOcsApi.cpp
+    souvera/talk/TalkConversationModel.h
+    souvera/talk/TalkConversationModel.cpp
+    souvera/deck/DeckPanel.h
+    souvera/deck/DeckPanel.cpp
+    souvera/deck/DeckOcsApi.h
+    souvera/deck/DeckOcsApi.cpp
+    souvera/calendar/CalendarPanel.h
+    souvera/calendar/CalendarPanel.cpp
+    souvera/calendar/CalDavSync.h
+    souvera/calendar/CalDavSync.cpp
     )
 
 if (NOT DISABLE_ACCOUNT_MIGRATION)

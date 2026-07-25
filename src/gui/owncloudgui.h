@@ -21,6 +21,8 @@
 #include <QDBusConnection>
 #endif
 
+class SouveraMainWindow;
+
 namespace OCC {
 
 class Folder;
@@ -135,6 +137,7 @@ public slots:
     void slotCopyInternalLinkFromFileProvider(const QString &fileId, const QString &remoteItemPath, const QString &fileProviderDomainIdentifier);
 #endif
     void slotNewAccountWizard();
+    void slotShowSouveraWorkspace();
 
 private slots:
     void slotLogin();
@@ -144,6 +147,7 @@ private:
     QPointer<Systray> _tray;
     QPointer<SettingsDialog> _settingsDialog;
     QPointer<LogBrowser> _logBrowser;
+    QPointer<SouveraMainWindow> _mainWindow;
 
 #ifdef WITH_LIBCLOUDPROVIDERS
     QDBusConnection _bus;
