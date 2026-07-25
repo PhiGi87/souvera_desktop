@@ -9,9 +9,8 @@
 #include <QMainWindow>
 #include <QStackedWidget>
 #include <QPushButton>
+#include <QBoxLayout>
 #include <QVector>
-
-class QVBoxLayout;
 
 namespace OCC {
 
@@ -35,7 +34,7 @@ public:
     void switchToTab(int index);
 
 private:
-    void setupSidebar(QVBoxLayout *layout);
+    void setupSidebar(QBoxLayout *layout);
     void setupContent();
     void updateActiveTab(int index);
 

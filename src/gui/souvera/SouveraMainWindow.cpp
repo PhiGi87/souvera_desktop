@@ -60,7 +60,7 @@ SouveraMainWindow::SouveraMainWindow(QWidget *parent)
     updateActiveTab(0);
 }
 
-void SouveraMainWindow::setupSidebar(QVBoxLayout *layout)
+void SouveraMainWindow::setupSidebar(QBoxLayout *layout)
 {
     auto *sidebar = new QFrame(this);
     sidebar->setObjectName(QStringLiteral("souveraSidebar"));

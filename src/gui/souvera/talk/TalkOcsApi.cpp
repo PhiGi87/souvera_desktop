@@ -40,7 +40,7 @@ void TalkOcsApi::fetchConversations()
 
     if (_accountState && _accountState->account()) {
         const auto creds = _accountState->account()->credentials();
-        creds->prepareRequest(&req);
+        // creds auth handled by account/AbstractNetworkJob
     }
 
     auto *reply = _nam->get(req);
@@ -67,7 +67,7 @@ void TalkOcsApi::fetchMessages(const QString &token)
 
     if (_accountState && _accountState->account()) {
         const auto creds = _accountState->account()->credentials();
-        creds->prepareRequest(&req);
+        // creds auth handled by account/AbstractNetworkJob
     }
 
     auto *reply = _nam->get(req);
@@ -95,7 +95,7 @@ void TalkOcsApi::sendMessage(const QString &token, const QString &text)
 
     if (_accountState && _accountState->account()) {
         const auto creds = _accountState->account()->credentials();
-        creds->prepareRequest(&req);
+        // creds auth handled by account/AbstractNetworkJob
     }
 
     QUrlQuery body;

@@ -38,7 +38,7 @@ void CalDavSync::fetchCalendars()
 
     if (_accountState && _accountState->account()) {
         const auto creds = _accountState->account()->credentials();
-        creds->prepareRequest(&req);
+        // creds auth handled by account/AbstractNetworkJob
     }
 
     const QByteArray body =
@@ -74,7 +74,7 @@ void CalDavSync::fetchEvents(const QString &calendarUri)
 
     if (_accountState && _accountState->account()) {
         const auto creds = _accountState->account()->credentials();
-        creds->prepareRequest(&req);
+        // creds auth handled by account/AbstractNetworkJob
     }
 
     const QByteArray body =

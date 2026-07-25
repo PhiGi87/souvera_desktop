@@ -55,7 +55,7 @@ void DeckColumnWidget::addCard(const QString &title, const QString &description)
     cardLayout->addWidget(titleLabel);
     cardLayout->addWidget(descLabel);
 
-    auto *layout = qobject_cast<QVBoxLayout *>(this->layout());
+    auto *layout = qobject_cast<QHBoxLayout *>(this->layout());
     if (layout) {
         layout->insertWidget(layout->count() - 1, card);
     }

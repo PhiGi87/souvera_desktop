@@ -39,7 +39,7 @@ void DeckOcsApi::fetchBoards()
     QNetworkRequest req(url);
     if (_accountState && _accountState->account()) {
         const auto creds = _accountState->account()->credentials();
-        creds->prepareRequest(&req);
+        // creds auth handled by account/AbstractNetworkJob
     }
 
     auto *reply = _nam->get(req);
@@ -62,7 +62,7 @@ void DeckOcsApi::fetchStacks(int boardId)
     QNetworkRequest req(url);
     if (_accountState && _accountState->account()) {
         const auto creds = _accountState->account()->credentials();
-        creds->prepareRequest(&req);
+        // creds auth handled by account/AbstractNetworkJob
     }
 
     auto *reply = _nam->get(req);
@@ -85,7 +85,7 @@ void DeckOcsApi::fetchCards(int stackId)
     QNetworkRequest req(url);
     if (_accountState && _accountState->account()) {
         const auto creds = _accountState->account()->credentials();
-        creds->prepareRequest(&req);
+        // creds auth handled by account/AbstractNetworkJob
     }
 
     auto *reply = _nam->get(req);
