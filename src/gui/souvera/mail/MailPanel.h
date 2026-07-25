@@ -13,7 +13,7 @@
 #include <QTextBrowser>
 #include <QPushButton>
 #include <QComboBox>
-#include "MailTypes.h"
+#include "MailAccount.h"
 
 namespace OCC {
 
