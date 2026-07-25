@@ -254,7 +254,7 @@ void MailAccount::handleTagLogin(const QString &response)
 
 void MailAccount::handleTagList(const QList<QByteArray> &lines)
 {
-    QList<ImapFolderData> folders;
+    QList<MailFolderData> folders;
 
     static QRegularExpression listRe(R"(\* LIST\s*\([^)]*\)\s*"[^"]*"\s*"([^"]+)")");
     static QRegularExpression listNoAttrRe(R"(\* LIST\s*\(\)\s*"[^"]*"\s*"([^"]+)")");
@@ -267,7 +267,7 @@ void MailAccount::handleTagList(const QList<QByteArray> &lines)
             match = listNoAttrRe.match(line);
         }
         if (match.hasMatch()) {
-            ImapFolderData folder;
+            MailFolderData folder;
             folder.name = match.captured(1);
             folders.append(folder);
         }
@@ -306,7 +306,7 @@ void MailAccount::handleTagSelect(const QString &response, const QList<QByteArra
 
 void MailAccount::handleTagFetch(const QList<QByteArray> &lines)
 {
-    QList<ImapMessageData> messages;
+    QList<MailMessageData> messages;
 
     QByteArray headerBuffer;
     bool inHeader = false;
@@ -357,9 +357,9 @@ void MailAccount::handleTagFetch(const QList<QByteArray> &lines)
     emit messagesFetched(messages);
 }
 
-void MailAccount::processMessageBuffer(const QByteArray &buf, QList<ImapMessageData> &messages, int seq, bool seen)
+void MailAccount::processMessageBuffer(const QByteArray &buf, QList<MailMessageData> &messages, int seq, bool seen)
 {
-    ImapMessageData msg;
+    MailMessageData msg;
     msg.seq = seq;
     msg.seen = seen;
 

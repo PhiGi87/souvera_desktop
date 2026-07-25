@@ -44,8 +44,8 @@ private:
     void onSendAsChanged(int index);
 
     void connectMailAccount();
-    void onFoldersFetched(const QList<ImapFolderData> &folders);
-    void onMessagesFetched(const QList<ImapMessageData> &messages);
+    void onFoldersFetched(const QList<MailFolderData> &folders);
+    void onMessagesFetched(const QList<MailMessageData> &messages);
     void onBodyFetched(int seq, const QString &htmlBody, const QString &plainBody);
     void onImapConnected();
 

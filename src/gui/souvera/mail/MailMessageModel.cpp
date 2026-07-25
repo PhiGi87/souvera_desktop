@@ -68,7 +68,7 @@ QVariant MailMessageModel::data(const QModelIndex &index, int role) const
     }
     case Qt::ToolTipRole:
         return QStringLiteral("Von: %1\nBetreff: %2\nDatum: %3")
-            .arg(msg.from, msg.subject, msg.dateTime.toString(Qt::DefaultLocaleLongDate));
+            .arg(msg.from, msg.subject, msg.dateTime.toString(QLocale().dateFormat(QLocale::LongFormat)));
     default:
         return {};
     }

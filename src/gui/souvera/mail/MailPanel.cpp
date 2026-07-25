@@ -349,7 +349,7 @@ void MailPanel::onImapConnected()
     _mailAccount->fetchFolders();
 }
 
-void MailPanel::onFoldersFetched(const QList<ImapFolderData> &folders)
+void MailPanel::onFoldersFetched(const QList<MailFolderData> &folders)
 {
     qCInfo(lcMailPanel) << "Folders received, count:" << folders.size();
 
@@ -374,7 +374,7 @@ void MailPanel::onFoldersFetched(const QList<ImapFolderData> &folders)
     _folderModel->setFolders(folderInfos);
 }
 
-void MailPanel::onMessagesFetched(const QList<ImapMessageData> &messages)
+void MailPanel::onMessagesFetched(const QList<MailMessageData> &messages)
 {
     qCInfo(lcMailPanel) << "Messages received, count:" << messages.size();
 

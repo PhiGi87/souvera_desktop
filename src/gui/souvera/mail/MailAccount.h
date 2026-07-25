@@ -17,13 +17,13 @@ namespace OCC {
 
 class AccountState;
 
-struct ImapFolderData {
+struct MailFolderData {
     QString name;
     int exists = 0;
     int unseen = 0;
 };
 
-struct ImapMessageData {
+struct MailMessageData {
     int seq = 0;
     int uid = 0;
     QString from;
@@ -67,8 +67,8 @@ signals:
     void imapConnected();
     void imapDisconnected();
     void imapConnectionError(const QString &error);
-    void foldersFetched(const QList<ImapFolderData> &folders);
-    void messagesFetched(const QList<ImapMessageData> &messages);
+    void foldersFetched(const QList<MailFolderData> &folders);
+    void messagesFetched(const QList<MailMessageData> &messages);
     void bodyFetched(int seq, const QString &htmlBody, const QString &plainBody);
     void messageSent(bool success, const QString &errorMsg);
 
@@ -86,7 +86,7 @@ private:
     void handleTagList(const QList<QByteArray> &lines);
     void handleTagSelect(const QString &response, const QList<QByteArray> &lines);
     void handleTagFetch(const QList<QByteArray> &lines);
-    void processMessageBuffer(const QByteArray &buf, QList<ImapMessageData> &messages, int seq, bool seen);
+    void processMessageBuffer(const QByteArray &buf, QList<MailMessageData> &messages, int seq, bool seen);
     void handleTagBody(const QList<QByteArray> &lines);
 
     AccountState *_accountState;
