@@ -21,8 +21,6 @@
 #include <QDBusConnection>
 #endif
 
-class SouveraMainWindow;
-
 namespace OCC {
 
 class Folder;
@@ -32,6 +30,7 @@ class ShareDialog;
 class Application;
 class LogBrowser;
 class AccountState;
+class SouveraMainWindow;
 
 enum class ShareDialogStartPage {
     UsersAndGroups,
