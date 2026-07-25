@@ -8,9 +8,6 @@
 
 #include <QMainWindow>
 #include <QStackedWidget>
-#include <QPushButton>
-#include <QBoxLayout>
-#include <QVector>
 
 namespace OCC {
 
@@ -18,6 +15,9 @@ class MailPanel;
 class TalkPanel;
 class DeckPanel;
 class CalendarPanel;
+class FilesPanel;
+class StatusHeader;
+class BottomBar;
 
 class SouveraMainWindow : public QMainWindow
 {
@@ -33,14 +33,21 @@ public:
 
     void switchToTab(int index);
 
+signals:
+    void settingsRequested();
+
+protected:
+    void closeEvent(QCloseEvent *event) override;
+
 private:
-    void setupSidebar(QBoxLayout *layout);
-    void setupContent();
-    void updateActiveTab(int index);
+    void setupUi();
+    void loadStyleSheet();
 
+    StatusHeader *_statusHeader = nullptr;
     QStackedWidget *_contentStack = nullptr;
-    QVector<QPushButton *> _tabButtons;
+    BottomBar *_bottomBar = nullptr;
 
+    FilesPanel *_filesPanel = nullptr;
     MailPanel *_mailPanel = nullptr;
     TalkPanel *_talkPanel = nullptr;
     DeckPanel *_deckPanel = nullptr;

@@ -1,0 +1,109 @@
+/*
+ * SPDX-FileCopyrightText: 2025 Souvera (Host-On Service Provider GmbH)
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+
+SouveraMainWindow {
+    background-color: #1a1a2e;
+}
+
+#StatusHeader {
+    background-color: #16213e;
+    border-bottom: 1px solid #0f3460;
+    min-height: 44px;
+}
+
+#StatusHeader QLabel {
+    color: #e0e0e0;
+    font-size: 13px;
+}
+
+#StatusHeader QPushButton {
+    color: #e0e0e0;
+    background: transparent;
+    border: none;
+    font-size: 16px;
+    padding: 4px 8px;
+    min-width: 32px;
+    min-height: 32px;
+}
+
+#StatusHeader QPushButton:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+#BottomBar {
+    background-color: #0d0d1a;
+    border-top: 1px solid #1a1a2e;
+    min-height: 56px;
+    max-height: 56px;
+}
+
+#BottomBar QPushButton {
+    color: #666666;
+    background: transparent;
+    border: none;
+    border-top: 3px solid transparent;
+    font-size: 11px;
+    padding: 4px 16px;
+    min-width: 72px;
+    min-height: 48px;
+}
+
+#BottomBar QPushButton:hover {
+    color: #999999;
+}
+
+#BottomBar QPushButton:checked {
+    color: #4BBFEA;
+    border-top: 3px solid #4BBFEA;
+}
+
+#ContentArea {
+    background-color: #1a1a2e;
+}
+
+#FilesPanel {
+    background-color: #1a1a2e;
+}
+
+#FilesPanel QLabel#FolderAliasLabel {
+    color: #e0e0e0;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+#FilesPanel QLabel#FolderStatusLabel {
+    color: #999999;
+    font-size: 12px;
+}
+
+#FilesPanel QPushButton {
+    color: #4BBFEA;
+    background: transparent;
+    border: 1px solid #4BBFEA;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+#FilesPanel QPushButton:hover {
+    background: rgba(75, 191, 234, 0.15);
+}
+
+#FilesPanel QLabel#EmptyLabel {
+    color: #666666;
+    font-size: 16px;
+}
+
+#FolderRow {
+    background-color: #16213e;
+    border: 1px solid #0f3460;
+    min-height: 48px;
+}
+
+#FolderRow:hover {
+    background-color: #1a2744;
+}

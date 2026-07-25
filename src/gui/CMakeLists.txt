@@ -56,7 +56,7 @@ set(client_UI_SRCS
     wizard/flow2authwidget.ui
 )
 
-qt_add_resources(client_UI_SRCS ../../resources.qrc ${CMAKE_SOURCE_DIR}/theme.qrc)
+qt_add_resources(client_UI_SRCS ../../resources.qrc ${CMAKE_SOURCE_DIR}/theme.qrc souvera/souvera.qrc)
 
 set(client_SRCS
     accountmanager.h
@@ -270,6 +270,12 @@ set(client_SRCS
     integration/fileactionsmodel.cpp
     souvera/SouveraMainWindow.h
     souvera/SouveraMainWindow.cpp
+    souvera/StatusHeader.h
+    souvera/StatusHeader.cpp
+    souvera/BottomBar.h
+    souvera/BottomBar.cpp
+    souvera/FilesPanel.h
+    souvera/FilesPanel.cpp
     souvera/mail/MailPanel.h
     souvera/mail/MailPanel.cpp
     souvera/mail/MailAccount.h

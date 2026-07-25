@@ -242,6 +242,8 @@ void ownCloudGui::slotOpenMainDialog()
 {
     if (_mainWindow.isNull()) {
         _mainWindow = new SouveraMainWindow;
+        connect(_mainWindow.data(), &SouveraMainWindow::settingsRequested,
+            this, &ownCloudGui::slotShowSettings);
     }
     _mainWindow->showNormal();
     _mainWindow->raise();

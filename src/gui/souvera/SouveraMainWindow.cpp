@@ -5,31 +5,26 @@
 
 #include "SouveraMainWindow.h"
 
+#include "StatusHeader.h"
+#include "BottomBar.h"
+#include "FilesPanel.h"
 #include "mail/MailPanel.h"
 #include "talk/TalkPanel.h"
 #include "deck/DeckPanel.h"
 #include "calendar/CalendarPanel.h"
 
 #include <QApplication>
-#include <QFrame>
-#include <QHBoxLayout>
+#include <QCloseEvent>
+#include <QFile>
 #include <QLabel>
 #include <QLoggingCategory>
 #include <QScreen>
-#include <QScrollArea>
+#include <QSettings>
 #include <QVBoxLayout>
 
 Q_LOGGING_CATEGORY(lcSouveraMainWindow, "souvera.mainwindow")
 
 namespace OCC {
-
-static const auto TabNames = {
-    QStringLiteral("Files"),
-    QStringLiteral("Mail"),
-    QStringLiteral("Talk"),
-    QStringLiteral("Deck"),
-    QStringLiteral("Calendar")
-};
 
 SouveraMainWindow::SouveraMainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -38,93 +33,71 @@ SouveraMainWindow::SouveraMainWindow(QWidget *parent)
     setWindowFlags(Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint
                    | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint
                    | Qt::WindowCloseButtonHint);
-    resize(1200, 800);
+    setAttribute(Qt::WA_QuitOnHide, false);
 
+    loadStyleSheet();
+    setupUi();
+
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("souveraMainWindow"));
+    auto geometry = settings.value(QStringLiteral("geometry"));
+    settings.endGroup();
+
+    if (geometry.isValid()) {
+        restoreGeometry(geometry.toByteArray());
+    } else {
+        resize(1200, 800);
+        if (auto *screen = QApplication::primaryScreen()) {
+            auto geo = screen->availableGeometry();
+            move((geo.width() - width()) / 2, (geo.height() - height()) / 2);
+        }
+    }
+
+    switchToTab(0);
+}
+
+void SouveraMainWindow::setupUi()
+{
     auto *central = new QWidget(this);
-    auto *layout = new QHBoxLayout(central);
+    central->setObjectName(QStringLiteral("ContentArea"));
+    auto *layout = new QVBoxLayout(central);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    setupSidebar(layout);
-    setupContent();
-    layout->addWidget(_contentStack, 1);
+    _statusHeader = new StatusHeader(central);
+    connect(_statusHeader, &StatusHeader::settingsClicked,
+            this, &SouveraMainWindow::settingsRequested);
+    layout->addWidget(_statusHeader);
 
-    setCentralWidget(central);
+    _filesPanel = new FilesPanel(central);
+    _mailPanel = new MailPanel(central);
+    _talkPanel = new TalkPanel(central);
+    _deckPanel = new DeckPanel(central);
+    _calendarPanel = new CalendarPanel(central);
 
-    if (auto *screen = QApplication::primaryScreen()) {
-        const auto geo = screen->availableGeometry();
-        resize(static_cast<int>(geo.width() * 0.75), static_cast<int>(geo.height() * 0.8));
-        move((geo.width() - width()) / 2, (geo.height() - height()) / 2);
-    }
-
-    updateActiveTab(0);
-}
-
-void SouveraMainWindow::setupSidebar(QBoxLayout *layout)
-{
-    auto *sidebar = new QFrame(this);
-    sidebar->setObjectName(QStringLiteral("souveraSidebar"));
-    sidebar->setFixedWidth(200);
-    sidebar->setStyleSheet(QStringLiteral(
-        "#souveraSidebar { background-color: #2b2b3d; }"));
-
-    auto *sidebarLayout = new QVBoxLayout(sidebar);
-    sidebarLayout->setContentsMargins(0, 0, 0, 0);
-    sidebarLayout->setSpacing(0);
-
-    auto *logo = new QLabel(QStringLiteral("Souvera"), sidebar);
-    logo->setStyleSheet(QStringLiteral(
-        "color: white; font-size: 18px; font-weight: bold; padding: 20px 16px;"));
-    sidebarLayout->addWidget(logo);
-
-    auto *scrollContent = new QWidget(sidebar);
-    auto *btnLayout = new QVBoxLayout(scrollContent);
-    btnLayout->setContentsMargins(8, 0, 8, 0);
-    btnLayout->setSpacing(2);
-
-    for (auto i = 0u; auto &&name : TabNames) {
-        auto *btn = new QPushButton(name, scrollContent);
-        btn->setCheckable(true);
-        btn->setCursor(Qt::PointingHandCursor);
-        btn->setMinimumHeight(44);
-        btn->setStyleSheet(QStringLiteral(
-            "QPushButton { color: #ccc; text-align: left; padding: 10px 16px;"
-            "  border: none; border-radius: 6px; font-size: 14px;"
-            "  background-color: transparent; }"
-            "QPushButton:hover { background-color: #3d3d5c; color: white; }"
-            "QPushButton:checked { background-color: #4a90d9; color: white; font-weight: bold; }"));
-        connect(btn, &QPushButton::clicked, this, [this, i]() { switchToTab(static_cast<int>(i)); });
-        btnLayout->addWidget(btn);
-        _tabButtons.append(btn);
-        ++i;
-    }
-
-    btnLayout->addStretch();
-    sidebarLayout->addWidget(scrollContent, 1);
-
-    layout->addWidget(sidebar);
-}
-
-void SouveraMainWindow::setupContent()
-{
-    auto *filesPanel = new QWidget(this);
-    auto *filesLayout = new QVBoxLayout(filesPanel);
-    auto *filesLabel = new QLabel(QStringLiteral("Files – Synchronisation & Explorer"), filesPanel);
-    filesLabel->setStyleSheet(QStringLiteral("font-size: 18px; padding: 20px;"));
-    filesLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-    filesLayout->addWidget(filesLabel);
-
-    _mailPanel = new MailPanel(this);
-    _talkPanel = new TalkPanel(this);
-    _deckPanel = new DeckPanel(this);
-    _calendarPanel = new CalendarPanel(this);
-
-    _contentStack = new QStackedWidget(this);
-    _contentStack->addWidget(filesPanel);
+    _contentStack = new QStackedWidget(central);
+    _contentStack->setObjectName(QStringLiteral("ContentArea"));
+    _contentStack->addWidget(_filesPanel);
     _contentStack->addWidget(_mailPanel);
     _contentStack->addWidget(_talkPanel);
     _contentStack->addWidget(_deckPanel);
     _contentStack->addWidget(_calendarPanel);
+    layout->addWidget(_contentStack, 1);
+
+    _bottomBar = new BottomBar(central);
+    connect(_bottomBar, &BottomBar::currentChanged, this, &SouveraMainWindow::switchToTab);
+    layout->addWidget(_bottomBar);
+
+    setCentralWidget(central);
+}
+
+void SouveraMainWindow::loadStyleSheet()
+{
+    QFile qssFile(QStringLiteral(":/souvera/souvera.qss"));
+    if (qssFile.open(QFile::ReadOnly | QFile::Text)) {
+        qApp->setStyleSheet(QString::fromUtf8(qssFile.readAll()));
+        qssFile.close();
+    }
 }
 
 void SouveraMainWindow::switchToTab(int index)
@@ -133,14 +106,18 @@ void SouveraMainWindow::switchToTab(int index)
         return;
     }
     _contentStack->setCurrentIndex(index);
-    updateActiveTab(index);
+    _bottomBar->setCurrentIndex(index);
 }
 
-void SouveraMainWindow::updateActiveTab(int index)
+void SouveraMainWindow::closeEvent(QCloseEvent *event)
 {
-    for (auto i = 0; i < _tabButtons.size(); ++i) {
-        _tabButtons[i]->setChecked(i == index);
-    }
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("souveraMainWindow"));
+    settings.setValue(QStringLiteral("geometry"), saveGeometry());
+    settings.endGroup();
+
+    hide();
+    event->ignore();
 }
 
 } // namespace OCC

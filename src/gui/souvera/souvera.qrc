@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/souvera">
+        <file>souvera.qss</file>
+    </qresource>
+</RCC>
