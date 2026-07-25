@@ -259,20 +259,17 @@ void ownCloudGui::slotTrayClicked(QSystemTrayIcon::ActivationReason reason)
     if (reason == QSystemTrayIcon::DoubleClick && currentUser && currentUser->hasLocalFolder()) {
         currentUser->openLocalFolder();
     } else if (reason == QSystemTrayIcon::Trigger) {
-        if (AccountManager::instance()->accounts().isEmpty()) {
-            // Without a configured account the tray icon drives the setup wizard
-            // directly: open it, or bring the existing one back to front instead
-            // of opening a second wizard.
-            if (!OwncloudSetupWizard::bringWizardToFrontIfVisible()) {
-                slotNewAccountWizard();
-            }
-        } else if (_tray->raiseDialogs()) {
-            // Brings dialogs hidden by other apps to front, returns true if any raised
-        } else if (_tray->isOpen()) {
-            _tray->hideWindow();
-        } else {
-            _tray->showTrayPopup();
-        }
+	if (AccountManager::instance()->accounts().isEmpty()) {
+	    // Without a configured account the tray icon drives the setup wizard
+	    // directly: open it, or bring the existing one back to front instead
+	    // of opening a second wizard.
+	    if (!OwncloudSetupWizard::bringWizardToFrontIfVisible()) {
+		slotNewAccountWizard();
+	    }
+	} else {
+	    // Souvera: single tray click opens the Souvera Workspace with all panels
+	    slotOpenMainDialog();
+	}
     }
     // FIXME: Also make sure that any auto updater dialogue https://github.com/owncloud/client/issues/5613
     // or SSL error dialog also comes to front.
