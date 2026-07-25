@@ -5,10 +5,10 @@
 
 set -xe
 
-export APPNAME=${APPNAME:-Nextcloud}
-export EXECUTABLE_NAME=${EXECUTABLE_NAME:-nextcloud}
+export APPNAME=${APPNAME:-Souvera}
+export EXECUTABLE_NAME=${EXECUTABLE_NAME:-souvera}
 # Icon base name as installed into hicolor (matches APPLICATION_ICON_NAME).
-export ICON_NAME=${ICON_NAME:-Nextcloud}
+export ICON_NAME=${ICON_NAME:-Souvera}
 export BUILD_UPDATER=${BUILD_UPDATER:-OFF}
 export BUILDNR=${BUILDNR:-0000}
 export DESKTOP_CLIENT_ROOT=${DESKTOP_CLIENT_ROOT:-/home/user}
