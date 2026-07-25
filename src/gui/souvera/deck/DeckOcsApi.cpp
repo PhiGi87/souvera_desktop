@@ -20,8 +20,12 @@ namespace OCC {
 
 DeckOcsApi::DeckOcsApi(QObject *parent)
     : QObject(parent)
-    , _nam(new QNetworkAccessManager(this))
 {
+}
+
+void DeckOcsApi::setAccountState(AccountState *state)
+{
+    _accountState = state;
 }
 
 QString DeckOcsApi::apiUrl(const QString &path) const
@@ -37,16 +41,14 @@ void DeckOcsApi::fetchBoards()
     if (url.isEmpty()) return;
 
     QNetworkRequest req(url);
-    if (_accountState && _accountState->account()) {
-        const auto creds = _accountState->account()->credentials();
-        // creds auth handled by account/AbstractNetworkJob
-    }
 
-    auto *reply = _nam->get(req);
+    const auto nam = _accountState->account()->networkAccessManager();
+    auto *reply = nam->get(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
             qCWarning(lcDeckOcsApi) << "fetchBoards failed:" << reply->errorString();
+            emit apiError(reply->errorString());
             return;
         }
         const auto doc = QJsonDocument::fromJson(reply->readAll());
@@ -60,16 +62,14 @@ void DeckOcsApi::fetchStacks(int boardId)
     if (url.isEmpty()) return;
 
     QNetworkRequest req(url);
-    if (_accountState && _accountState->account()) {
-        const auto creds = _accountState->account()->credentials();
-        // creds auth handled by account/AbstractNetworkJob
-    }
 
-    auto *reply = _nam->get(req);
+    const auto nam = _accountState->account()->networkAccessManager();
+    auto *reply = nam->get(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
             qCWarning(lcDeckOcsApi) << "fetchStacks failed:" << reply->errorString();
+            emit apiError(reply->errorString());
             return;
         }
         const auto doc = QJsonDocument::fromJson(reply->readAll());
@@ -83,20 +83,71 @@ void DeckOcsApi::fetchCards(int stackId)
     if (url.isEmpty()) return;
 
     QNetworkRequest req(url);
-    if (_accountState && _accountState->account()) {
-        const auto creds = _accountState->account()->credentials();
-        // creds auth handled by account/AbstractNetworkJob
-    }
 
-    auto *reply = _nam->get(req);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    const auto nam = _accountState->account()->networkAccessManager();
+    auto *reply = nam->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, stackId]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
             qCWarning(lcDeckOcsApi) << "fetchCards failed:" << reply->errorString();
+            emit apiError(reply->errorString());
             return;
         }
         const auto doc = QJsonDocument::fromJson(reply->readAll());
-        emit cardsReceived(doc.array());
+        emit cardsReceived(doc.array(), stackId);
+    });
+}
+
+void DeckOcsApi::createCard(int stackId, const QString &title, const QString &description)
+{
+    const auto url = apiUrl(QStringLiteral("/stacks/%1/cards").arg(stackId));
+    if (url.isEmpty()) return;
+
+    QJsonObject body;
+    body[QStringLiteral("title")] = title;
+    body[QStringLiteral("description")] = description;
+    body[QStringLiteral("type")] = QStringLiteral("plain");
+
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+
+    const auto nam = _accountState->account()->networkAccessManager();
+    const auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
+    auto *reply = nam->post(req, payload);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, stackId]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qCWarning(lcDeckOcsApi) << "createCard failed:" << reply->errorString();
+            emit apiError(reply->errorString());
+            return;
+        }
+        const auto doc = QJsonDocument::fromJson(reply->readAll());
+        emit cardCreated(doc.object(), stackId);
+    });
+}
+
+void DeckOcsApi::moveCard(int cardId, int stackId)
+{
+    const auto url = apiUrl(QStringLiteral("/cards/%1/stack/%2").arg(cardId).arg(stackId));
+    if (url.isEmpty()) return;
+
+    QJsonObject body;
+    body[QStringLiteral("order")] = 999;
+
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+
+    const auto nam = _accountState->account()->networkAccessManager();
+    const auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
+    auto *reply = nam->put(req, payload);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qCWarning(lcDeckOcsApi) << "moveCard failed:" << reply->errorString();
+            emit apiError(reply->errorString());
+            return;
+        }
+        emit cardMoved();
     });
 }
 

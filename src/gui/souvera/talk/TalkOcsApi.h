@@ -9,10 +9,7 @@
 #include <QObject>
 #include <QJsonArray>
 #include <QJsonObject>
-#include <QNetworkAccessManager>
 #include <QNetworkReply>
-
-class QNetworkAccessManager;
 
 namespace OCC {
 
@@ -24,21 +21,20 @@ class TalkOcsApi : public QObject
 public:
     explicit TalkOcsApi(QObject *parent = nullptr);
 
-    void setAccountState(AccountState *state) { _accountState = state; }
+    void setAccountState(AccountState *state);
 
     void fetchConversations();
-    void fetchMessages(const QString &token);
+    void fetchMessages(const QString &token, qint64 lastKnownId = 0);
     void sendMessage(const QString &token, const QString &text);
 
 signals:
     void conversationsReceived(const QJsonArray &conversations);
-    void messagesReceived(const QJsonArray &messages);
-    void messageSent();
+    void messagesReceived(const QJsonArray &messages, const QString &token);
+    void messageSent(const QString &token);
 
 private:
     [[nodiscard]] QString ocsUrl(const QString &path) const;
 
-    QNetworkAccessManager *_nam = nullptr;
     AccountState *_accountState = nullptr;
 };
 

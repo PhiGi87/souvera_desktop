@@ -7,7 +7,8 @@
 #define CALDAVSYNC_H
 
 #include <QObject>
-#include <QNetworkAccessManager>
+#include <QVariantList>
+#include <QDate>
 
 namespace OCC {
 
@@ -19,17 +20,26 @@ class CalDavSync : public QObject
 public:
     explicit CalDavSync(QObject *parent = nullptr);
 
-    void setAccountState(AccountState *state) { _accountState = state; }
-
+    void setAccountState(AccountState *state);
     void fetchCalendars();
-    void fetchEvents(const QString &calendarUri);
+    void fetchEvents(const QString &calendarUri, const QDate &from, const QDate &to);
+    void createEvent(const QString &calendarUri, const QByteArray &iCalData);
 
 signals:
-    void calendarsLoaded();
-    void eventsLoaded();
+    void calendarsLoaded(const QVariantList &calendars);
+    void eventsLoaded(const QVariantList &events);
+    void eventCreated(bool success);
+    void errorOccurred(const QString &message);
 
 private:
-    QNetworkAccessManager *_nam = nullptr;
+    QVariantList parseCalendars(const QByteArray &data);
+    QVariantList parseEvents(const QByteArray &data);
+    static QVariantMap parseICalendar(const QString &iCalText);
+    QByteArray buildPropfindBody();
+    QByteArray buildReportBody(const QDate &from, const QDate &to);
+    QUrl makeCalendarUrl(const QString &calendarUri) const;
+    QUrl makeEventUrl(const QString &calendarUri, const QString &uid) const;
+
     AccountState *_accountState = nullptr;
 };
 

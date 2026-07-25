@@ -284,20 +284,28 @@ set(client_SRCS
     souvera/mail/MailFolderModel.cpp
     souvera/mail/MailMessageModel.h
     souvera/mail/MailMessageModel.cpp
+    souvera/mail/MailComposer.h
+    souvera/mail/MailComposer.cpp
     souvera/talk/TalkPanel.h
     souvera/talk/TalkPanel.cpp
     souvera/talk/TalkOcsApi.h
     souvera/talk/TalkOcsApi.cpp
     souvera/talk/TalkConversationModel.h
     souvera/talk/TalkConversationModel.cpp
+    souvera/talk/TalkMessageWidget.h
+    souvera/talk/TalkMessageWidget.cpp
     souvera/deck/DeckPanel.h
     souvera/deck/DeckPanel.cpp
     souvera/deck/DeckOcsApi.h
     souvera/deck/DeckOcsApi.cpp
+    souvera/deck/DeckCardWidget.h
+    souvera/deck/DeckCardWidget.cpp
     souvera/calendar/CalendarPanel.h
     souvera/calendar/CalendarPanel.cpp
     souvera/calendar/CalDavSync.h
     souvera/calendar/CalDavSync.cpp
+    souvera/calendar/CalendarEventDialog.h
+    souvera/calendar/CalendarEventDialog.cpp
     )
 
 if (NOT DISABLE_ACCOUNT_MIGRATION)

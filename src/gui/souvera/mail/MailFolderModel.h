@@ -7,23 +7,51 @@
 #define MAILFOLDERMODEL_H
 
 #include <QAbstractListModel>
-#include <QStringList>
+#include <QList>
+#include <QIcon>
 
 namespace OCC {
+
+enum class FolderIcon {
+    Inbox,
+    Sent,
+    Drafts,
+    Trash,
+    Junk,
+    Archive,
+    Generic
+};
+
+struct FolderInfo {
+    QString name;
+    FolderIcon icon = FolderIcon::Generic;
+    int unreadCount = 0;
+};
 
 class MailFolderModel : public QAbstractListModel
 {
     Q_OBJECT
 public:
+    enum Roles {
+        NameRole = Qt::DisplayRole,
+        UnreadCountRole = Qt::UserRole + 1,
+        IconTypeRole,
+        FolderDisplayRole
+    };
+
     explicit MailFolderModel(QObject *parent = nullptr);
 
     [[nodiscard]] int rowCount(const QModelIndex &parent = {}) const override;
     [[nodiscard]] QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
 
-    void setFolders(const QStringList &folders);
+    void setFolders(const QList<FolderInfo> &folders);
+    void setUnreadCount(const QString &folderName, int count);
 
 private:
-    QStringList _folders;
+    static int sortWeight(const FolderInfo &folder);
+    static QIcon iconForType(FolderIcon type);
+
+    QList<FolderInfo> _folders;
 };
 
 } // namespace OCC

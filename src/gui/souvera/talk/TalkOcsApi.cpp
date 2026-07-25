@@ -19,31 +19,35 @@ namespace OCC {
 
 TalkOcsApi::TalkOcsApi(QObject *parent)
     : QObject(parent)
-    , _nam(new QNetworkAccessManager(this))
 {
+}
+
+void TalkOcsApi::setAccountState(AccountState *state)
+{
+    _accountState = state;
 }
 
 QString TalkOcsApi::ocsUrl(const QString &path) const
 {
     if (!_accountState || !_accountState->account()) return {};
     const auto base = _accountState->account()->url().toString();
-    return QStringLiteral("%1/ocs/v2.php/apps/spreed/api/v1%2").arg(base, path);
+    const auto baseClean = base.endsWith(QLatin1Char('/')) ? base.chopped(1) : base;
+    return QStringLiteral("%1/ocs/v2.php/apps/spreed/api/v1%2").arg(baseClean, path);
 }
 
 void TalkOcsApi::fetchConversations()
 {
     const auto url = ocsUrl(QStringLiteral("/room"));
-    if (url.isEmpty()) return;
-
-    QNetworkRequest req(url);
-    req.setRawHeader("OCS-APIRequest", "true");
-
-    if (_accountState && _accountState->account()) {
-        const auto creds = _accountState->account()->credentials();
-        // creds auth handled by account/AbstractNetworkJob
+    if (url.isEmpty()) {
+        qCWarning(lcTalkOcsApi) << "Cannot fetch conversations: no account state";
+        return;
     }
 
-    auto *reply = _nam->get(req);
+    QNetworkRequest req;
+    req.setRawHeader("OCS-APIRequest", "true");
+
+    auto *account = _accountState->account().data();
+    auto *reply = account->sendRawRequest("GET", QUrl(url), req);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
@@ -53,25 +57,33 @@ void TalkOcsApi::fetchConversations()
         const auto doc = QJsonDocument::fromJson(reply->readAll());
         const auto data = doc.object().value(QStringLiteral("ocs")).toObject()
                               .value(QStringLiteral("data")).toArray();
+        qCInfo(lcTalkOcsApi) << "Fetched" << data.size() << "conversations";
         emit conversationsReceived(data);
     });
 }
 
-void TalkOcsApi::fetchMessages(const QString &token)
+void TalkOcsApi::fetchMessages(const QString &token, qint64 lastKnownId)
 {
-    const auto url = ocsUrl(QStringLiteral("/chat/%1").arg(token));
-    if (url.isEmpty()) return;
-
-    QNetworkRequest req(url);
-    req.setRawHeader("OCS-APIRequest", "true");
-
-    if (_accountState && _accountState->account()) {
-        const auto creds = _accountState->account()->credentials();
-        // creds auth handled by account/AbstractNetworkJob
+    auto url = QUrl(ocsUrl(QStringLiteral("/chat/%1").arg(token)));
+    if (!url.isValid()) {
+        qCWarning(lcTalkOcsApi) << "Cannot fetch messages: no account state";
+        return;
     }
 
-    auto *reply = _nam->get(req);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    QUrlQuery query;
+    if (lastKnownId > 0) {
+        query.addQueryItem(QStringLiteral("lookIntoFuture"), QStringLiteral("1"));
+        query.addQueryItem(QStringLiteral("lastKnownMessageId"), QString::number(lastKnownId));
+        query.addQueryItem(QStringLiteral("limit"), QStringLiteral("100"));
+    }
+    url.setQuery(query);
+
+    QNetworkRequest req;
+    req.setRawHeader("OCS-APIRequest", "true");
+
+    auto *account = _accountState->account().data();
+    auto *reply = account->sendRawRequest("GET", url, req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, token]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
             qCWarning(lcTalkOcsApi) << "fetchMessages failed:" << reply->errorString();
@@ -80,34 +92,35 @@ void TalkOcsApi::fetchMessages(const QString &token)
         const auto doc = QJsonDocument::fromJson(reply->readAll());
         const auto data = doc.object().value(QStringLiteral("ocs")).toObject()
                               .value(QStringLiteral("data")).toArray();
-        emit messagesReceived(data);
+        emit messagesReceived(data, token);
     });
 }
 
 void TalkOcsApi::sendMessage(const QString &token, const QString &text)
 {
-    const auto url = ocsUrl(QStringLiteral("/chat/%1").arg(token));
-    if (url.isEmpty()) return;
+    const auto url = QUrl(ocsUrl(QStringLiteral("/chat/%1").arg(token)));
+    if (!url.isValid()) {
+        qCWarning(lcTalkOcsApi) << "Cannot send message: no account state";
+        return;
+    }
 
-    QNetworkRequest req(url);
+    QNetworkRequest req;
     req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/x-www-form-urlencoded"));
     req.setRawHeader("OCS-APIRequest", "true");
 
-    if (_accountState && _accountState->account()) {
-        const auto creds = _accountState->account()->credentials();
-        // creds auth handled by account/AbstractNetworkJob
-    }
-
     QUrlQuery body;
     body.addQueryItem(QStringLiteral("message"), text);
-    auto *reply = _nam->post(req, body.toString(QUrl::FullyEncoded).toUtf8());
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+
+    auto *account = _accountState->account().data();
+    auto *reply = account->sendRawRequest("POST", url, req, body.toString(QUrl::FullyEncoded).toUtf8());
+    connect(reply, &QNetworkReply::finished, this, [this, reply, token]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
             qCWarning(lcTalkOcsApi) << "sendMessage failed:" << reply->errorString();
             return;
         }
-        emit messageSent();
+        qCInfo(lcTalkOcsApi) << "Message sent to" << token;
+        emit messageSent(token);
     });
 }
 

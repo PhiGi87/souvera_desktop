@@ -8,7 +8,7 @@
 
 #include <QObject>
 #include <QJsonArray>
-#include <QNetworkAccessManager>
+#include <QJsonObject>
 
 namespace OCC {
 
@@ -19,22 +19,27 @@ class DeckOcsApi : public QObject
     Q_OBJECT
 public:
     explicit DeckOcsApi(QObject *parent = nullptr);
+    ~DeckOcsApi() override = default;
 
-    void setAccountState(AccountState *state) { _accountState = state; }
+    void setAccountState(AccountState *state);
 
     void fetchBoards();
     void fetchStacks(int boardId);
     void fetchCards(int stackId);
+    void createCard(int stackId, const QString &title, const QString &description);
+    void moveCard(int cardId, int stackId);
 
 signals:
     void boardsReceived(const QJsonArray &boards);
     void stacksReceived(const QJsonArray &stacks);
-    void cardsReceived(const QJsonArray &cards);
+    void cardsReceived(const QJsonArray &cards, int stackId);
+    void cardCreated(const QJsonObject &card, int stackId);
+    void cardMoved();
+    void apiError(const QString &message);
 
 private:
     [[nodiscard]] QString apiUrl(const QString &path) const;
 
-    QNetworkAccessManager *_nam = nullptr;
     AccountState *_accountState = nullptr;
 };
 

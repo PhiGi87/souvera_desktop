@@ -7,16 +7,19 @@
 #define TALKPANEL_H
 
 #include <QWidget>
-#include <QListWidget>
-#include <QTextEdit>
+#include <QJsonArray>
+#include <QSplitter>
+#include <QListView>
+#include <QScrollArea>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QTimer>
 
-class QSplitter;
-
 namespace OCC {
 
+class TalkConversationModel;
 class TalkOcsApi;
+class AccountState;
 
 class TalkPanel : public QWidget
 {
@@ -25,20 +28,31 @@ public:
     explicit TalkPanel(QWidget *parent = nullptr);
     ~TalkPanel() override = default;
 
+    void setAccountState(AccountState *state);
+
 private:
     void setupUi();
     void onConversationSelected();
     void sendMessage();
     void pollMessages();
+    void onConversationsReceived(const QJsonArray &conversations);
+    void onMessagesReceived(const QJsonArray &messages, const QString &token);
+    void rebuildChatArea(const QJsonArray &messages);
 
     QSplitter *_splitter = nullptr;
-    QListWidget *_conversationList = nullptr;
-    QTextEdit *_messageHistory = nullptr;
-    QTextEdit *_messageInput = nullptr;
+    QListView *_conversationList = nullptr;
+    QScrollArea *_chatScroll = nullptr;
+    QWidget *_chatContainer = nullptr;
+    QLineEdit *_messageInput = nullptr;
     QPushButton *_sendBtn = nullptr;
     QTimer *_pollTimer = nullptr;
 
+    TalkConversationModel *_conversationModel = nullptr;
     TalkOcsApi *_ocsApi = nullptr;
+
+    QString _currentToken;
+    qint64 _lastKnownId = 0;
+    QString _currentUserId;
 };
 
 } // namespace OCC

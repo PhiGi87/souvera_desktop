@@ -8,52 +8,120 @@
 
 #include <QObject>
 #include <QString>
+#include <QSslSocket>
+#include <QByteArray>
+#include <QList>
+#include <QDateTime>
 
 namespace OCC {
+
+class AccountState;
+
+struct ImapFolderData {
+    QString name;
+    int exists = 0;
+    int unseen = 0;
+};
+
+struct ImapMessageData {
+    int seq = 0;
+    int uid = 0;
+    QString from;
+    QString subject;
+    QDateTime dateTime;
+    bool seen = false;
+    bool deleted = false;
+};
 
 class MailAccount : public QObject
 {
     Q_OBJECT
 public:
-    explicit MailAccount(QObject *parent = nullptr);
+    explicit MailAccount(AccountState *accountState, QObject *parent = nullptr);
+    ~MailAccount() override;
 
-    [[nodiscard]] QString imapHost() const { return _imapHost; }
-    void setImapHost(const QString &host) { _imapHost = host; }
-    [[nodiscard]] int imapPort() const { return _imapPort; }
-    void setImapPort(int port) { _imapPort = port; }
-    [[nodiscard]] bool imapUseSsl() const { return _imapUseSsl; }
-    void setImapUseSsl(bool ssl) { _imapUseSsl = ssl; }
+    void connectImap();
+    void disconnectFromImap();
+    [[nodiscard]] bool isImapConnected() const;
 
-    [[nodiscard]] QString smtpHost() const { return _smtpHost; }
-    void setSmtpHost(const QString &host) { _smtpHost = host; }
-    [[nodiscard]] int smtpPort() const { return _smtpPort; }
-    void setSmtpPort(int port) { _smtpPort = port; }
-    [[nodiscard]] bool smtpUseSsl() const { return _smtpUseSsl; }
-    void setSmtpUseSsl(bool ssl) { _smtpUseSsl = ssl; }
+    void fetchFolders();
+    void fetchMessages(const QString &folderName);
+    void fetchBody(int seq);
+    void sendMail(const QString &to, const QString &cc, const QString &bcc,
+                  const QString &subject, const QString &body);
 
-    [[nodiscard]] QString username() const { return _username; }
-    void setUsername(const QString &name) { _username = name; }
-    [[nodiscard]] QString password() const { return _password; }
-    void setPassword(const QString &pwd) { _password = pwd; }
-    [[nodiscard]] QString emailAddress() const { return _emailAddress; }
-    void setEmailAddress(const QString &addr) { _emailAddress = addr; }
+    AccountState *accountState() const { return _accountState; }
+
+    [[nodiscard]] QString emailAddress() const;
+    [[nodiscard]] QString userName() const;
+
+    [[nodiscard]] QString imapHost() const;
+    [[nodiscard]] int imapPort() const;
+    [[nodiscard]] QString smtpHost() const;
+    [[nodiscard]] int smtpPort() const;
 
     static QString deriveImapHost(const QString &souveraDomain);
     static QString deriveSmtpHost(const QString &souveraDomain);
 
 signals:
-    void connectionChanged();
+    void imapConnected();
+    void imapDisconnected();
+    void imapConnectionError(const QString &error);
+    void foldersFetched(const QList<ImapFolderData> &folders);
+    void messagesFetched(const QList<ImapMessageData> &messages);
+    void bodyFetched(int seq, const QString &htmlBody, const QString &plainBody);
+    void messageSent(bool success, const QString &errorMsg);
 
 private:
-    QString _imapHost;
-    int _imapPort = 993;
-    bool _imapUseSsl = true;
-    QString _smtpHost;
-    int _smtpPort = 587;
-    bool _smtpUseSsl = true;
-    QString _username;
-    QString _password;
-    QString _emailAddress;
+    void setupImapSocket();
+    void onImapConnected();
+    void onImapReadyRead();
+    void onImapErrorOccurred(QAbstractSocket::SocketError error);
+    void onImapDisconnected();
+
+    QString nextImapTag();
+    void sendImapLine(const QString &line);
+    void handleImapTaggedResponse(const QString &tag, const QList<QByteArray> &lines);
+    void handleTagLogin(const QString &response);
+    void handleTagList(const QList<QByteArray> &lines);
+    void handleTagSelect(const QString &response, const QList<QByteArray> &lines);
+    void handleTagFetch(const QList<QByteArray> &lines);
+    void processMessageBuffer(const QByteArray &buf, QList<ImapMessageData> &messages, int seq, bool seen);
+    void handleTagBody(const QList<QByteArray> &lines);
+
+    AccountState *_accountState;
+
+    QSslSocket *_imapSocket = nullptr;
+    QByteArray _imapBuf;
+    int _imapLiteralRemaining = 0;
+    QByteArray _imapLiteralData;
+    QList<QByteArray> _imapResponseLines;
+    int _imapTagCounter = 0;
+    QString _lastTag;
+    bool _imapLoggedIn = false;
+
+    QString _pendingFolderName;
+    int _pendingBodySeq = 0;
+
+    // SMTP
+    QSslSocket *_smtpSocket = nullptr;
+    QByteArray _smtpBuf;
+    int _smtpStep = 0;
+    QStringList _smtpRecipients;
+    int _smtpRcptIndex = 0;
+    QString _smtpFrom;
+    QString _smtpTo;
+    QString _smtpCc;
+    QString _smtpBcc;
+    QString _smtpSubject;
+    QString _smtpBody;
+
+    void setupSmtpSocket();
+    void connectSmtp();
+    void onSmtpConnected();
+    void onSmtpReadyRead();
+    void onSmtpErrorOccurred(QAbstractSocket::SocketError error);
+    void smtpAdvance();
 };
 
 } // namespace OCC

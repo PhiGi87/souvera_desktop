@@ -6,6 +6,7 @@
 #include "MailMessageModel.h"
 
 #include <QLoggingCategory>
+#include <QLocale>
 
 Q_LOGGING_CATEGORY(lcMailMessageModel, "souvera.mail.messagemodel")
 
@@ -25,29 +26,80 @@ int MailMessageModel::rowCount(const QModelIndex &parent) const
 QVariant MailMessageModel::data(const QModelIndex &index, int role) const
 {
     if (!index.isValid() || index.row() >= _messages.size()) return {};
+
     const auto &msg = _messages.at(index.row());
-    if (role == Qt::DisplayRole) {
-        return QStringLiteral("%1 — %2").arg(msg.sender, msg.subject);
-    }
-    if (role == Qt::UserRole) {
+
+    switch (role) {
+    case FromRole:
+        return msg.from;
+    case SubjectRole:
+        return msg.subject;
+    case DateTimeRole:
+        return msg.dateTime;
+    case BodyHtmlRole:
         return msg.bodyHtml;
+    case BodyPlainRole:
+        return msg.bodyPlain;
+    case UnreadRole:
+        return msg.unread;
+    case HasAttachmentsRole:
+        return msg.hasAttachments;
+    case UidRole:
+        return msg.uid;
+    case DateDisplayRole: {
+        auto now = QDateTime::currentDateTime();
+        if (msg.dateTime.date() == now.date()) {
+            return msg.dateTime.toString(QStringLiteral("HH:mm"));
+        }
+        if (msg.dateTime.date().year() == now.date().year()) {
+            return msg.dateTime.toString(QStringLiteral("dd.MM"));
+        }
+        return msg.dateTime.toString(QStringLiteral("dd.MM.yy"));
     }
-    return {};
+    case SummaryRole: {
+        auto preview = msg.bodyPlain.left(100).simplified();
+        if (preview.isEmpty()) {
+            preview = QStringLiteral("...");
+        }
+        if (msg.unread) {
+            return QStringLiteral("◆ %1\n%2\n%3").arg(msg.from, msg.subject, preview);
+        }
+        return QStringLiteral("%1\n%2\n%3").arg(msg.from, msg.subject, preview);
+    }
+    case Qt::ToolTipRole:
+        return QStringLiteral("Von: %1\nBetreff: %2\nDatum: %3")
+            .arg(msg.from, msg.subject, msg.dateTime.toString(Qt::DefaultLocaleLongDate));
+    default:
+        return {};
+    }
 }
 
-void MailMessageModel::loadFolder(const QString &folderName)
+void MailMessageModel::loadMessages(const QList<MailMessage> &messages)
 {
-    Q_UNUSED(folderName)
+    beginResetModel();
+
+    auto sorted = messages;
+    std::sort(sorted.begin(), sorted.end(), [](const MailMessage &a, const MailMessage &b) {
+        return a.dateTime > b.dateTime;
+    });
+
+    _messages = sorted;
+    endResetModel();
+
+    qCInfo(lcMailMessageModel) << "Messages loaded, count:" << _messages.size();
+}
+
+void MailMessageModel::clear()
+{
     beginResetModel();
     _messages.clear();
-    MailMessage placeholder;
-    placeholder.subject = QStringLiteral("Willkommen bei Souvera Mail");
-    placeholder.sender = QStringLiteral("support@souvera.work");
-    placeholder.date = QStringLiteral("2025-07-25");
-    placeholder.bodyHtml = QStringLiteral("<h2>Willkommen</h2><p>Ihr E-Mail-Postfach ist bereit.</p>");
-    _messages.append(placeholder);
     endResetModel();
-    qCInfo(lcMailMessageModel) << "Loaded folder:" << folderName;
+}
+
+const MailMessage *MailMessageModel::messageAt(int row) const
+{
+    if (row < 0 || row >= _messages.size()) return nullptr;
+    return &_messages.at(row);
 }
 
 } // namespace OCC

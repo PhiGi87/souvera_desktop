@@ -4,13 +4,19 @@
  */
 
 #include "TalkPanel.h"
+#include "TalkConversationModel.h"
 #include "TalkOcsApi.h"
+#include "TalkMessageWidget.h"
+
+#include "accountstate.h"
+#include "account.h"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QLoggingCategory>
-#include <QSplitter>
+#include <QScrollBar>
+#include <QJsonObject>
 
 Q_LOGGING_CATEGORY(lcTalkPanel, "souvera.talk.panel")
 
@@ -20,15 +26,34 @@ TalkPanel::TalkPanel(QWidget *parent)
     : QWidget(parent)
 {
     _ocsApi = new TalkOcsApi(this);
+    _conversationModel = new TalkConversationModel(this);
+
     setupUi();
 
     _pollTimer = new QTimer(this);
+    _pollTimer->setInterval(5000);
     connect(_pollTimer, &QTimer::timeout, this, &TalkPanel::pollMessages);
 
-    // Demo: populate conversation list
-    _conversationList->addItem(QStringLiteral("Allgemein"));
-    _conversationList->addItem(QStringLiteral("Projekt Souvera"));
-    _conversationList->addItem(QStringLiteral("Entwicklungsteam"));
+    connect(_ocsApi, &TalkOcsApi::conversationsReceived,
+            this, &TalkPanel::onConversationsReceived);
+    connect(_ocsApi, &TalkOcsApi::messagesReceived,
+            this, &TalkPanel::onMessagesReceived);
+    connect(_ocsApi, &TalkOcsApi::messageSent,
+            this, [this](const QString &token) {
+        if (token == _currentToken) {
+            _lastKnownId = 0;
+            _ocsApi->fetchMessages(_currentToken);
+        }
+    });
+}
+
+void TalkPanel::setAccountState(AccountState *state)
+{
+    _ocsApi->setAccountState(state);
+    if (state && state->account()) {
+        _currentUserId = state->account()->davUser();
+    }
+    _ocsApi->fetchConversations();
 }
 
 void TalkPanel::setupUi()
@@ -40,42 +65,77 @@ void TalkPanel::setupUi()
     auto *toolbarLayout = new QHBoxLayout(toolbar);
     toolbarLayout->setContentsMargins(12, 8, 12, 8);
 
-    auto *title = new QLabel(QStringLiteral("Talk – Nachrichten"), toolbar);
+    auto *title = new QLabel(QStringLiteral("Talk"), toolbar);
     title->setStyleSheet(QStringLiteral("font-size: 18px; font-weight: bold;"));
     toolbarLayout->addWidget(title);
     toolbarLayout->addStretch();
+
+    auto *refreshBtn = new QPushButton(QStringLiteral("Refresh"), toolbar);
+    refreshBtn->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #4a90d9; color: white; border: none;"
+        "  border-radius: 4px; padding: 8px 16px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #357abd; }"));
+    connect(refreshBtn, &QPushButton::clicked, this, [this]() {
+        _ocsApi->fetchConversations();
+        if (!_currentToken.isEmpty()) {
+            _lastKnownId = 0;
+            _ocsApi->fetchMessages(_currentToken);
+        }
+    });
+    toolbarLayout->addWidget(refreshBtn);
 
     layout->addWidget(toolbar);
 
     _splitter = new QSplitter(Qt::Horizontal, this);
 
-    _conversationList = new QListWidget(_splitter);
-    _conversationList->setFixedWidth(250);
-    connect(_conversationList, &QListWidget::currentItemChanged, this, [this](QListWidgetItem *, QListWidgetItem *) { onConversationSelected(); });
+    _conversationList = new QListView(_splitter);
+    _conversationList->setModel(_conversationModel);
+    _conversationList->setFixedWidth(260);
+    _conversationList->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    _conversationList->setSelectionMode(QAbstractItemView::SingleSelection);
+    connect(_conversationList, &QListView::clicked, this, [this]() { onConversationSelected(); });
 
     auto *chatWidget = new QWidget(_splitter);
     auto *chatLayout = new QVBoxLayout(chatWidget);
-    chatLayout->setContentsMargins(8, 8, 8, 8);
+    chatLayout->setContentsMargins(0, 0, 0, 0);
 
-    _messageHistory = new QTextEdit(chatWidget);
-    _messageHistory->setReadOnly(true);
-    _messageHistory->setPlaceholderText(QStringLiteral("Wählen Sie eine Unterhaltung…"));
-    chatLayout->addWidget(_messageHistory, 1);
+    _chatScroll = new QScrollArea(chatWidget);
+    _chatScroll->setWidgetResizable(true);
+    _chatScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    _chatScroll->setStyleSheet(QStringLiteral("QScrollArea { border: none; background: #f5f5f5; }"));
+
+    _chatContainer = new QWidget(_chatScroll);
+    auto *containerLayout = new QVBoxLayout(_chatContainer);
+    containerLayout->setContentsMargins(8, 8, 8, 8);
+    containerLayout->setSpacing(4);
+    containerLayout->addStretch();
+
+    auto *placeholder = new QLabel(QStringLiteral("Select a conversation"), _chatContainer);
+    placeholder->setAlignment(Qt::AlignCenter);
+    placeholder->setStyleSheet(QStringLiteral("color: #999; font-size: 16px;"));
+    containerLayout->addWidget(placeholder);
+
+    _chatScroll->setWidget(_chatContainer);
+    chatLayout->addWidget(_chatScroll, 1);
 
     auto *inputBar = new QWidget(chatWidget);
     auto *inputLayout = new QHBoxLayout(inputBar);
-    inputLayout->setContentsMargins(0, 4, 0, 0);
+    inputLayout->setContentsMargins(8, 4, 8, 8);
 
-    _messageInput = new QTextEdit(inputBar);
-    _messageInput->setFixedHeight(60);
-    _messageInput->setPlaceholderText(QStringLiteral("Nachricht eingeben…"));
+    _messageInput = new QLineEdit(inputBar);
+    _messageInput->setPlaceholderText(QStringLiteral("Type a message…"));
+    _messageInput->setStyleSheet(QStringLiteral(
+        "QLineEdit { border: 1px solid #ccc; border-radius: 18px;"
+        "  padding: 8px 16px; font-size: 13px; background: white; }"));
+    connect(_messageInput, &QLineEdit::returnPressed, this, &TalkPanel::sendMessage);
     inputLayout->addWidget(_messageInput, 1);
 
-    _sendBtn = new QPushButton(QStringLiteral("Senden"), inputBar);
+    _sendBtn = new QPushButton(QStringLiteral("Send"), inputBar);
     _sendBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #4a90d9; color: white; border: none;"
-        "  border-radius: 4px; padding: 8px 16px; font-weight: bold; }"
-        "QPushButton:hover { background-color: #357abd; }"));
+        "  border-radius: 18px; padding: 8px 20px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #357abd; }"
+        "QPushButton:disabled { background-color: #ccc; }"));
     connect(_sendBtn, &QPushButton::clicked, this, &TalkPanel::sendMessage);
     inputLayout->addWidget(_sendBtn);
 
@@ -91,33 +151,91 @@ void TalkPanel::setupUi()
 
 void TalkPanel::onConversationSelected()
 {
-    auto *item = _conversationList->currentItem();
-    if (!item) return;
+    const auto idx = _conversationList->currentIndex();
+    if (!idx.isValid()) return;
 
-    qCInfo(lcTalkPanel) << "Conversation selected:" << item->text();
-    _messageHistory->clear();
-    _messageHistory->append(QStringLiteral("--- Unterhaltung: %1 ---\n").arg(item->text()));
+    const auto token = idx.data(TalkConversationModel::TokenRole).toString();
+    const auto displayName = idx.data(TalkConversationModel::DisplayNameRole).toString();
+    if (token.isEmpty()) return;
 
-    _pollTimer->start(5000);
+    qCInfo(lcTalkPanel) << "Conversation selected:" << displayName << token;
+
+    _currentToken = token;
+    _lastKnownId = 0;
+
+    _ocsApi->fetchMessages(_currentToken);
+    _pollTimer->start();
 }
 
 void TalkPanel::sendMessage()
 {
-    const auto text = _messageInput->toPlainText().trimmed();
-    if (text.isEmpty()) return;
+    const auto text = _messageInput->text().trimmed();
+    if (text.isEmpty() || _currentToken.isEmpty()) return;
 
-    auto *item = _conversationList->currentItem();
-    if (!item) return;
+    qCInfo(lcTalkPanel) << "Sending message to" << _currentToken << ":" << text;
 
-    _messageHistory->append(QStringLiteral("Ich: %1").arg(text));
     _messageInput->clear();
-
-    qCInfo(lcTalkPanel) << "Sending message to" << item->text() << ":" << text;
+    _ocsApi->sendMessage(_currentToken, text);
 }
 
 void TalkPanel::pollMessages()
 {
-    qCInfo(lcTalkPanel) << "Polling for new messages…";
+    if (_currentToken.isEmpty()) return;
+    qCInfo(lcTalkPanel) << "Polling for messages in" << _currentToken;
+    _ocsApi->fetchMessages(_currentToken, _lastKnownId);
+}
+
+void TalkPanel::onConversationsReceived(const QJsonArray &conversations)
+{
+    _conversationModel->setConversations(conversations);
+    qCInfo(lcTalkPanel) << "Conversations updated:" << conversations.size();
+}
+
+void TalkPanel::onMessagesReceived(const QJsonArray &messages, const QString &token)
+{
+    if (token != _currentToken) return;
+
+    qCInfo(lcTalkPanel) << "Messages received for" << token << ":" << messages.size();
+
+    if (messages.isEmpty()) return;
+
+    rebuildChatArea(messages);
+
+    for (const auto &msgVal : messages) {
+        const auto msgObj = msgVal.toObject();
+        const auto id = static_cast<qint64>(msgObj.value(QStringLiteral("id")).toDouble());
+        if (id > _lastKnownId) {
+            _lastKnownId = id;
+        }
+    }
+
+    auto *scrollBar = _chatScroll->verticalScrollBar();
+    scrollBar->setValue(scrollBar->maximum());
+}
+
+void TalkPanel::rebuildChatArea(const QJsonArray &messages)
+{
+    auto *old = _chatScroll->takeWidget();
+    if (old) {
+        old->deleteLater();
+    }
+
+    _chatContainer = new QWidget(_chatScroll);
+    auto *layout = new QVBoxLayout(_chatContainer);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(4);
+    layout->addStretch();
+
+    for (const auto &msgVal : messages) {
+        const auto msgObj = msgVal.toObject();
+        const auto actorId = msgObj.value(QStringLiteral("actorId")).toString();
+        const auto isOwn = (actorId == _currentUserId);
+        auto *msgWidget = new TalkMessageWidget(isOwn, _chatContainer);
+        msgWidget->setMessage(msgObj);
+        layout->addWidget(msgWidget);
+    }
+
+    _chatScroll->setWidget(_chatContainer);
 }
 
 } // namespace OCC
