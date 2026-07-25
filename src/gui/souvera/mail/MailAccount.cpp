@@ -35,7 +35,7 @@ MailAccount::~MailAccount()
 
 QString MailAccount::emailAddress() const
 {
-    auto *acc = _accountState->account();
+    auto acc = _accountState->account();
     auto *creds = acc->credentials();
     return QStringLiteral("%1@%2").arg(creds->user(), acc->url().host());
 }
@@ -256,8 +256,8 @@ void MailAccount::handleTagList(const QList<QByteArray> &lines)
 {
     QList<MailFolderData> folders;
 
-    static QRegularExpression listRe(R"(\* LIST\s*\([^)]*\)\s*"[^"]*"\s*"([^"]+)")");
-    static QRegularExpression listNoAttrRe(R"(\* LIST\s*\(\)\s*"[^"]*"\s*"([^"]+)")");
+    static QRegularExpression listRe(QStringLiteral(R"regex(\* LIST\s*\([^)]*\)\s*"[^"]*"\s*"([^"]+)")regex"));
+    static QRegularExpression listNoAttrRe(QStringLiteral(R"regex(\* LIST\s*\(\)\s*"[^"]*"\s*"([^"]+)")regex"));
 
     for (const auto &raw : lines) {
         auto line = QString::fromUtf8(raw);

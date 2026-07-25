@@ -38,7 +38,7 @@ void MailPanel::setAccountState(AccountState *accountState)
     _accountState = accountState;
     if (!accountState) return;
 
-    auto *acc = accountState->account();
+    auto acc = accountState->account();
     if (!acc) return;
 
     auto *creds = acc->credentials();
