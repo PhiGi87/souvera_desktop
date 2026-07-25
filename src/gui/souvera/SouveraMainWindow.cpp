@@ -33,7 +33,7 @@ SouveraMainWindow::SouveraMainWindow(QWidget *parent)
     setWindowFlags(Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint
                    | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint
                    | Qt::WindowCloseButtonHint);
-    setAttribute(Qt::WA_QuitOnHide, false);
+    setAttribute(Qt::WA_QuitOnClose, false);
 
     loadStyleSheet();
     setupUi();
