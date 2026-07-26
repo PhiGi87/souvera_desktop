@@ -104,6 +104,9 @@ ownCloudGui::ownCloudGui(Application *parent)
 
     _tray->show();
 
+    // Souvera: open the workspace window on startup
+    QTimer::singleShot(500, this, &ownCloudGui::slotOpenMainDialog);
+
     connect(_tray.data(), &QSystemTrayIcon::activated,
         this, &ownCloudGui::slotTrayClicked);
 
