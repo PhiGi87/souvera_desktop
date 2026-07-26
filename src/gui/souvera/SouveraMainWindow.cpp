@@ -69,19 +69,19 @@ void SouveraMainWindow::setupUi()
             this, &SouveraMainWindow::settingsRequested);
     layout->addWidget(_statusHeader);
 
-    _filesPanel = new FilesPanel(central);
     _mailPanel = new MailPanel(central);
     _talkPanel = new TalkPanel(central);
     _deckPanel = new DeckPanel(central);
     _calendarPanel = new CalendarPanel(central);
+    _filesPanel = new FilesPanel(central);
 
     _contentStack = new QStackedWidget(central);
     _contentStack->setObjectName(QStringLiteral("ContentArea"));
-    _contentStack->addWidget(_filesPanel);
     _contentStack->addWidget(_mailPanel);
     _contentStack->addWidget(_talkPanel);
     _contentStack->addWidget(_deckPanel);
     _contentStack->addWidget(_calendarPanel);
+    _contentStack->addWidget(_filesPanel);
     layout->addWidget(_contentStack, 1);
 
     _bottomBar = new BottomBar(central);

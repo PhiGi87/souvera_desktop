@@ -8,12 +8,14 @@
 #include "folderman.h"
 #include "folder.h"
 #include "syncresult.h"
+#include "progressdispatcher.h"
 
 #include <QDesktopServices>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLoggingCategory>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QUrl>
@@ -31,6 +33,10 @@ FilesPanel::FilesPanel(QWidget *parent)
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(16, 16, 16, 16);
 
+    auto *headerLabel = new QLabel(QStringLiteral("Datei-Synchronisation"), this);
+    headerLabel->setObjectName(QStringLiteral("FilesHeaderLabel"));
+    layout->addWidget(headerLabel);
+
     _scrollArea = new QScrollArea(this);
     _scrollArea->setWidgetResizable(true);
     _scrollArea->setFrameShape(QFrame::NoFrame);
@@ -40,10 +46,10 @@ FilesPanel::FilesPanel(QWidget *parent)
     _folderContainer->setObjectName(QStringLiteral("ContentArea"));
     _foldersLayout = new QVBoxLayout(_folderContainer);
     _foldersLayout->setContentsMargins(0, 0, 0, 0);
-    _foldersLayout->setSpacing(8);
+    _foldersLayout->setSpacing(12);
 
     _scrollArea->setWidget(_folderContainer);
-    layout->addWidget(_scrollArea);
+    layout->addWidget(_scrollArea, 1);
 
     refreshFolderList();
 
@@ -51,6 +57,10 @@ FilesPanel::FilesPanel(QWidget *parent)
             this, [this](Folder *) { refreshFolderList(); });
     connect(FolderMan::instance(), &FolderMan::folderListChanged,
             this, [this](const Folder::Map &) { refreshFolderList(); });
+    connect(ProgressDispatcher::instance(), &ProgressDispatcher::progressInfo,
+            this, [this](const QString &folderAlias, const ProgressInfo &info) {
+        updateProgress(folderAlias, info);
+    });
 }
 
 void FilesPanel::refreshFolderList()
@@ -64,7 +74,7 @@ void FilesPanel::refreshFolderList()
 
     auto folders = FolderMan::instance()->map();
     if (folders.isEmpty()) {
-        auto *label = new QLabel(QStringLiteral("No sync folders configured"), _folderContainer);
+        auto *label = new QLabel(QStringLiteral("Keine Synchronisationsordner konfiguriert"), _folderContainer);
         label->setObjectName(QStringLiteral("EmptyLabel"));
         label->setAlignment(Qt::AlignCenter);
         _foldersLayout->addWidget(label);
@@ -82,52 +92,95 @@ void FilesPanel::addFolderRow(Folder *folder)
     auto *row = new QFrame(_folderContainer);
     row->setObjectName(QStringLiteral("FolderRow"));
     row->setFrameShape(QFrame::NoFrame);
-    auto *rowLayout = new QHBoxLayout(row);
-    rowLayout->setContentsMargins(12, 0, 12, 0);
+    auto *rowLayout = new QVBoxLayout(row);
+    rowLayout->setContentsMargins(16, 12, 16, 12);
+    rowLayout->setSpacing(6);
+
+    auto *topRow = new QHBoxLayout;
+    topRow->setContentsMargins(0, 0, 0, 0);
 
     auto *aliasLabel = new QLabel(folder->alias(), row);
     aliasLabel->setObjectName(QStringLiteral("FolderAliasLabel"));
-    rowLayout->addWidget(aliasLabel);
+    topRow->addWidget(aliasLabel);
 
-    rowLayout->addStretch();
+    topRow->addStretch();
 
     auto *statusLabel = new QLabel(syncStatusText(folder), row);
     statusLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
-    rowLayout->addWidget(statusLabel);
+    topRow->addWidget(statusLabel);
 
-    auto *openBtn = new QPushButton(QStringLiteral("Open Folder"), row);
+    auto *openBtn = new QPushButton(QStringLiteral("Ordner \u00F6ffnen"), row);
     openBtn->setCursor(Qt::PointingHandCursor);
     connect(openBtn, &QPushButton::clicked, this, [folder]() {
         QDesktopServices::openUrl(QUrl::fromLocalFile(folder->path()));
     });
-    rowLayout->addWidget(openBtn);
+    topRow->addWidget(openBtn);
+
+    rowLayout->addLayout(topRow);
+
+    auto *progressBar = new QProgressBar(row);
+    progressBar->setObjectName(QStringLiteral("FolderProgressBar"));
+    progressBar->setRange(0, 100);
+    progressBar->setValue(0);
+    progressBar->setVisible(false);
+    rowLayout->addWidget(progressBar);
+
+    auto *errorLabel = new QLabel(row);
+    errorLabel->setObjectName(QStringLiteral("FolderErrorLabel"));
+    errorLabel->setVisible(false);
+    errorLabel->setWordWrap(true);
+    rowLayout->addWidget(errorLabel);
+
+    _folderRows[folder->alias()] = {statusLabel, progressBar, errorLabel};
 
     _foldersLayout->addWidget(row);
+}
+
+void FilesPanel::updateProgress(const QString &folderAlias, const ProgressInfo &info)
+{
+    auto it = _folderRows.find(folderAlias);
+    if (it == _folderRows.end()) return;
+
+    auto &[statusLabel, progressBar, errorLabel] = it.value();
+
+    auto total = info.totalFiles();
+    auto completed = info.completedFiles();
+
+    if (info.status() == ProgressInfo::Propagation && total > 0) {
+        progressBar->setValue(static_cast<int>(completed * 100 / total));
+        progressBar->setVisible(true);
+
+        statusLabel->setText(QStringLiteral("Synchronisiere %1/%2 Dateien")
+            .arg(completed).arg(total));
+    } else {
+        progressBar->setValue(100);
+        progressBar->setVisible(false);
+    }
 }
 
 QString FilesPanel::syncStatusText(Folder *folder)
 {
     if (folder->syncPaused()) {
-        return QStringLiteral("Paused");
+        return QStringLiteral("Pausiert");
     }
     if (folder->isSyncRunning()) {
-        return QStringLiteral("Syncing\u2026");
+        return QStringLiteral("Synchronisiere\u2026");
     }
 
     switch (folder->syncResult().status()) {
     case SyncResult::Success:
-        return QStringLiteral("Up to date");
+        return QStringLiteral("Aktuell");
     case SyncResult::Problem:
-        return QStringLiteral("Sync completed with warnings");
+        return QStringLiteral("Sync mit Warnungen abgeschlossen");
     case SyncResult::Error:
     case SyncResult::SetupError:
-        return QStringLiteral("Sync error");
+        return QStringLiteral("Sync-Fehler");
     case SyncResult::SyncAbortRequested:
-        return QStringLiteral("Sync cancelled");
+        return QStringLiteral("Sync abgebrochen");
     case SyncResult::NotYetStarted:
     case SyncResult::Undefined:
     default:
-        return QStringLiteral("Waiting");
+        return QStringLiteral("Warte");
     }
 }
 

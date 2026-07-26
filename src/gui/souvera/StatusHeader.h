@@ -23,8 +23,11 @@ signals:
     void settingsClicked();
 
 private:
+    void updateSyncStatus();
+
     QLabel *_userLabel = nullptr;
-    QLabel *_syncStatusLabel = nullptr;
+    QLabel *_syncIconLabel = nullptr;
+    QLabel *_syncTextLabel = nullptr;
     QPushButton *_settingsButton = nullptr;
 };
 

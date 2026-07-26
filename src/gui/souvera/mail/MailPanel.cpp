@@ -66,18 +66,16 @@ void MailPanel::setupUi()
     layout->addWidget(_toolbar);
 
     _splitter = new QSplitter(Qt::Horizontal, this);
+    _splitter->setObjectName(QStringLiteral("MailSplitter"));
 
     auto *folderPanel = new QWidget(_splitter);
+    folderPanel->setObjectName(QStringLiteral("MailFolderPanel"));
     auto *folderLayout = new QVBoxLayout(folderPanel);
     folderLayout->setContentsMargins(0, 0, 0, 0);
     folderLayout->setSpacing(0);
 
-    auto *folderHeader = new QLabel(QStringLiteral("Ordner"), folderPanel);
-    folderHeader->setStyleSheet(QStringLiteral(
-        "QLabel { font-weight: bold; padding: 8px 12px; background: #f0f0f0; border-bottom: 1px solid #ddd; }"));
-    folderLayout->addWidget(folderHeader);
-
     _folderView = new QTreeView(folderPanel);
+    _folderView->setObjectName(QStringLiteral("MailFolderView"));
     _folderView->setHeaderHidden(true);
     _folderView->setFixedWidth(220);
     _folderView->setIndentation(12);
@@ -88,16 +86,13 @@ void MailPanel::setupUi()
     _splitter->addWidget(folderPanel);
 
     auto *messagePanel = new QWidget(_splitter);
+    messagePanel->setObjectName(QStringLiteral("MailMessagePanel"));
     auto *messageLayout = new QVBoxLayout(messagePanel);
     messageLayout->setContentsMargins(0, 0, 0, 0);
     messageLayout->setSpacing(0);
 
-    auto *messageHeader = new QLabel(QStringLiteral("Nachrichten"), messagePanel);
-    messageHeader->setStyleSheet(QStringLiteral(
-        "QLabel { font-weight: bold; padding: 8px 12px; background: #f0f0f0; border-bottom: 1px solid #ddd; }"));
-    messageLayout->addWidget(messageHeader);
-
     _messageView = new QListView(messagePanel);
+    _messageView->setObjectName(QStringLiteral("MailMessageView"));
     _messageView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     _messageView->setSelectionMode(QAbstractItemView::SingleSelection);
     _messageView->setAlternatingRowColors(true);
@@ -106,18 +101,15 @@ void MailPanel::setupUi()
     _splitter->addWidget(messagePanel);
 
     auto *previewPanel = new QWidget(_splitter);
+    previewPanel->setObjectName(QStringLiteral("MailPreviewPanel"));
     auto *previewLayout = new QVBoxLayout(previewPanel);
     previewLayout->setContentsMargins(0, 0, 0, 0);
     previewLayout->setSpacing(0);
 
-    auto *previewHeader = new QLabel(QStringLiteral("Vorschau"), previewPanel);
-    previewHeader->setStyleSheet(QStringLiteral(
-        "QLabel { font-weight: bold; padding: 8px 12px; background: #f0f0f0; border-bottom: 1px solid #ddd; }"));
-    previewLayout->addWidget(previewHeader);
-
     _preview = new QTextBrowser(previewPanel);
+    _preview->setObjectName(QStringLiteral("MailPreview"));
     _preview->setOpenExternalLinks(true);
-    _preview->setPlaceholderText(QStringLiteral("Wählen Sie eine Nachricht aus…"));
+    _preview->setPlaceholderText(QStringLiteral("W\u00E4hle eine Nachricht\u2026"));
     previewLayout->addWidget(_preview);
 
     _splitter->addWidget(previewPanel);
@@ -141,39 +133,43 @@ void MailPanel::setupUi()
 void MailPanel::setupToolbar()
 {
     _toolbar = new QWidget(this);
+    _toolbar->setObjectName(QStringLiteral("MailToolbar"));
     auto *toolbarLayout = new QHBoxLayout(_toolbar);
-    toolbarLayout->setContentsMargins(12, 8, 12, 8);
+    toolbarLayout->setContentsMargins(16, 10, 16, 10);
     toolbarLayout->setSpacing(8);
 
     auto *title = new QLabel(QStringLiteral("E-Mail"), _toolbar);
-    title->setStyleSheet(QStringLiteral("font-size: 18px; font-weight: bold; margin-right: 16px;"));
+    title->setObjectName(QStringLiteral("MailToolbarTitle"));
     toolbarLayout->addWidget(title);
 
-    _newMsgBtn = new QPushButton(QStringLiteral("Neue Mail"), _toolbar);
-    _newMsgBtn->setStyleSheet(QStringLiteral(
-        "QPushButton { background-color: #4a90d9; color: white; border: none;"
-        "  border-radius: 4px; padding: 6px 14px; font-weight: bold; }"
-        "QPushButton:hover { background-color: #357abd; }"
-        "QPushButton:disabled { background-color: #ccc; }"));
+    toolbarLayout->addSpacing(16);
+
+    _newMsgBtn = new QPushButton(QStringLiteral("Verfassen"), _toolbar);
+    _newMsgBtn->setObjectName(QStringLiteral("MailComposeBtn"));
     toolbarLayout->addWidget(_newMsgBtn);
 
     _replyBtn = new QPushButton(QStringLiteral("Antworten"), _toolbar);
+    _replyBtn->setObjectName(QStringLiteral("MailReplyBtn"));
     _replyBtn->setEnabled(false);
     toolbarLayout->addWidget(_replyBtn);
 
-    _deleteBtn = new QPushButton(QStringLiteral("Löschen"), _toolbar);
+    _deleteBtn = new QPushButton(QStringLiteral("L\u00F6schen"), _toolbar);
+    _deleteBtn->setObjectName(QStringLiteral("MailDeleteBtn"));
     _deleteBtn->setEnabled(false);
     toolbarLayout->addWidget(_deleteBtn);
 
     _refreshBtn = new QPushButton(QStringLiteral("Aktualisieren"), _toolbar);
+    _refreshBtn->setObjectName(QStringLiteral("MailRefreshBtn"));
     toolbarLayout->addWidget(_refreshBtn);
 
     toolbarLayout->addStretch();
 
     auto *sendAsLabel = new QLabel(QStringLiteral("Senden als:"), _toolbar);
+    sendAsLabel->setObjectName(QStringLiteral("MailSendAsLabel"));
     toolbarLayout->addWidget(sendAsLabel);
 
     _sendAsCombo = new QComboBox(_toolbar);
+    _sendAsCombo->setObjectName(QStringLiteral("MailSendAsCombo"));
     _sendAsCombo->setMinimumWidth(200);
     toolbarLayout->addWidget(_sendAsCombo);
 }
@@ -238,12 +234,12 @@ void MailPanel::onMessageSelected(const QModelIndex &index)
     qCInfo(lcMailPanel) << "Message selected - from:" << from << "subject:" << subject;
 
     _preview->setHtml(QStringLiteral(
-        "<div style='border-bottom: 1px solid #ddd; padding-bottom: 12px; margin-bottom: 12px;'>"
-        "<h2 style='margin: 0 0 8px 0;'>%1</h2>"
-        "<p style='color: #666; margin: 2px 0;'><b>Von:</b> %2</p>"
-        "<p style='color: #666; margin: 2px 0;'><b>Datum:</b> %3</p>"
+        "<div style='border-bottom: 1px solid #333; padding-bottom: 12px; margin-bottom: 12px;'>"
+        "<h2 style='margin: 0 0 8px 0; color: #e0e0e0;'>%1</h2>"
+        "<p style='color: #999; margin: 2px 0;'><b style='color: #ccc;'>Von:</b> %2</p>"
+        "<p style='color: #999; margin: 2px 0;'><b style='color: #ccc;'>Datum:</b> %3</p>"
         "</div>"
-        "<p style='color: #999;'>Lade Nachricht…</p>")
+        "<p style='color: #666;'>Lade Nachricht\u2026</p>")
         .arg(subject.toHtmlEscaped(), from.toHtmlEscaped(), date));
 
     _replyBtn->setEnabled(true);
@@ -303,8 +299,8 @@ void MailPanel::onDelete()
 {
     if (_selectedMessageSeq < 0) return;
 
-    auto ret = QMessageBox::question(this, QStringLiteral("Löschen"),
-                                      QStringLiteral("Möchten Sie diese Nachricht wirklich löschen?"),
+    auto ret = QMessageBox::question(this, QStringLiteral("L\u00F6schen"),
+                                      QStringLiteral("M\u00F6chten Sie diese Nachricht wirklich l\u00F6schen?"),
                                       QMessageBox::Yes | QMessageBox::No);
     if (ret != QMessageBox::Yes) return;
 
@@ -362,8 +358,8 @@ void MailPanel::onFoldersFetched(const QList<MailFolderData> &folders)
         auto lower = imapFolder.name.toLower();
         if (lower == QStringLiteral("inbox")) info.icon = FolderIcon::Inbox;
         else if (lower == QStringLiteral("gesendet") || lower == QStringLiteral("sent")) info.icon = FolderIcon::Sent;
-        else if (lower == QStringLiteral("entwürfe") || lower == QStringLiteral("drafts")) info.icon = FolderIcon::Drafts;
-        else if (lower == QStringLiteral("gelöscht") || lower == QStringLiteral("papierkorb") || lower == QStringLiteral("trash")) info.icon = FolderIcon::Trash;
+        else if (lower == QStringLiteral("entw\u00FCrfe") || lower == QStringLiteral("drafts")) info.icon = FolderIcon::Drafts;
+        else if (lower == QStringLiteral("gel\u00F6scht") || lower == QStringLiteral("papierkorb") || lower == QStringLiteral("trash")) info.icon = FolderIcon::Trash;
         else if (lower == QStringLiteral("spam") || lower == QStringLiteral("junk")) info.icon = FolderIcon::Junk;
         else if (lower == QStringLiteral("archiv") || lower == QStringLiteral("archive")) info.icon = FolderIcon::Archive;
         else info.icon = FolderIcon::Generic;

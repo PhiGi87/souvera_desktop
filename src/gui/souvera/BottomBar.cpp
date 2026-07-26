@@ -22,11 +22,11 @@ struct TabInfo {
 };
 
 static const auto TabData = std::array{
-    TabInfo{QStringLiteral("\U0001F4C1"), QStringLiteral("Files")},
     TabInfo{QStringLiteral("\u2709"), QStringLiteral("Mail")},
     TabInfo{QStringLiteral("\U0001F4AC"), QStringLiteral("Talk")},
     TabInfo{QStringLiteral("\U0001F4CB"), QStringLiteral("Deck")},
     TabInfo{QStringLiteral("\U0001F4C5"), QStringLiteral("Calendar")},
+    TabInfo{QStringLiteral("\U0001F4C1"), QStringLiteral("Files")},
 };
 
 BottomBar::BottomBar(QWidget *parent)
@@ -46,14 +46,16 @@ BottomBar::BottomBar(QWidget *parent)
         btn->setCursor(Qt::PointingHandCursor);
 
         auto *btnLayout = new QVBoxLayout(btn);
-        btnLayout->setContentsMargins(0, 0, 0, 0);
+        btnLayout->setContentsMargins(0, 6, 0, 4);
         btnLayout->setSpacing(2);
         btnLayout->setAlignment(Qt::AlignCenter);
 
         auto *iconLabel = new QLabel(tab.icon, btn);
         iconLabel->setAlignment(Qt::AlignCenter);
+        iconLabel->setObjectName(QStringLiteral("BottomBarIcon"));
         auto *textLabel = new QLabel(tab.label, btn);
         textLabel->setAlignment(Qt::AlignCenter);
+        textLabel->setObjectName(QStringLiteral("BottomBarText"));
 
         btnLayout->addWidget(iconLabel);
         btnLayout->addWidget(textLabel);
