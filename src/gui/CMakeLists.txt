@@ -284,9 +284,19 @@ set(client_SRCS
     souvera/mail/MailFolderModel.cpp
     souvera/mail/MailMessageModel.h
     souvera/mail/MailMessageModel.cpp
-    souvera/mail/MailComposer.h
-    souvera/mail/MailComposer.cpp
-    souvera/talk/TalkPanel.h
+     souvera/mail/MailComposer.h
+     souvera/mail/MailComposer.cpp
+     souvera/mail/JmapClient.h
+     souvera/mail/JmapClient.cpp
+     souvera/mail/JmapMailboxModel.h
+     souvera/mail/JmapMailboxModel.cpp
+     souvera/mail/JmapEmailListModel.h
+     souvera/mail/JmapEmailListModel.cpp
+     souvera/LeftSidebar.h
+     souvera/LeftSidebar.cpp
+     souvera/notes/NotesPanel.h
+     souvera/notes/NotesPanel.cpp
+     souvera/talk/TalkPanel.h
     souvera/talk/TalkPanel.cpp
     souvera/talk/TalkOcsApi.h
     souvera/talk/TalkOcsApi.cpp
