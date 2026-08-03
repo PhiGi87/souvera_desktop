@@ -11,6 +11,10 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QNetworkAccessManager>
+#include <QString>
+#include <QList>
+#include <QPair>
+#include <QDateTime>
 #include <functional>
 
 namespace OCC {
