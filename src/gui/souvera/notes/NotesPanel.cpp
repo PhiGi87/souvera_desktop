@@ -6,6 +6,8 @@
 #include "NotesPanel.h"
 #include "accountstate.h"
 #include "account.h"
+#include "creds/abstractcredentials.h"
+
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QSplitter>
@@ -16,7 +18,7 @@
 #include <QJsonObject>
 #include <QNetworkReply>
 #include <QNetworkRequest>
-#include <QMessageBox>
+#include <QRegularExpression>
 
 namespace OCC {
 
