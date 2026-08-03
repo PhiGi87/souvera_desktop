@@ -48,10 +48,10 @@ struct JmapEmailBody {
 };
 
 /**
- * @brief HTTP REST client for Stalwart JMAP API.
+ * @brief REST client for souvera_mail v2 PHP proxy.
  *
- * Uses QNetworkAccessManager with OIDC bearer token authentication.
- * All methods are asynchronous — results are delivered via signals or callbacks.
+ * Uses HTTP Basic Auth with the Nextcloud app password (from Flow2Auth).
+ * All JMAP calls are proxied through /apps/souvera_mail/api/v2/* endpoints.
  */
 class JmapClient : public QObject
 {
@@ -59,12 +59,12 @@ class JmapClient : public QObject
 public:
     explicit JmapClient(AccountState *accountState, QObject *parent = nullptr);
 
-    void setBearerToken(const QString &token);
-    QString bearerToken() const { return _bearerToken; }
-    QString accountId() const { return _accountId; }
+    void setCredentials(const QString &user, const QString &password);
+    QString userName() const { return _user; }
 
     void fetchMailboxes();
-    void queryEmails(const QString &mailboxId, int limit = 50, int offset = 0);
+    void queryEmails(const QString &mailboxId, int limit = 50, int offset = 0,
+                     const QString &searchQuery = QString(), const QString &filterType = QString());
     void fetchEmailBody(const QString &emailId);
     void markRead(const QString &emailId, bool read);
     void moveEmail(const QString &emailId, const QString &targetMailboxId);
@@ -73,33 +73,24 @@ public:
                    const QString &subject, const QString &bodyHtml,
                    const QString &inReplyTo);
 
-    /// Resolves the JMAP session, determines accountId.
-    void resolveSession();
-
 signals:
-    void sessionResolved(const QString &accountId, const QString &apiUrl);
-    void sessionError(const QString &error);
-
     void mailboxesFetched(const QList<JmapMailbox> &mailboxes);
     void emailsFetched(const QList<JmapEmail> &emails, int total);
     void emailBodyFetched(const JmapEmailBody &body);
     void emailSent(bool success, const QString &error);
     void operationCompleted(bool success);
-
     void networkError(const QString &error);
 
 private:
-    void jmapCall(const QString &method, const QJsonObject &args,
-                  std::function<void(const QJsonObject &)> callback);
-    void jmapBatch(const QList<QPair<QString, QJsonObject>> &calls,
-                   std::function<void(const QJsonArray &)> callback);
+    QNetworkRequest makeRequest(const QString &path) const;
+    void apiGet(const QString &path, std::function<void(const QJsonDocument &)> callback);
+    void apiPost(const QString &path, const QJsonObject &body,
+                 std::function<void(const QJsonDocument &)> callback);
 
-    QString jmapUrl() const;
-    QString _apiUrl;
-    QString _accountId;
-    QString _bearerToken;
-    QNetworkAccessManager *_nam;
     AccountState *_accountState;
+    QNetworkAccessManager *_nam;
+    QString _user;
+    QString _password;
 };
 
 } // namespace OCC
