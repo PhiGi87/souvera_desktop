@@ -43,6 +43,7 @@ void MailPanel::wireAccount(AccountState *accountState)
     if (!acc) return;
 
     const auto creds = acc->credentials();
+    if (!creds) return;
     const auto user = creds->user();
     const auto password = creds->password();
     const auto host = acc->url().host();

@@ -7,7 +7,6 @@
 #define JMAPCLIENT_H
 
 #include <QObject>
-#include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QNetworkAccessManager>
@@ -83,4 +82,9 @@ private:
 };
 
 } // namespace OCC
+
+Q_DECLARE_METATYPE(OCC::JmapMailbox)
+Q_DECLARE_METATYPE(OCC::JmapEmail)
+Q_DECLARE_METATYPE(OCC::JmapEmailBody)
+
 #endif // JMAPCLIENT_H

@@ -58,9 +58,11 @@ SouveraMainWindow::SouveraMainWindow(QWidget *parent)
 
     switchToTab(1);
 
-    const auto accounts = AccountManager::instance()->accounts();
-    if (!accounts.isEmpty()) {
-        _mailPanel->setAccountState(accounts.first().data());
+    if (auto *am = AccountManager::instance()) {
+        const auto accounts = am->accounts();
+        if (!accounts.isEmpty()) {
+            _mailPanel->setAccountState(accounts.first().data());
+        }
     }
 }
 

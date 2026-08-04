@@ -40,7 +40,8 @@ LeftSidebar::LeftSidebar(QWidget *parent)
     auto accounts = AccountManager::instance()->accounts();
     if (!accounts.isEmpty()) {
         const auto acc = accounts.first()->account();
-        const auto user = acc->credentials()->user();
+        const auto creds = acc->credentials();
+        const auto user = creds ? creds->user() : QString();
         const auto initial = user.isEmpty() ? QStringLiteral("?") : user.left(1).toUpper();
 
         auto *avatar = new QPushButton(initial, this);

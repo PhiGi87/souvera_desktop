@@ -19,8 +19,8 @@ namespace OCC {
 
 JmapClient::JmapClient(AccountState *accountState, QObject *parent)
     : QObject(parent)
-    , _accountState(accountState)
     , _nam(new QNetworkAccessManager(this))
+    , _accountState(accountState)
 {
 }
 
@@ -275,7 +275,7 @@ void JmapClient::fetchEmailBody(const QString &emailId)
 void JmapClient::markRead(const QString &emailId, bool read)
 {
     QJsonObject update;
-    update[QLatin1String("keywords/$seen")] = read ? QJsonValue(true) : QJsonValue(QJsonValue::Null);
+    update[QLatin1String("keywords/$seen")] = read ? QJsonValue(true) : QJsonValue();
     QJsonObject emailUpdate; emailUpdate[emailId] = update;
     QJsonObject args;
     args[QLatin1String("accountId")] = _accountId;
