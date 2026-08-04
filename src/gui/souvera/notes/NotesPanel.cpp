@@ -98,7 +98,7 @@ void NotesPanel::fetchNotes()
     url.setPath(QLatin1String("/index.php/apps/notes/api/v1/notes"));
     QNetworkRequest req(url);
     const auto cred = QStringLiteral("%1:%2").arg(_user, _password).toUtf8().toBase64();
-    req.setRawHeader("Authorization", "Basic " + cred);
+    req.setRawHeader("Authorization", QByteArray("Basic ") + cred);
     req.setRawHeader("Accept", "application/json");
 
     auto *reply = _nam->get(req);
@@ -140,7 +140,7 @@ void NotesPanel::createNote()
     url.setPath(QLatin1String("/index.php/apps/notes/api/v1/notes"));
     QNetworkRequest req(url);
     const auto cred = QStringLiteral("%1:%2").arg(_user, _password).toUtf8().toBase64();
-    req.setRawHeader("Authorization", "Basic " + cred);
+    req.setRawHeader("Authorization", QByteArray("Basic ") + cred);
     req.setHeader(QNetworkRequest::ContentTypeHeader, QLatin1String("application/json"));
     QJsonObject body;
     body[QLatin1String("title")] = QLatin1String("New Note");
@@ -161,7 +161,7 @@ void NotesPanel::saveCurrentNote()
     url.setPath(QStringLiteral("/index.php/apps/notes/api/v1/notes/%1").arg(_currentNoteId));
     QNetworkRequest req(url);
     const auto cred = QStringLiteral("%1:%2").arg(_user, _password).toUtf8().toBase64();
-    req.setRawHeader("Authorization", "Basic " + cred);
+    req.setRawHeader("Authorization", QByteArray("Basic ") + cred);
     req.setHeader(QNetworkRequest::ContentTypeHeader, QLatin1String("application/json"));
     QJsonObject body;
     body[QLatin1String("content")] = _editor->toPlainText();
@@ -180,7 +180,7 @@ void NotesPanel::deleteCurrentNote()
     url.setPath(QStringLiteral("/index.php/apps/notes/api/v1/notes/%1").arg(_currentNoteId));
     QNetworkRequest req(url);
     const auto cred = QStringLiteral("%1:%2").arg(_user, _password).toUtf8().toBase64();
-    req.setRawHeader("Authorization", "Basic " + cred);
+    req.setRawHeader("Authorization", QByteArray("Basic ") + cred);
     auto *reply = _nam->deleteResource(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();

@@ -39,9 +39,9 @@ QString JmapClient::baseUrl() const
 QString JmapClient::authHeader() const
 {
     if (!_bearerToken.isEmpty())
-        return QLatin1String("Bearer ") + _bearerToken;
+        return QStringLiteral("Bearer %1").arg(_bearerToken);
     const auto cred = QStringLiteral("%1:%2").arg(_user, _password).toUtf8().toBase64();
-    return QLatin1String("Basic ") + cred;
+    return QStringLiteral("Basic %1").arg(QString::fromLatin1(cred));
 }
 
 void JmapClient::setBearerToken(const QString &token)
@@ -71,8 +71,8 @@ void JmapClient::resolveSession()
         }
         const auto doc = QJsonDocument::fromJson(reply->readAll());
         const auto obj = doc.object();
-        _apiUrl = obj.value(QLatin1String("apiUrl")).toString().takeIf([](auto s){ return !s.isEmpty(); })
-            .value_or(baseUrl() + QLatin1String("/jmap"));
+        const auto sessionApiUrl = obj.value(QLatin1String("apiUrl")).toString();
+        _apiUrl = !sessionApiUrl.isEmpty() ? sessionApiUrl : (baseUrl() + QLatin1String("/jmap"));
         const auto primary = obj.value(QLatin1String("primaryAccounts")).toObject();
         _accountId = primary.value(QLatin1String("urn:ietf:params:jmap:mail")).toString();
         if (_accountId.isEmpty()) {

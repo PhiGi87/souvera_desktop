@@ -11,6 +11,9 @@
 #include <QPlainTextEdit>
 #include <QTextBrowser>
 #include <QNetworkAccessManager>
+#include <QString>
+#include <QDateTime>
+#include <QList>
 
 namespace OCC {
 
