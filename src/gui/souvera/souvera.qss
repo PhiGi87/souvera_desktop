@@ -1,137 +1,348 @@
 /*
- * SPDX-FileCopyrightText: 2025 Souvera (Host-On Service Provider GmbH)
+ * SPDX-FileCopyrightText: 2026 Souvera (Host-On Service Provider GmbH)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Souvera Dark Theme — professional dark UI with #4BBFEA accent
- * Grid: 8dp/12dp/16dp/24dp spacing
+ * Souvera Design System — Dark Professional
+ * Palette: Deep Indigo + Cyan Accent
+ * Grid: 8dp / 12dp / 16dp / 24dp
  */
 
-/* ── Base ─────────────────────────────────────────────────────────────────── */
+/* ==========================================================================
+   Base
+   ========================================================================== */
 
 SouveraMainWindow {
-    background-color: #1a1a2e;
+    background-color: #0f1729;
 }
 
 QWidget#ContentArea {
-    background-color: #1a1a2e;
+    background-color: #161a2e;
 }
 
-/* ── Status Header ────────────────────────────────────────────────────────── */
+/* ==========================================================================
+   Left Sidebar
+   ========================================================================== */
+
+#LeftSidebar {
+    background-color: #0b1120;
+    border-right: 1px solid #1e293b;
+}
+
+#LeftSidebar QPushButton#SidebarButton {
+    background: transparent;
+    border: none;
+    border-left: 3px solid transparent;
+    color: #64748b;
+    min-width: 64px;
+    min-height: 56px;
+    padding: 0;
+    font-size: 10px;
+}
+
+#LeftSidebar QPushButton#SidebarButton:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: #94a3b8;
+}
+
+#LeftSidebar QPushButton#SidebarButton:checked {
+    background: rgba(75, 191, 234, 0.08);
+    border-left: 3px solid #4BBFEA;
+    color: #e2e8f0;
+}
+
+#LeftSidebar QPushButton#SidebarButton:checked:hover {
+    background: rgba(75, 191, 234, 0.12);
+}
+
+QLabel#SidebarIcon {
+    font-size: 22px;
+    color: inherit;
+    background: transparent;
+}
+
+QLabel#SidebarText {
+    font-size: 9px;
+    color: inherit;
+    background: transparent;
+}
+
+#SidebarAvatar {
+    background: #1e3a5f;
+    color: #4BBFEA;
+    border: 2px solid #334155;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: bold;
+    min-width: 40px;
+    min-height: 40px;
+    max-width: 40px;
+    max-height: 40px;
+    padding: 0;
+}
+
+#SidebarAvatar:hover {
+    border-color: #4BBFEA;
+    background: #23456b;
+}
+
+/* ==========================================================================
+   Status Header
+   ========================================================================== */
 
 #StatusHeader {
-    background-color: #16162a;
-    border-bottom: 1px solid #2a2a4a;
-    min-height: 48px;
-    max-height: 48px;
+    background-color: #0f1729;
+    border-bottom: 1px solid #1e293b;
+    min-height: 44px;
+    max-height: 44px;
 }
 
 #StatusHeader QLabel#UserEmailLabel {
-    color: #e0e0e0;
+    color: #e2e8f0;
     font-size: 13px;
-    font-weight: bold;
-    padding: 0 4px;
+    font-weight: 600;
 }
 
 #StatusHeader QLabel#SyncIconLabel {
-    color: #4CAF50;
+    color: #22c55e;
     font-size: 14px;
 }
 
 #StatusHeader QLabel#SyncTextLabel {
-    color: #999999;
+    color: #94a3b8;
     font-size: 12px;
-    padding: 0 4px;
 }
 
 #StatusHeader QPushButton#SettingsButton {
-    color: #999999;
+    color: #64748b;
     background: transparent;
     border: none;
     font-size: 18px;
     padding: 4px 8px;
-    min-width: 36px;
-    min-height: 36px;
     border-radius: 6px;
 }
 
 #StatusHeader QPushButton#SettingsButton:hover {
-    color: #e0e0e0;
-    background: rgba(255, 255, 255, 0.08);
+    color: #e2e8f0;
+    background: rgba(255, 255, 255, 0.06);
 }
 
-/* ── Bottom Bar ───────────────────────────────────────────────────────────── */
+/* ==========================================================================
+   Mail Panel
+   ========================================================================== */
 
-#BottomBar {
-    background-color: #0d0d1a;
-    border-top: 1px solid #2a2a4a;
-    min-height: 64px;
-    max-height: 64px;
+#MailToolbar {
+    background-color: #0f1729;
+    border-bottom: 1px solid #1e293b;
+    min-height: 44px;
 }
 
-#BottomBar QPushButton {
-    color: #666666;
-    background: transparent;
+QLabel#MailToolbarTitle {
+    color: #e2e8f0;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+QLabel#MailSendAsLabel {
+    color: #64748b;
+    font-size: 12px;
+}
+
+QPushButton#MailComposeBtn {
+    background-color: #4BBFEA;
+    color: #0f1729;
     border: none;
-    border-top: 3px solid transparent;
-    font-size: 11px;
-    padding: 8px 20px;
-    min-width: 80px;
-    min-height: 56px;
-    border-radius: 0px;
+    border-radius: 8px;
+    padding: 7px 16px;
+    font-size: 12px;
+    font-weight: 600;
 }
 
-#BottomBar QPushButton:hover {
-    color: #999999;
-    background: rgba(255, 255, 255, 0.05);
+QPushButton#MailComposeBtn:hover {
+    background-color: #38bdf8;
 }
 
-#BottomBar QPushButton:checked {
-    color: #4BBFEA;
-    border-top: 3px solid #4BBFEA;
-    background: rgba(75, 191, 234, 0.08);
+QPushButton#MailComposeBtn:pressed {
+    background-color: #0ea5e9;
 }
 
-#BottomBar QPushButton:checked:hover {
+QPushButton#MailReplyBtn,
+QPushButton#MailDeleteBtn,
+QPushButton#MailRefreshBtn {
+    background: transparent;
+    color: #94a3b8;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+QPushButton#MailReplyBtn:hover,
+QPushButton#MailDeleteBtn:hover,
+QPushButton#MailRefreshBtn:hover {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #475569;
+}
+
+QPushButton#MailReplyBtn:disabled,
+QPushButton#MailDeleteBtn:disabled {
+    color: #475569;
+    border-color: #1e293b;
+}
+
+QComboBox#MailSendAsCombo {
+    background-color: #1e293b;
+    color: #e2e8f0;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 30px;
+}
+
+QComboBox#MailSendAsCombo::drop-down {
+    border: none;
+    width: 22px;
+}
+
+QComboBox#MailSendAsCombo::down-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #64748b;
+    margin-right: 6px;
+}
+
+QComboBox#MailSendAsCombo:hover {
+    border-color: #475569;
+}
+
+QComboBox#MailSendAsCombo QAbstractItemView {
+    background-color: #1e293b;
+    color: #e2e8f0;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    selection-background-color: rgba(75, 191, 234, 0.2);
+    selection-color: #e2e8f0;
+    outline: none;
+}
+
+/* ---- MailSplitter ---- */
+
+QSplitter#MailSplitter::handle {
+    background-color: #1e293b;
+    width: 1px;
+}
+
+/* ---- Folder Panel ---- */
+
+#MailFolderPanel {
+    background-color: #0f1729;
+    border-right: 1px solid #1e293b;
+}
+
+#MailFolderView {
+    background: transparent;
+    color: #cbd5e1;
+    font-size: 13px;
+    border: none;
+    outline: none;
+}
+
+#MailFolderView::item {
+    padding: 8px 16px;
+    border-radius: 6px;
+    margin: 1px 6px;
+}
+
+#MailFolderView::item:selected {
     background: rgba(75, 191, 234, 0.12);
+    color: #4BBFEA;
 }
 
-QLabel#BottomBarIcon {
-    font-size: 18px;
-    color: inherit;
+#MailFolderView::item:hover:!selected {
+    background: rgba(255, 255, 255, 0.04);
+    color: #e2e8f0;
 }
 
-QLabel#BottomBarText {
-    font-size: 10px;
-    color: inherit;
+/* ---- Message List ---- */
+
+#MailMessagePanel {
+    background-color: #161a2e;
+    border-right: 1px solid #1e293b;
 }
 
-/* ── Files Panel ──────────────────────────────────────────────────────────── */
+#MailMessageView {
+    background: transparent;
+    color: #e2e8f0;
+    font-size: 13px;
+    border: none;
+    outline: none;
+    alternate-background-color: rgba(255, 255, 255, 0.015);
+}
+
+#MailMessageView::item {
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin: 1px 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+#MailMessageView::item:selected {
+    background: rgba(75, 191, 234, 0.10);
+    color: #e2e8f0;
+}
+
+#MailMessageView::item:hover:!selected {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+/* ---- Preview Panel ---- */
+
+#MailPreviewPanel {
+    background-color: #161a2e;
+}
+
+#MailPreview {
+    background: #0f1729;
+    color: #e2e8f0;
+    font-size: 13px;
+    line-height: 1.6;
+    border: none;
+    padding: 20px;
+    selection-background-color: rgba(75, 191, 234, 0.3);
+    selection-color: #ffffff;
+}
+
+/* ==========================================================================
+   Files Panel
+   ========================================================================== */
 
 #FilesPanel {
-    background-color: #1a1a2e;
+    background-color: #161a2e;
 }
 
 QLabel#FilesHeaderLabel {
-    color: #e0e0e0;
-    font-size: 16px;
-    font-weight: bold;
-    padding: 0 0 12px 0;
+    color: #e2e8f0;
+    font-size: 18px;
+    font-weight: 700;
+    padding: 0 0 16px 0;
 }
 
 #FilesPanel QLabel#FolderAliasLabel {
-    color: #e0e0e0;
+    color: #e2e8f0;
     font-size: 14px;
-    font-weight: bold;
+    font-weight: 600;
 }
 
 #FilesPanel QLabel#FolderStatusLabel {
-    color: #999999;
+    color: #94a3b8;
     font-size: 12px;
-    padding: 0 8px;
 }
 
 #FilesPanel QLabel#FolderErrorLabel {
-    color: #F44336;
+    color: #ef4444;
     font-size: 11px;
     padding: 4px 0 0 0;
 }
@@ -139,304 +350,119 @@ QLabel#FilesHeaderLabel {
 #FilesPanel QPushButton {
     color: #4BBFEA;
     background: transparent;
-    border: 1px solid #4BBFEA;
-    border-radius: 6px;
+    border: 1px solid #334155;
+    border-radius: 8px;
     padding: 6px 14px;
     font-size: 12px;
-    font-weight: bold;
+    font-weight: 500;
 }
 
 #FilesPanel QPushButton:hover {
-    color: #ffffff;
+    color: #0f1729;
     background: #4BBFEA;
+    border-color: #4BBFEA;
 }
 
 #FilesPanel QLabel#EmptyLabel {
-    color: #666666;
-    font-size: 15px;
-    padding: 40px 0;
+    color: #475569;
+    font-size: 14px;
+    padding: 48px 0;
 }
 
 #FolderRow {
-    background-color: #16162a;
-    border: 1px solid #2a2a4a;
-    border-radius: 8px;
-    min-height: 56px;
+    background: #0f1729;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    min-height: 60px;
 }
 
 #FolderRow:hover {
-    background-color: #1e1e3a;
-    border: 1px solid #3a3a5a;
+    background: #1a2540;
+    border-color: #334155;
 }
 
 QProgressBar#FolderProgressBar {
-    background-color: #2a2a4a;
+    background: #1e293b;
     border: none;
-    border-radius: 4px;
-    min-height: 6px;
-    max-height: 6px;
+    border-radius: 3px;
+    min-height: 4px;
+    max-height: 4px;
     text-align: center;
     font-size: 0px;
 }
 
 QProgressBar#FolderProgressBar::chunk {
-    background-color: #4BBFEA;
-    border-radius: 4px;
+    background: #4BBFEA;
+    border-radius: 3px;
 }
 
-/* ── Mail Panel ───────────────────────────────────────────────────────────── */
-
-#MailToolbar {
-    background-color: #16162a;
-    border-bottom: 1px solid #2a2a4a;
-    min-height: 48px;
-}
-
-QLabel#MailToolbarTitle {
-    color: #e0e0e0;
-    font-size: 16px;
-    font-weight: bold;
-}
-
-QLabel#MailSendAsLabel {
-    color: #999999;
-    font-size: 12px;
-}
-
-/* Mail toolbar buttons */
-QPushButton#MailComposeBtn {
-    background-color: #4BBFEA;
-    color: #ffffff;
-    border: none;
-    border-radius: 6px;
-    padding: 7px 16px;
-    font-size: 12px;
-    font-weight: bold;
-}
-
-QPushButton#MailComposeBtn:hover {
-    background-color: #3dabcc;
-}
-
-QPushButton#MailComposeBtn:pressed {
-    background-color: #3599b8;
-}
-
-QPushButton#MailReplyBtn, QPushButton#MailDeleteBtn, QPushButton#MailRefreshBtn {
-    background-color: transparent;
-    color: #cccccc;
-    border: 1px solid #3a3a5a;
-    border-radius: 6px;
-    padding: 7px 14px;
-    font-size: 12px;
-}
-
-QPushButton#MailReplyBtn:hover, QPushButton#MailDeleteBtn:hover, QPushButton#MailRefreshBtn:hover {
-    background-color: #2a2a4a;
-    color: #e0e0e0;
-    border: 1px solid #4a4a6a;
-}
-
-QPushButton#MailReplyBtn:disabled, QPushButton#MailDeleteBtn:disabled {
-    color: #555555;
-    border: 1px solid #2a2a3a;
-}
-
-/* Mail folder panel */
-#MailFolderPanel {
-    background-color: #16162a;
-    border-right: 1px solid #2a2a4a;
-}
-
-#MailFolderView {
-    background-color: transparent;
-    color: #e0e0e0;
-    font-size: 13px;
-    border: none;
-    outline: none;
-}
-
-#MailFolderView::item {
-    padding: 8px 12px;
-    border-radius: 6px;
-    margin: 1px 4px;
-}
-
-#MailFolderView::item:selected {
-    background-color: rgba(75, 191, 234, 0.15);
-    color: #4BBFEA;
-}
-
-#MailFolderView::item:hover {
-    background-color: rgba(255, 255, 255, 0.05);
-}
-
-/* Mail message panel */
-#MailMessagePanel {
-    background-color: #1a1a2e;
-    border-right: 1px solid #2a2a4a;
-}
-
-#MailMessageView {
-    background-color: transparent;
-    color: #e0e0e0;
-    font-size: 12px;
-    border: none;
-    outline: none;
-    alternate-background-color: rgba(255, 255, 255, 0.02);
-}
-
-#MailMessageView::item {
-    padding: 10px 12px;
-    border-radius: 6px;
-    margin: 1px 4px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-#MailMessageView::item:selected {
-    background-color: rgba(75, 191, 234, 0.12);
-    color: #e0e0e0;
-}
-
-#MailMessageView::item:hover {
-    background-color: rgba(255, 255, 255, 0.04);
-}
-
-/* Mail preview panel */
-#MailPreviewPanel {
-    background-color: #1a1a2e;
-}
-
-#MailPreview {
-    background-color: #16162a;
-    color: #e0e0e0;
-    font-size: 13px;
-    border: none;
-    padding: 16px;
-    selection-background-color: #4BBFEA;
-    selection-color: #ffffff;
-}
-
-/* Mail splitter handle */
-QSplitter#MailSplitter::handle {
-    background-color: #2a2a4a;
-    width: 1px;
-}
-
-/* Mail send-as combo */
-QComboBox#MailSendAsCombo {
-    background-color: #2a2a4a;
-    color: #e0e0e0;
-    border: 1px solid #3a3a5a;
-    border-radius: 6px;
-    padding: 5px 10px;
-    font-size: 12px;
-    min-height: 28px;
-}
-
-QComboBox#MailSendAsCombo::drop-down {
-    border: none;
-    width: 24px;
-}
-
-QComboBox#MailSendAsCombo::down-arrow {
-    image: none;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-top: 5px solid #999999;
-    margin-right: 6px;
-}
-
-QComboBox#MailSendAsCombo:hover {
-    border: 1px solid #4a4a6a;
-}
-
-QComboBox#MailSendAsCombo QAbstractItemView {
-    background-color: #2a2a4a;
-    color: #e0e0e0;
-    border: 1px solid #3a3a5a;
-    border-radius: 4px;
-    selection-background-color: rgba(75, 191, 234, 0.2);
-    selection-color: #e0e0e0;
-    outline: none;
-}
-
-/* ── General Widget Styling ──────────────────────────────────────────────── */
+/* ==========================================================================
+   General Widgets
+   ========================================================================== */
 
 QToolTip {
-    background-color: #2a2a4a;
-    color: #e0e0e0;
-    border: 1px solid #3a3a5a;
-    border-radius: 4px;
-    padding: 6px 10px;
+    background: #1e293b;
+    color: #e2e8f0;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 8px 12px;
     font-size: 12px;
 }
 
-/* QScrollBar - Dark theme */
+/* ---- Scrollbars ---- */
+
 QScrollBar:vertical {
-    background-color: transparent;
-    width: 8px;
+    background: transparent;
+    width: 6px;
     margin: 0;
     border: none;
 }
 
 QScrollBar::handle:vertical {
-    background-color: #3a3a5a;
-    border-radius: 4px;
+    background: #334155;
+    border-radius: 3px;
     min-height: 30px;
 }
 
 QScrollBar::handle:vertical:hover {
-    background-color: #4a4a6a;
+    background: #475569;
 }
 
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
     height: 0;
     border: none;
 }
 
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
     background: none;
 }
 
 QScrollBar:horizontal {
-    background-color: transparent;
-    height: 8px;
+    background: transparent;
+    height: 6px;
     margin: 0;
     border: none;
 }
 
 QScrollBar::handle:horizontal {
-    background-color: #3a3a5a;
-    border-radius: 4px;
+    background: #334155;
+    border-radius: 3px;
     min-width: 30px;
 }
 
 QScrollBar::handle:horizontal:hover {
-    background-color: #4a4a6a;
+    background: #475569;
 }
 
-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
     width: 0;
     border: none;
 }
 
-QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
     background: none;
-}
-
-/* ── Settings Button (generic) ────────────────────────────────────────────── */
-
-QPushButton#SettingsButton {
-    color: #999999;
-    background: transparent;
-    border: none;
-    font-size: 18px;
-    padding: 4px 8px;
-    border-radius: 6px;
-}
-
-QPushButton#SettingsButton:hover {
-    color: #e0e0e0;
-    background: rgba(255, 255, 255, 0.08);
 }

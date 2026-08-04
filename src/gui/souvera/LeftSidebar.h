@@ -7,16 +7,19 @@
 #define LEFTSIDEBAR_H
 
 #include <QWidget>
-#include <QListWidget>
-#include <QStackedWidget>
+#include <QVBoxLayout>
+#include <QVector>
+
+class QPushButton;
+class QLabel;
 
 namespace OCC {
 
-/**
- * @brief Vertical left sidebar navigation replacing the bottom tab bar.
- *
- * Shows icon + text for each panel. Emits currentChanged(int) when clicked.
- */
+struct SidebarItem {
+    QString icon;
+    QString label;
+};
+
 class LeftSidebar : public QWidget
 {
     Q_OBJECT
@@ -25,12 +28,16 @@ public:
 
     void addItem(const QString &icon, const QString &label);
     void setCurrentIndex(int index);
+    [[nodiscard]] int currentIndex() const { return _currentIndex; }
 
 signals:
     void currentChanged(int index);
 
 private:
-    QListWidget *_list;
+    QVBoxLayout *_topLayout = nullptr;
+    QVBoxLayout *_bottomLayout = nullptr;
+    QVector<QPushButton *> _buttons;
+    int _currentIndex = 0;
 };
 
 } // namespace OCC

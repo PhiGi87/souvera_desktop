@@ -9,6 +9,8 @@
 #include <QMainWindow>
 #include <QStackedWidget>
 
+class QHBoxLayout;
+
 namespace OCC {
 
 class MailPanel;
@@ -17,7 +19,7 @@ class DeckPanel;
 class CalendarPanel;
 class FilesPanel;
 class StatusHeader;
-class BottomBar;
+class LeftSidebar;
 
 class SouveraMainWindow : public QMainWindow
 {
@@ -43,9 +45,9 @@ private:
     void setupUi();
     void loadStyleSheet();
 
+    LeftSidebar *_sidebar = nullptr;
     StatusHeader *_statusHeader = nullptr;
     QStackedWidget *_contentStack = nullptr;
-    BottomBar *_bottomBar = nullptr;
 
     FilesPanel *_filesPanel = nullptr;
     MailPanel *_mailPanel = nullptr;

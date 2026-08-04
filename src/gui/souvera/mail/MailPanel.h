@@ -1,10 +1,14 @@
 /*
- * SPDX-FileCopyrightText: 2025 Souvera (Host-On Service Provider GmbH)
+ * SPDX-FileCopyrightText: 2026 Souvera (Host-On Service Provider GmbH)
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef MAILPANEL_H
 #define MAILPANEL_H
+
+#include "JmapClient.h"
+#include "JmapMailboxModel.h"
+#include "JmapEmailListModel.h"
 
 #include <QWidget>
 #include <QSplitter>
@@ -13,13 +17,9 @@
 #include <QTextBrowser>
 #include <QPushButton>
 #include <QComboBox>
-#include "MailAccount.h"
 
 namespace OCC {
 
-class MailFolderModel;
-class MailMessageModel;
-class MailAccount;
 class AccountState;
 
 class MailPanel : public QWidget
@@ -35,6 +35,7 @@ private:
     void setupUi();
     void setupToolbar();
     void setupConnections();
+    void wireAccount(AccountState *accountState);
 
     void onFolderSelected(const QModelIndex &index);
     void onMessageSelected(const QModelIndex &index);
@@ -42,13 +43,6 @@ private:
     void onReply();
     void onDelete();
     void onRefresh();
-    void onSendAsChanged(int index);
-
-    void connectMailAccount();
-    void onFoldersFetched(const QList<MailFolderData> &folders);
-    void onMessagesFetched(const QList<MailMessageData> &messages);
-    void onBodyFetched(int seq, const QString &htmlBody, const QString &plainBody);
-    void onImapConnected();
 
     QSplitter *_splitter = nullptr;
     QTreeView *_folderView = nullptr;
@@ -61,13 +55,13 @@ private:
     QPushButton *_refreshBtn = nullptr;
     QComboBox *_sendAsCombo = nullptr;
 
-    MailFolderModel *_folderModel = nullptr;
-    MailMessageModel *_messageModel = nullptr;
-    MailAccount *_mailAccount = nullptr;
+    JmapMailboxModel *_folderModel = nullptr;
+    JmapEmailListModel *_messageModel = nullptr;
+    JmapClient *_jmapClient = nullptr;
     AccountState *_accountState = nullptr;
 
-    int _selectedMessageSeq = -1;
-    QString _currentFolder;
+    QString _selectedEmailId;
+    QString _currentMailboxId;
 };
 
 } // namespace OCC
