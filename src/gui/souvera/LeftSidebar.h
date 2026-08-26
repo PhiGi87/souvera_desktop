@@ -15,18 +15,13 @@ class QLabel;
 
 namespace OCC {
 
-struct SidebarItem {
-    QString icon;
-    QString label;
-};
-
 class LeftSidebar : public QWidget
 {
     Q_OBJECT
 public:
     explicit LeftSidebar(QWidget *parent = nullptr);
 
-    void addItem(const QString &icon, const QString &label);
+    void addItem(const QString &iconName, const QString &label);
     void setCurrentIndex(int index);
     [[nodiscard]] int currentIndex() const { return _currentIndex; }
 
@@ -34,9 +29,22 @@ signals:
     void currentChanged(int index);
 
 private:
+    void setupAvatar();
+    void setupThemeToggle();
+    void updateThemeToggleIcon();
+    void applyIconTints();
+
+    struct SidebarButton {
+        QPushButton *button = nullptr;
+        QLabel *icon = nullptr;
+        QLabel *text = nullptr;
+        QString iconName;
+    };
+
     QVBoxLayout *_topLayout = nullptr;
     QVBoxLayout *_bottomLayout = nullptr;
-    QVector<QPushButton *> _buttons;
+    QVector<SidebarButton> _buttons;
+    QPushButton *_themeToggle = nullptr;
     int _currentIndex = 0;
 };
 

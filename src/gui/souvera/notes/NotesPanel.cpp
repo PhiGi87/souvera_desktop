@@ -90,6 +90,13 @@ void NotesPanel::loadNotes()
     fetchNotes();
 }
 
+void NotesPanel::setAccountState(AccountState *accountState)
+{
+    if (_accountState == accountState) return;
+    _accountState = accountState;
+    loadNotes();
+}
+
 void NotesPanel::fetchNotes()
 {
     const auto acc = _accountState ? _accountState->account() : nullptr;

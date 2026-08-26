@@ -31,6 +31,7 @@ class NotesPanel : public QWidget
     Q_OBJECT
 public:
     explicit NotesPanel(AccountState *accountState, QWidget *parent = nullptr);
+    void setAccountState(AccountState *accountState);
     void loadNotes();
 
 signals:

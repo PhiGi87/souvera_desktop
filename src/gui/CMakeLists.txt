@@ -272,8 +272,6 @@ set(client_SRCS
     souvera/SouveraMainWindow.cpp
     souvera/StatusHeader.h
     souvera/StatusHeader.cpp
-    souvera/BottomBar.h
-    souvera/BottomBar.cpp
     souvera/FilesPanel.h
     souvera/FilesPanel.cpp
     souvera/mail/MailPanel.h
@@ -316,6 +314,8 @@ set(client_SRCS
     souvera/calendar/CalDavSync.cpp
     souvera/calendar/CalendarEventDialog.h
     souvera/calendar/CalendarEventDialog.cpp
+    souvera/theme/SouveraTheme.h
+    souvera/theme/SouveraTheme.cpp
     )
 
 if (NOT DISABLE_ACCOUNT_MIGRATION)
@@ -666,6 +666,7 @@ target_include_directories(nextcloudCore
   ${CMAKE_SOURCE_DIR}/src/3rdparty/kmessagewidget
   ${CMAKE_CURRENT_BINARY_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/souvera
 )
 
 if(NOT BUILD_OWNCLOUD_OSX_BUNDLE)

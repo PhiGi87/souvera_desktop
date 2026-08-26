@@ -10,6 +10,7 @@
 #include "folderman.h"
 #include "folder.h"
 #include "syncresult.h"
+#include "theme/SouveraTheme.h"
 
 #include <QHBoxLayout>
 #include <QLabel>
@@ -54,11 +55,18 @@ StatusHeader::StatusHeader(QWidget *parent)
 
     layout->addSpacing(24);
 
-    _settingsButton = new QPushButton(QStringLiteral("\u2699"), this);
+    _settingsButton = new QPushButton(this);
     _settingsButton->setObjectName(QStringLiteral("SettingsButton"));
     _settingsButton->setCursor(Qt::PointingHandCursor);
+    _settingsButton->setToolTip(QStringLiteral("Einstellungen"));
+    _settingsButton->setIcon(SouveraTheme::instance()->icon(QStringLiteral("settings"), SouveraTheme::Color::TextMuted));
+    _settingsButton->setIconSize(QSize(18, 18));
     connect(_settingsButton, &QPushButton::clicked, this, &StatusHeader::settingsClicked);
     layout->addWidget(_settingsButton);
+
+    connect(SouveraTheme::instance(), &SouveraTheme::themeChanged, this, [this]() {
+        _settingsButton->setIcon(SouveraTheme::instance()->icon(QStringLiteral("settings"), SouveraTheme::Color::TextMuted));
+    });
 
     updateSyncStatus();
 

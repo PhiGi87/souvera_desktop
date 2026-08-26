@@ -8,6 +8,7 @@
 #include "account.h"
 #include "accountstate.h"
 #include "creds/abstractcredentials.h"
+#include "theme/SouveraTheme.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -279,14 +280,21 @@ void MailPanel::onMessageSelected(const QModelIndex &index)
     const auto fromDisplay = from.isEmpty() ? email : QStringLiteral("%1 <%2>").arg(from, email);
     const auto dateStr = date.isValid() ? date.toString(QStringLiteral("dd.MM.yyyy HH:mm")) : QString();
 
+    const auto *theme = SouveraTheme::instance();
+    const auto border = theme->color(SouveraTheme::Color::Border).name();
+    const auto textPrimary = theme->color(SouveraTheme::Color::TextPrimary).name();
+    const auto textSecondary = theme->color(SouveraTheme::Color::TextSecondary).name();
+    const auto textMuted = theme->color(SouveraTheme::Color::TextMuted).name();
+
     _preview->setHtml(QStringLiteral(
-        "<div style='border-bottom: 1px solid #1e293b; padding-bottom: 14px; margin-bottom: 14px;'>"
-        "<h2 style='margin: 0 0 10px 0; color: #e2e8f0; font-size: 18px; font-weight: 700;'>%1</h2>"
-        "<p style='color: #94a3b8; margin: 4px 0;'><b style='color: #cbd5e1;'>Von:</b> %2</p>"
-        "<p style='color: #94a3b8; margin: 4px 0;'><b style='color: #cbd5e1;'>Datum:</b> %3</p>"
+        "<div style='border-bottom: 1px solid %4; padding-bottom: 14px; margin-bottom: 14px;'>"
+        "<h2 style='margin: 0 0 10px 0; color: %5; font-size: 18px; font-weight: 700;'>%1</h2>"
+        "<p style='color: %6; margin: 4px 0;'><b style='color: %5;'>Von:</b> %2</p>"
+        "<p style='color: %6; margin: 4px 0;'><b style='color: %5;'>Datum:</b> %3</p>"
         "</div>"
-        "<p style='color: #64748b;'>Nachricht wird geladen\u2026</p>")
-        .arg(subject.toHtmlEscaped(), fromDisplay.toHtmlEscaped(), dateStr));
+        "<p style='color: %7;'>Nachricht wird geladen\u2026</p>")
+        .arg(subject.toHtmlEscaped(), fromDisplay.toHtmlEscaped(), dateStr,
+             border, textPrimary, textSecondary, textMuted));
 
     _replyBtn->setEnabled(true);
     _deleteBtn->setEnabled(true);

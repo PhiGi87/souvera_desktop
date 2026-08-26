@@ -18,6 +18,7 @@ class TalkPanel;
 class DeckPanel;
 class CalendarPanel;
 class FilesPanel;
+class NotesPanel;
 class StatusHeader;
 class LeftSidebar;
 
@@ -32,6 +33,7 @@ public:
     [[nodiscard]] TalkPanel *talkPanel() const { return _talkPanel; }
     [[nodiscard]] DeckPanel *deckPanel() const { return _deckPanel; }
     [[nodiscard]] CalendarPanel *calendarPanel() const { return _calendarPanel; }
+    [[nodiscard]] NotesPanel *notesPanel() const { return _notesPanel; }
 
     void switchToTab(int index);
 
@@ -54,6 +56,7 @@ private:
     TalkPanel *_talkPanel = nullptr;
     DeckPanel *_deckPanel = nullptr;
     CalendarPanel *_calendarPanel = nullptr;
+    NotesPanel *_notesPanel = nullptr;
 };
 
 } // namespace OCC

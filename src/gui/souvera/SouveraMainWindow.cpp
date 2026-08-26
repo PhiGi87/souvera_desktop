@@ -12,12 +12,13 @@
 #include "talk/TalkPanel.h"
 #include "deck/DeckPanel.h"
 #include "calendar/CalendarPanel.h"
+#include "notes/NotesPanel.h"
 #include "accountmanager.h"
 #include "accountstate.h"
+#include "theme/SouveraTheme.h"
 
 #include <QApplication>
 #include <QCloseEvent>
-#include <QFile>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLoggingCategory>
@@ -56,12 +57,17 @@ SouveraMainWindow::SouveraMainWindow(QWidget *parent)
         }
     }
 
-    switchToTab(1);
+    switchToTab(0);
 
     if (auto *am = AccountManager::instance()) {
         const auto accounts = am->accounts();
         if (!accounts.isEmpty()) {
-            _mailPanel->setAccountState(accounts.first().data());
+            const auto accountState = accounts.first().data();
+            _mailPanel->setAccountState(accountState);
+            _talkPanel->setAccountState(accountState);
+            _deckPanel->setAccountState(accountState);
+            _calendarPanel->setAccountState(accountState);
+            _notesPanel->setAccountState(accountState);
         }
     }
 }
@@ -76,11 +82,12 @@ void SouveraMainWindow::setupUi()
     rootLayout->setSpacing(0);
 
     _sidebar = new LeftSidebar(root);
-    _sidebar->addItem(QStringLiteral("\u2709\uFE0F"), QStringLiteral("Mail"));
-    _sidebar->addItem(QStringLiteral("\U0001F4AC"), QStringLiteral("Talk"));
-    _sidebar->addItem(QStringLiteral("\U0001F4CB"), QStringLiteral("Deck"));
-    _sidebar->addItem(QStringLiteral("\U0001F4C5"), QStringLiteral("Kalender"));
-    _sidebar->addItem(QStringLiteral("\U0001F4C1"), QStringLiteral("Dateien"));
+    _sidebar->addItem(QStringLiteral("mail"), QStringLiteral("Mail"));
+    _sidebar->addItem(QStringLiteral("chat"), QStringLiteral("Talk"));
+    _sidebar->addItem(QStringLiteral("folder"), QStringLiteral("Dateien"));
+    _sidebar->addItem(QStringLiteral("board"), QStringLiteral("Deck"));
+    _sidebar->addItem(QStringLiteral("calendar"), QStringLiteral("Kalender"));
+    _sidebar->addItem(QStringLiteral("notes"), QStringLiteral("Notizen"));
     rootLayout->addWidget(_sidebar);
 
     auto *contentArea = new QWidget(root);
@@ -96,17 +103,19 @@ void SouveraMainWindow::setupUi()
 
     _mailPanel = new MailPanel(contentArea);
     _talkPanel = new TalkPanel(contentArea);
+    _filesPanel = new FilesPanel(contentArea);
     _deckPanel = new DeckPanel(contentArea);
     _calendarPanel = new CalendarPanel(contentArea);
-    _filesPanel = new FilesPanel(contentArea);
+    _notesPanel = new NotesPanel(nullptr, contentArea);
 
     _contentStack = new QStackedWidget(contentArea);
     _contentStack->setObjectName(QStringLiteral("ContentArea"));
     _contentStack->addWidget(_mailPanel);
     _contentStack->addWidget(_talkPanel);
+    _contentStack->addWidget(_filesPanel);
     _contentStack->addWidget(_deckPanel);
     _contentStack->addWidget(_calendarPanel);
-    _contentStack->addWidget(_filesPanel);
+    _contentStack->addWidget(_notesPanel);
     contentLayout->addWidget(_contentStack, 1);
 
     rootLayout->addWidget(contentArea, 1);
@@ -118,11 +127,7 @@ void SouveraMainWindow::setupUi()
 
 void SouveraMainWindow::loadStyleSheet()
 {
-    QFile qssFile(QStringLiteral(":/souvera/souvera.qss"));
-    if (qssFile.open(QFile::ReadOnly | QFile::Text)) {
-        qApp->setStyleSheet(QString::fromUtf8(qssFile.readAll()));
-        qssFile.close();
-    }
+    SouveraTheme::instance()->applyStyleSheet();
 }
 
 void SouveraMainWindow::switchToTab(int index)
