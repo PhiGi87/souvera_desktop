@@ -5,7 +5,7 @@
 
 #include "FilesPanel.h"
 
-#include "RemoteFilesModel.h"
+#include "files/RemoteFilesModel.h"
 #include "account.h"
 #include "accountstate.h"
 #include "capabilities.h"
