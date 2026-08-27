@@ -13,7 +13,6 @@
 #include <QUrl>
 
 class QNetworkReply;
-#include <QUrl>
 
 namespace OCC {
 
