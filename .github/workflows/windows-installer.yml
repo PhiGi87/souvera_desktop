@@ -82,7 +82,7 @@ jobs:
               $c = $c -replace 'self\.defines\["appname"\] = "nextcloud"', ('self.defines["appname"] = "souvera"' + "`r`n        " + 'self.defines["productname"] = "Souvera Workspace"')
               $c = $c -replace 'self\.defines\["company"\] = "Nextcloud GmbH"', 'self.defines["company"] = "Host-On Service Provider GmbH"'
               $c = $c -replace 'self\.applicationExecutable = "nextcloud"', 'self.applicationExecutable = "souvera"'
-              $c = $c -replace 'self\.subinfo\.options\.configure\.args \+= \[f"-DMIRALL_VERSION_SUFFIX=\{versionSuffix\}"\]', ('$0' + "`r`n        self.subinfo.options.configure.args += [""-DBUILD_WIN_MSI=ON""]")
+              $c = $c -replace 'self\.subinfo\.options\.configure\.args \+= \[f"-DMIRALL_VERSION_SUFFIX=\{versionSuffix\}"\]', ('$0' + "`r`n        self.subinfo.options.configure.args += [""-DBUILD_WIN_MSI=ON"", ""-DCMAKE_INSTALL_PREFIX=/""]")
               [System.IO.File]::WriteAllText($bp, $c)
               Write-Host "== Patched blueprint =="
               Get-Content $bp | Select-String -Pattern 'displayName|appname|productname|company|applicationExecutable|BUILD_WIN_MSI|^import os'
@@ -103,27 +103,38 @@ jobs:
       - name: Build MSI installer
         shell: pwsh
         run: |
-          # Craft installs the built tree into <target>\build\nextcloud-client\image-RelWithDebInfo-*.
-          $img = Get-ChildItem "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\build" -Directory -Recurse -Filter "image-RelWithDebInfo-master" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $img) { throw "Craft image directory not found." }
-          $msiDir = Join-Path $img.FullName "msi"
-          if (-not (Test-Path "$msiDir\Souvera.wxs")) {
-              throw "MSI assets missing in image dir - BUILD_WIN_MSI patch did not apply?"
+          function craft() {
+              python "${{ env.CRAFT_MASTER_LOCATION }}\CraftMaster.py" --config "${{ env.CRAFT_MASTER_CONFIG }}" --target ${{ env.CRAFT_TARGET }} -c $args
+              if($LASTEXITCODE -ne 0) {exit $LASTEXITCODE}
           }
-          cmd /c "cd /d `"$msiDir`" && make-msi.bat `"$($img.FullName)`""
+
+          # Merge the app image with all runtime dependencies (Qt, etc.) into
+          # the craft "archive" directory. This also produces an NSIS setup.exe
+          # as a fallback installer.
+          craft --package nextcloud-client
+
+          # The merged, flattened tree lives in <target>\build\nextcloud-client\archive.
+          $archive = "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\build\nextcloud-client\archive"
+          if (-not (Test-Path $archive)) { throw "Craft archive directory not found." }
+
+          $msiDir = Join-Path $archive "msi"
+          if (-not (Test-Path "$msiDir\make-msi.bat")) {
+              throw "MSI assets missing in archive dir - BUILD_WIN_MSI patch did not apply?"
+          }
+          cmd /c "cd /d `"$msiDir`" && make-msi.bat `"$archive`""
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-ChildItem $msiDir -Filter *.msi | Format-Table Name,Length
 
       - name: Collect installer artifacts
         shell: pwsh
         run: |
-          $img = Get-ChildItem "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\build" -Directory -Recurse -Filter "image-RelWithDebInfo-master" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $img) { throw "Craft image directory not found." }
+          $archive = "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\build\nextcloud-client\archive"
+          $msiDir = Join-Path $archive "msi"
 
           $out = "${{ github.workspace }}\souvera-artifacts"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-          $msi = Get-ChildItem (Join-Path $img.FullName "msi") -Filter *.msi -ErrorAction SilentlyContinue
+          $msi = Get-ChildItem $msiDir -Filter *.msi -ErrorAction SilentlyContinue
           foreach ($m in $msi) { Copy-Item $m.FullName -Destination $out -Force }
 
           if (-not (Get-ChildItem $out -Filter *.msi -ErrorAction SilentlyContinue)) {
