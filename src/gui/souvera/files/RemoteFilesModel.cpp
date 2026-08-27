@@ -183,7 +183,7 @@ void RemoteFilesModel::fetchDirectory(const QString &remotePath)
     req.setRawHeader("Authorization", QByteArray("Basic ") + cred);
     req.setRawHeader("Depth", "1");
 
-    const auto prefix = QStringLiteral("/remote.php/dav/files/") + acc->davUser() + QLatin1Char('/');
+    const QString prefix = QStringLiteral("/remote.php/dav/files/") + acc->davUser() + QLatin1Char('/');
 
     auto *nam = acc->networkAccessManager();
     auto *reply = nam->sendCustomRequest(req, "PROPFIND");

@@ -218,7 +218,7 @@ QString FilesPanel::localPathForRemote(const QString &remotePath) const
     const auto folders = FolderMan::instance()->map();
     for (const auto *folder : folders) {
         auto remote = folder->remotePathTrailingSlash();
-        const auto withSlash = QLatin1Char('/') + remotePath;
+        const QString withSlash = QLatin1Char('/') + remotePath;
         if (withSlash.startsWith(remote)) {
             const auto relative = withSlash.mid(remote.size());
             const auto local = QDir::cleanPath(folder->path() + QLatin1Char('/') + relative);
