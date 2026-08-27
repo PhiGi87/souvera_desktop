@@ -55,8 +55,9 @@ if "%WISUBSTG%" == "" (
 
 REM generate a ProductCode to use in the resulting MSI to ensure that the embedded
 REM transforms don't break managed deployments (see #8610)
-REM the uuidgen tool is provided by the Visual Studio CLI tools
-for /f %%i in ('uuidgen -c') do set PRODUCTCODE=%%i
+REM Use PowerShell instead of the Visual Studio uuidgen tool so the MSI build
+REM works on plain CI runners without a VS developer shell.
+for /f %%i in ('powershell -NoProfile -Command "[guid]::NewGuid().ToString().ToUpper()"') do set PRODUCTCODE=%%i
 echo/
 echo :: Using ProductCode=%PRODUCTCODE%
 

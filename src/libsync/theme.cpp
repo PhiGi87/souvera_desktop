@@ -137,7 +137,7 @@ QString Theme::statusHeaderText(SyncResult::Status status) const
 
 bool Theme::isBranded() const
 {
-    return (appNameGUI() != QStringLiteral("Souvera Workspace") && NEXTCLOUD_DEV == 0);
+    return (appNameGUI() != QStringLiteral("Nextcloud") && NEXTCLOUD_DEV == 0);
 }
 
 QString Theme::appNameGUI() const

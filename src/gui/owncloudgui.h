@@ -120,7 +120,7 @@ public slots:
     void slotOpenItemInBrowserFromFileProvider(const QString &fileId, const QString &remoteItemPath, const QString &fileProviderDomainIdentifier);
 
     /**
-     * @brief Copy an item's Nextcloud internal link to the clipboard on behalf of the macOS file provider extension.
+     * @brief Copy an item's Souvera internal link to the clipboard on behalf of the macOS file provider extension.
      *
      * Resolves the per-item private link via `fetchPrivateLinkUrl` (PROPFIND for
      * the server-side `privatelink` property, falling back to the deprecated link

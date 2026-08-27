@@ -2,11 +2,11 @@
 Categories=Utility;X-SuSE-SyncUtility;
 Type=Application
 Exec=@APPLICATION_EXECUTABLE@ %u
-Name=@APPLICATION_NAME@ Desktop
-Comment=@APPLICATION_NAME@ desktop synchronization client
-GenericName=Folder Sync
+Name=@APPLICATION_NAME@
+Comment=@APPLICATION_NAME@ — Mail, Talk, Dateien und mehr
+GenericName=Workspace
 Icon=@APPLICATION_ICON_NAME@
-Keywords=@APPLICATION_NAME@;syncing;file;sharing;
+Keywords=@APPLICATION_NAME@;workspace;mail;talk;syncing;file;sharing;
 X-GNOME-Autostart-Delay=3
 MimeType=application/vnd.@APPLICATION_EXECUTABLE@;x-scheme-handler/@APPLICATION_URI_HANDLER_SCHEME@;
 SingleMainWindow=true

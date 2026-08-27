@@ -21,7 +21,7 @@
 
 using namespace OCC;
 
-Q_LOGGING_CATEGORY(lcNextcloudCloudProviderIntegration, "nextcloud.cloudprovider.integration", QtInfoMsg)
+Q_LOGGING_CATEGORY(lcSouveraCloudProviderIntegration, "souvera.cloudprovider.integration", QtInfoMsg)
 
 GSimpleActionGroup *actionGroup = nullptr;
 
@@ -59,7 +59,7 @@ CloudProviderWrapper::CloudProviderWrapper(QObject *parent, Folder *folder, int 
 
 void mainMenuWasDeleted(gpointer data, GObject *where_the_object_was)
 {
-    qCDebug(lcNextcloudCloudProviderIntegration) << "I was deleted" << data << where_the_object_was;
+    qCDebug(lcSouveraCloudProviderIntegration) << "I was deleted" << data << where_the_object_was;
 }
 
 CloudProviderWrapper::~CloudProviderWrapper()

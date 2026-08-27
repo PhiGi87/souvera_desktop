@@ -58,7 +58,7 @@ public:
         DisplayPathRole,
         PathRole,
         OpenablePathRole,
-        DisplayLocationRole, // Provides the display path to a file's parent folder, relative to Nextcloud root
+        DisplayLocationRole, // Provides the display path to a file's parent folder, relative to the server root
         LinkRole,
         PointInTimeRole,
         AccountConnectedRole,
