@@ -8,6 +8,7 @@ on:
       - souvera-branding
     paths:
       - 'src/**'
+      - 'shell_integration/**'
       - 'theme/**'
       - 'admin/**'
       - 'CMakeLists.txt'
