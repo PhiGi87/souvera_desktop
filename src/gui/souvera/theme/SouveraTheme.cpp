@@ -44,13 +44,13 @@ struct Palette {
 const Palette &darkPalette()
 {
     static const Palette p{
-        QStringLiteral("#0f1729"),
-        QStringLiteral("#161a2e"),
-        QStringLiteral("#0b1120"),
-        QStringLiteral("#1e293b"),
-        QStringLiteral("#1a2540"),
-        QStringLiteral("#1e293b"),
-        QStringLiteral("#334155"),
+        QStringLiteral("#0d1424"),
+        QStringLiteral("#121a2e"),
+        QStringLiteral("#0a101e"),
+        QStringLiteral("#1b2740"),
+        QStringLiteral("#22314e"),
+        QStringLiteral("#22304a"),
+        QStringLiteral("#33415f"),
         QStringLiteral("#e2e8f0"),
         QStringLiteral("#94a3b8"),
         QStringLiteral("#64748b"),
@@ -58,7 +58,7 @@ const Palette &darkPalette()
         QStringLiteral("#4bbfea"),
         QStringLiteral("#38bdf8"),
         QStringLiteral("#0ea5e9"),
-        QStringLiteral("#0f1729"),
+        QStringLiteral("#0d1424"),
         QStringLiteral("#ef4444"),
         QStringLiteral("#22c55e"),
         QStringLiteral("#eab308"),
@@ -69,20 +69,20 @@ const Palette &darkPalette()
 const Palette &lightPalette()
 {
     static const Palette p{
-        QStringLiteral("#eef1f6"),
+        QStringLiteral("#eef4fb"),
         QStringLiteral("#ffffff"),
-        QStringLiteral("#e7ebf2"),
+        QStringLiteral("#e3edf8"),
         QStringLiteral("#ffffff"),
-        QStringLiteral("#f1f5f9"),
-        QStringLiteral("#e2e8f0"),
-        QStringLiteral("#cbd5e1"),
-        QStringLiteral("#0f172a"),
+        QStringLiteral("#f1f6fc"),
+        QStringLiteral("#d7e4f3"),
+        QStringLiteral("#c3d5ec"),
+        QStringLiteral("#10203c"),
         QStringLiteral("#475569"),
         QStringLiteral("#64748b"),
         QStringLiteral("#94a3b8"),
-        QStringLiteral("#0284c7"),
-        QStringLiteral("#0369a1"),
-        QStringLiteral("#075985"),
+        QStringLiteral("#1b55c2"),
+        QStringLiteral("#2360c9"),
+        QStringLiteral("#17479f"),
         QStringLiteral("#ffffff"),
         QStringLiteral("#dc2626"),
         QStringLiteral("#16a34a"),
@@ -274,6 +274,16 @@ QString SouveraTheme::styleSheet() const
     tokens.insert(QStringLiteral("overlayHoverStrong"), rgba(overlay, 6));
     tokens.insert(QStringLiteral("accentOverlay"), rgba(p.accent, 8));
     tokens.insert(QStringLiteral("accentOverlayHover"), rgba(p.accent, 12));
+
+    const auto gradientTop = _theme == Theme::Dark ? QColor(0x4b, 0xbf, 0xea) : QColor(0x23, 0x60, 0xc9);
+    const auto gradientBottom = _theme == Theme::Dark ? QColor(0x3b, 0x86, 0xd0) : QColor(0x1b, 0x55, 0xc2);
+    const auto accentSecondary = _theme == Theme::Dark ? QColor(0x3b, 0x86, 0xd0) : QColor(0x23, 0x60, 0xc9);
+    const auto accentDeep = _theme == Theme::Dark ? QColor(0x49, 0x6b, 0xbf) : QColor(0x1b, 0x55, 0xc2);
+    tokens.insert(QStringLiteral("accentGradient"),
+                  QStringLiteral("qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %1, stop:1 %2)")
+                      .arg(gradientTop.name(), gradientBottom.name()));
+    tokens.insert(QStringLiteral("accentSecondary"), accentSecondary.name());
+    tokens.insert(QStringLiteral("accentDeep"), accentDeep.name());
 
     for (auto it = tokens.cbegin(); it != tokens.cend(); ++it) {
         qss.replace(QStringLiteral("@") + it.key() + QStringLiteral("@"), it.value());

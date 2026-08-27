@@ -46,7 +46,7 @@ QWidget#ContentArea {
 
 #LeftSidebar QPushButton#SidebarButton:checked {
     background: @accentOverlay@;
-    border-left: 3px solid @accent@;
+    border-left: 3px solid @accentSecondary@;
     color: @textPrimary@;
 }
 
@@ -158,7 +158,7 @@ QLabel#MailSendAsLabel {
 }
 
 QPushButton#MailComposeBtn {
-    background-color: @accent@;
+    background: @accentGradient@;
     color: @onAccent@;
     border: none;
     border-radius: 8px;
