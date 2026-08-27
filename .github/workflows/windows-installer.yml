@@ -52,20 +52,26 @@ jobs:
         shell: pwsh
         run: choco install inkscape -y
 
+      - name: Install WiX Toolset (for MSI packaging)
+        shell: pwsh
+        run: |
+          choco install wixtoolset -y
+          "WIX=C:\Program Files (x86)\WiX Toolset v3.14" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Setup PATH
         shell: pwsh
         run: |
           echo "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: Patch blueprint (Souvera branding)
+      - name: Patch blueprint (Souvera branding + MSI)
         shell: pwsh
         run: |
           # The stable-34.0 nextcloud-client blueprint hardcodes the installer
-          # identity (product name, install dir, shortcuts, executable, company)
-          # to Nextcloud, independent of our NEXTCLOUD.cmake source branding.
-          # Rewrite it to Souvera so the installer installs alongside Nextcloud
-          # and is fully branded. Also fixes an upstream bug where createPackage()
-          # uses os.path.join without importing os.
+          # identity to Nextcloud, independent of our NEXTCLOUD.cmake branding.
+          # Rewrite it to Souvera and fix the missing `import os` in
+          # createPackage(). Also enable BUILD_WIN_MSI so the repo's own WiX
+          # MSI assets (product name, shortcuts, product icon, registry) are
+          # built and installed into the Craft image directory.
           $bp = "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\etc\blueprints\locations\craft-blueprints-nextcloud\nextcloud-client\nextcloud-client.py"
           if (Test-Path $bp) {
               $c = Get-Content -Raw $bp
@@ -76,9 +82,10 @@ jobs:
               $c = $c -replace 'self\.defines\["appname"\] = "nextcloud"', ('self.defines["appname"] = "souvera"' + "`r`n        " + 'self.defines["productname"] = "Souvera Workspace"')
               $c = $c -replace 'self\.defines\["company"\] = "Nextcloud GmbH"', 'self.defines["company"] = "Host-On Service Provider GmbH"'
               $c = $c -replace 'self\.applicationExecutable = "nextcloud"', 'self.applicationExecutable = "souvera"'
+              $c = $c -replace 'self\.subinfo\.options\.configure\.args \+= \[f"-DMIRALL_VERSION_SUFFIX=\{versionSuffix\}"\]', ('$0' + "`r`n        self.subinfo.options.configure.args += [""-DBUILD_WIN_MSI=ON""]")
               [System.IO.File]::WriteAllText($bp, $c)
               Write-Host "== Patched blueprint =="
-              Get-Content $bp | Select-String -Pattern 'displayName|appname|productname|company|applicationExecutable|^import os'
+              Get-Content $bp | Select-String -Pattern 'displayName|appname|productname|company|applicationExecutable|BUILD_WIN_MSI|^import os'
           } else {
               Write-Host "WARNING: blueprint not found at $bp"
           }
@@ -93,31 +100,34 @@ jobs:
 
           craft --src-dir ${{ github.workspace }} nextcloud-client
 
-      - name: Package installer (NSIS)
+      - name: Build MSI installer
         shell: pwsh
         run: |
-          function craft() {
-              python "${{ env.CRAFT_MASTER_LOCATION }}\CraftMaster.py" --config "${{ env.CRAFT_MASTER_CONFIG }}" --target ${{ env.CRAFT_TARGET }} -c $args
-              if($LASTEXITCODE -ne 0) {exit $LASTEXITCODE}
+          # Craft installs the built tree into <target>\build\nextcloud-client\image-RelWithDebInfo-*.
+          $img = Get-ChildItem "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\build" -Directory -Recurse -Filter "image-RelWithDebInfo-master" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $img) { throw "Craft image directory not found." }
+          $msiDir = Join-Path $img.FullName "msi"
+          if (-not (Test-Path "$msiDir\Nextcloud.wxs")) {
+              throw "MSI assets missing in image dir - BUILD_WIN_MSI patch did not apply?"
           }
-
-          craft --package nextcloud-client
+          cmd /c "cd /d `"$msiDir`" && make-msi.bat `"$($img.FullName)`""
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem $msiDir -Filter *.msi | Format-Table Name,Length
 
       - name: Collect installer artifacts
         shell: pwsh
         run: |
+          $img = Get-ChildItem "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\build" -Directory -Recurse -Filter "image-RelWithDebInfo-master" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $img) { throw "Craft image directory not found." }
+
           $out = "${{ github.workspace }}\souvera-artifacts"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-          # NSIS installer produced by `craft --package`. Match setup executables
-          # only, and exclude Craft's download/cache/build trees so we don't drag
-          # in dependency .7z archives.
-          $pkgs = Get-ChildItem -Path "${{ github.workspace }}" -Recurse -Include *setup*.exe,*Setup*.exe,nextcloud-*.exe,souvera-*.exe -ErrorAction SilentlyContinue |
-                  Where-Object { $_.FullName -notmatch "\\(build|download|cache|dev-utils|msys)\\" -and $_.Length -gt 1MB }
-          foreach ($p in $pkgs) { Copy-Item $p.FullName -Destination $out -Force }
+          $msi = Get-ChildItem (Join-Path $img.FullName "msi") -Filter *.msi -ErrorAction SilentlyContinue
+          foreach ($m in $msi) { Copy-Item $m.FullName -Destination $out -Force }
 
-          if (-not (Get-ChildItem $out -Filter *.exe -ErrorAction SilentlyContinue)) {
-              throw "No NSIS installer was produced by craft --package."
+          if (-not (Get-ChildItem $out -Filter *.msi -ErrorAction SilentlyContinue)) {
+              throw "No MSI installer was produced."
           }
 
           Write-Host "== Collected artifacts =="
