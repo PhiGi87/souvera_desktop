@@ -20,6 +20,7 @@
 #include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QItemSelectionModel>
 #include <QLabel>
 #include <QLoggingCategory>
 #include <QMessageBox>
@@ -32,7 +33,6 @@
 #include <QUrl>
 #include <QUrlQuery>
 #include <QVBoxLayout>
-#include <QHeaderView>
 #include <QTreeView>
 
 Q_LOGGING_CATEGORY(lcFilesPanel, "souvera.filespanel")
@@ -97,9 +97,9 @@ void FilesPanel::setAccountState(AccountState *accountState)
     _accountState = accountState;
     if (_remoteModel) {
         _remoteModel->setAccountState(accountState);
-    }
-    if (accountState) {
-        refreshRemoteFiles();
+        if (accountState && _remoteModel->currentPath().isEmpty()) {
+            _remoteModel->load(QString());
+        }
     }
 }
 
@@ -135,8 +135,9 @@ void FilesPanel::setupRemoteBrowser()
     actionsLayout->addStretch();
 
     _remoteView = new QTreeView(this);
-    _remoteView->setObjectName(QStringLiteral("MailFolderView"));
+    _remoteView->setObjectName(QStringLiteral("RemoteFilesView"));
     _remoteView->setRootIsDecorated(false);
+    _remoteView->setHeaderHidden(true);
     _remoteView->setAlternatingRowColors(true);
     _remoteView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     _remoteView->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -144,7 +145,6 @@ void FilesPanel::setupRemoteBrowser()
 
     _remoteModel = new RemoteFilesModel(_accountState, this);
     _remoteView->setModel(_remoteModel);
-    _remoteView->setColumnWidth(0, 340);
 
     auto *browserLayout = qobject_cast<QVBoxLayout *>(layout());
     if (browserLayout) {
@@ -164,13 +164,6 @@ void FilesPanel::setupRemoteBrowser()
         _upBtn->setEnabled(!path.isEmpty());
         updateRemoteActions();
     });
-}
-
-void FilesPanel::refreshRemoteFiles()
-{
-    if (_remoteModel && _accountState) {
-        _remoteModel->load(_remoteModel->currentPath());
-    }
 }
 
 void FilesPanel::navigateUp()
@@ -225,8 +218,9 @@ QString FilesPanel::localPathForRemote(const QString &remotePath) const
     const auto folders = FolderMan::instance()->map();
     for (const auto *folder : folders) {
         auto remote = folder->remotePathTrailingSlash();
-        if (remotePath.startsWith(remote)) {
-            const auto relative = remotePath.mid(remote.size());
+        const auto withSlash = QLatin1Char('/') + remotePath;
+        if (withSlash.startsWith(remote)) {
+            const auto relative = withSlash.mid(remote.size());
             const auto local = QDir::cleanPath(folder->path() + QLatin1Char('/') + relative);
             if (QFileInfo::exists(local)) {
                 return local;
@@ -266,7 +260,8 @@ void FilesPanel::onEditInOffice()
     if (file.locked && file.lockOwnerType != QLatin1String("office")) {
         const auto owner = file.lockOwnerDisplayName.isEmpty() ? file.lockOwner : file.lockOwnerDisplayName;
         QMessageBox::warning(this, QStringLiteral("Datei gesperrt"),
-            QStringLiteral("Diese Datei wird gerade von %1 bearbeitet.\nBitte versuche es sp\u00E4ter erneut.").arg(owner));
+            QStringLiteral("Diese Datei wird gerade von %1 bearbeitet.\nBitte versuche es sp\u00E4ter erneut.")
+                .arg(owner.isEmpty() ? QStringLiteral("einem anderen Benutzer") : owner));
         return;
     }
 
@@ -284,7 +279,8 @@ void FilesPanel::onEditLocally()
     if (file.locked) {
         const auto owner = file.lockOwnerDisplayName.isEmpty() ? file.lockOwner : file.lockOwnerDisplayName;
         QMessageBox::warning(this, QStringLiteral("Datei gesperrt"),
-            QStringLiteral("Diese Datei wird gerade von %1 bearbeitet.\nBitte versuche es sp\u00E4ter erneut.").arg(owner));
+            QStringLiteral("Diese Datei wird gerade von %1 bearbeitet.\nBitte versuche es sp\u00E4ter erneut.")
+                .arg(owner.isEmpty() ? QStringLiteral("einem anderen Benutzer") : owner));
         return;
     }
 
@@ -300,7 +296,14 @@ void FilesPanel::onEditLocally()
     if (!acc) return;
 
     const auto downloadDir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
-    const auto target = QDir::cleanPath(downloadDir + QLatin1Char('/') + file.name);
+    auto target = QDir::cleanPath(downloadDir + QLatin1Char('/') + file.name);
+    auto counter = 1;
+    while (QFileInfo::exists(target)) {
+        const auto baseName = QFileInfo(file.name).completeBaseName();
+        const auto suffix = QFileInfo(file.name).suffix();
+        target = QDir::cleanPath(downloadDir + QLatin1Char('/') + baseName
+            + QStringLiteral(" (%1)").arg(counter++) + (suffix.isEmpty() ? QString() : QLatin1Char('.') + suffix));
+    }
 
     QNetworkRequest req(_remoteModel->davUrl(file.path));
     const auto creds = acc->credentials();
@@ -336,6 +339,7 @@ void FilesPanel::updateRemoteActions()
 
 void FilesPanel::refreshFolderList()
 {
+    _folderRows.clear();
     while (auto *item = _foldersLayout->takeAt(0)) {
         if (auto *w = item->widget()) {
             w->deleteLater();

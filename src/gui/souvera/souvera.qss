@@ -324,6 +324,31 @@ QSplitter#MailSplitter::handle {
     selection-color: @textPrimary@;
 }
 
+/* ---- Remote file browser ---- */
+
+#RemoteFilesView {
+    background: transparent;
+    color: @textPrimary@;
+    font-size: 13px;
+    border: 1px solid @border@;
+    border-radius: 8px;
+    outline: none;
+    alternate-background-color: @overlayHover@;
+}
+
+#RemoteFilesView::item {
+    padding: 7px 12px;
+}
+
+#RemoteFilesView::item:selected {
+    background: @accentOverlay@;
+    color: @accent@;
+}
+
+#RemoteFilesView::item:hover:!selected {
+    background: @overlayHover@;
+}
+
 /* ==========================================================================
    Files Panel
    ========================================================================== */

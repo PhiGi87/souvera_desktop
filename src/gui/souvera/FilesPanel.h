@@ -41,7 +41,6 @@ private:
     static QString syncStatusText(Folder *folder);
 
     void setupRemoteBrowser();
-    void refreshRemoteFiles();
     void navigateUp();
     void onRemoteFileActivated(const QModelIndex &index);
     void onOpenInBrowser();

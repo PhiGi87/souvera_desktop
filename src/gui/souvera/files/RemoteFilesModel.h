@@ -9,7 +9,10 @@
 #include <QAbstractListModel>
 #include <QDateTime>
 #include <QList>
+#include <QPointer>
 #include <QUrl>
+
+class QNetworkReply;
 #include <QUrl>
 
 namespace OCC {
@@ -73,6 +76,8 @@ private:
     AccountState *_accountState = nullptr;
     QList<RemoteFileInfo> _entries;
     QString _currentPath;
+    QPointer<QNetworkReply> _activeReply;
+    int _generation = 0;
 };
 
 } // namespace OCC

@@ -264,6 +264,8 @@ void RemoteFilesModel::fetchDirectory(const QString &remotePath)
                     auto path = QString::fromUtf8(QByteArray::fromPercentEncoding(currentHref.toUtf8()));
                     if (path.startsWith(prefix)) {
                         path.remove(0, prefix.size());
+                    } else if (path == prefix.left(prefix.size() - 1)) {
+                        path.clear();
                     }
                     if (path.endsWith(QLatin1Char('/'))) {
                         path.chop(1);
