@@ -121,6 +121,18 @@ jobs:
           if (-not (Test-Path "$msiDir\make-msi.bat")) {
               throw "MSI assets missing in archive dir - BUILD_WIN_MSI patch did not apply?"
           }
+
+          # The shell extension DLLs may end up in usr\bin (FHS-style install
+          # prefix) while WinShellExt.wxs expects them at the archive root.
+          foreach ($dll in @('NCContextMenu.dll', 'NCOverlays.dll')) {
+              $src = Get-ChildItem $archive -Recurse -Filter $dll -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($src) {
+                  Copy-Item $src.FullName (Join-Path $archive $dll) -Force
+              } else {
+                  throw "Shell extension DLL not found in archive: $dll"
+              }
+          }
+
           cmd /c "cd /d `"$msiDir`" && make-msi.bat `"$archive`""
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-ChildItem $msiDir -Filter *.msi | Format-Table Name,Length
