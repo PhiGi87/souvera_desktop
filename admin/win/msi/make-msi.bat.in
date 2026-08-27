@@ -49,7 +49,7 @@ if "%WISUBSTG%" == "" (
   set languages=1252:en-us
 ) else ( if "%WILANGID%" == "" (
   REM WILANGID is used to update the supported languages field in the MSI ^(Package in .wxs file -- unfortunately the Language attribute only allows one language at a time^)
-  REM Nextcloud.wxs specifies the language as 1033 ^(en-us^) as default, so this step can be skipped
+  REM Souvera.wxs specifies the language as 1033 ^(en-us^) as default, so this step can be skipped
   echo :: Did not find WiLangId.vbs ^(environment variable 'WILANGID'^), the resulting MSI will be in English by default
 ))
 
@@ -108,7 +108,7 @@ exit 0
   set codepage=%~1
 
   echo :: Compiling MSI project for codepage !codepage!
-  "%WIX%\bin\candle.exe" -dcodepage=!codepage! -dProductCode=%PRODUCTCODE% -dPlatform=%BuildArch% -arch %BuildArch% -dHarvestAppDir="%HarvestAppDir%" -ext WixUtilExtension NCMsiHelper.wxs WinShellExt.wxs collect.wxs Nextcloud.wxs RegistryCleanupCustomAction.wxs
+  "%WIX%\bin\candle.exe" -dcodepage=!codepage! -dProductCode=%PRODUCTCODE% -dPlatform=%BuildArch% -arch %BuildArch% -dHarvestAppDir="%HarvestAppDir%" -ext WixUtilExtension NCMsiHelper.wxs WinShellExt.wxs collect.wxs Souvera.wxs RegistryCleanupCustomAction.wxs
   if %ERRORLEVEL% neq 0 exit %ERRORLEVEL%
   echo/
 

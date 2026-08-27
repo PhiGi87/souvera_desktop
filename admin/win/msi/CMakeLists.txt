@@ -29,7 +29,7 @@ install(FILES
         ${CMAKE_CURRENT_BINARY_DIR}/make-msi.bat
         EnsureACL.js
         Platform.wxi
-        Nextcloud.wxs
+        Souvera.wxs
         ${CMAKE_CURRENT_BINARY_DIR}/RegistryCleanup.vbs
         RegistryCleanupCustomAction.wxs
         gui/banner.bmp

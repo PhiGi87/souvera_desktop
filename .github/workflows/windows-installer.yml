@@ -107,7 +107,7 @@ jobs:
           $img = Get-ChildItem "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\build" -Directory -Recurse -Filter "image-RelWithDebInfo-master" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $img) { throw "Craft image directory not found." }
           $msiDir = Join-Path $img.FullName "msi"
-          if (-not (Test-Path "$msiDir\Nextcloud.wxs")) {
+          if (-not (Test-Path "$msiDir\Souvera.wxs")) {
               throw "MSI assets missing in image dir - BUILD_WIN_MSI patch did not apply?"
           }
           cmd /c "cd /d `"$msiDir`" && make-msi.bat `"$($img.FullName)`""
