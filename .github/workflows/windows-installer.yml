@@ -104,8 +104,8 @@ jobs:
       - name: Build MSI installer
         shell: pwsh
         run: |
-          $img = Get-ChildItem "${{ github.workspace }}\${{ env.CRAFT_TARGET }}" -Directory |
-                 Where-Object Name -like "image*" | Select-Object -First 1
+          # Craft installs the built tree into <target>\build\nextcloud-client\image-RelWithDebInfo-*.
+          $img = Get-ChildItem "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\build" -Directory -Recurse -Filter "image-RelWithDebInfo-master" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $img) { throw "Craft image directory not found." }
           $msiDir = Join-Path $img.FullName "msi"
           if (-not (Test-Path "$msiDir\Nextcloud.wxs")) {
@@ -118,8 +118,7 @@ jobs:
       - name: Collect installer artifacts
         shell: pwsh
         run: |
-          $img = Get-ChildItem "${{ github.workspace }}\${{ env.CRAFT_TARGET }}" -Directory |
-                 Where-Object Name -like "image*" | Select-Object -First 1
+          $img = Get-ChildItem "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\build" -Directory -Recurse -Filter "image-RelWithDebInfo-master" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $img) { throw "Craft image directory not found." }
 
           $out = "${{ github.workspace }}\souvera-artifacts"
