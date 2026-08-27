@@ -37,6 +37,9 @@ class OWNCLOUDSYNC_EXPORT Capabilities
 public:
     Capabilities(const QVariantMap &capabilities);
 
+    /** Access to the raw capabilities map as advertised by the server. */
+    [[nodiscard]] const QVariantMap &raw() const { return _capabilities; }
+
     [[nodiscard]] bool shareAPI() const;
     [[nodiscard]] bool shareEmailPasswordEnforced() const;
     [[nodiscard]] bool sharePublicLink() const;

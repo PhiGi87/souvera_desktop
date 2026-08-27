@@ -68,6 +68,7 @@ SouveraMainWindow::SouveraMainWindow(QWidget *parent)
             _deckPanel->setAccountState(accountState);
             _calendarPanel->setAccountState(accountState);
             _notesPanel->setAccountState(accountState);
+            _filesPanel->setAccountState(accountState);
         }
     }
 }
