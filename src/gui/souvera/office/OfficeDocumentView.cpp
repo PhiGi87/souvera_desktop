@@ -15,7 +15,9 @@
 
 #if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
 
+#ifndef LOK_USE_UNSTABLE_API
 #define LOK_USE_UNSTABLE_API 1
+#endif
 #include "lok/LibreOfficeKitEnums.h"
 #include "lok/LibreOfficeKitInit.h"
 

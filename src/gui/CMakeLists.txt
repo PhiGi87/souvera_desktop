@@ -638,6 +638,11 @@ endif()
 
 add_library(nextcloudCore STATIC ${final_src})
 
+# LibreOfficeKit: the unstable API block (postKeyEvent, paintTile, ...) must be
+# visible in every translation unit - also under CMAKE_UNITY_BUILD, where the
+# first include of the header wins for the whole unity chunk.
+target_compile_definitions(nextcloudCore PRIVATE LOK_USE_UNSTABLE_API=1)
+
 if(HAVE_WEBENGINE)
     target_link_libraries(nextcloudCore PUBLIC Qt::WebEngineWidgets)
     target_compile_definitions(nextcloudCore PUBLIC BUILD_WITH_WEBENGINE=1)
