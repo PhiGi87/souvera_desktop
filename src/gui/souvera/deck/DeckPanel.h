@@ -39,6 +39,7 @@ public:
     void removeCard(DeckCardWidget *card);
     void clearCards();
     void updateCardCount();
+    void applyColumnTheme();
 
 private:
     int _stackId = -1;

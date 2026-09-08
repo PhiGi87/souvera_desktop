@@ -1,31 +1,21 @@
 /*
- * SPDX-FileCopyrightText: 2025 Souvera (Host-On Service Provider GmbH)
+ * SPDX-FileCopyrightText: 2026 Souvera (Host-On Service Provider GmbH)
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "DeckCardWidget.h"
+#include "theme/SouveraTheme.h"
 
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QMouseEvent>
-#include <QGraphicsDropShadowEffect>
 
 namespace OCC {
 
 DeckCardWidget::DeckCardWidget(const QString &title, const QString &description, QWidget *parent)
     : QFrame(parent)
 {
-    setStyleSheet(QStringLiteral(
-        "DeckCardWidget { background-color: white; border-radius: 8px; border: 1px solid #e0e0e0; }"
-        "DeckCardWidget:hover { border-color: #4a90d9; background-color: #fafafa; }"));
-
-    auto *shadow = new QGraphicsDropShadowEffect(this);
-    shadow->setBlurRadius(6);
-    shadow->setOffset(0, 1);
-    shadow->setColor(QColor(0, 0, 0, 20));
-    setGraphicsEffect(shadow);
-
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(10, 8, 10, 8);
     layout->setSpacing(4);
@@ -38,18 +28,51 @@ DeckCardWidget::DeckCardWidget(const QString &title, const QString &description,
     layout->addWidget(_labelsContainer);
 
     _titleLabel = new QLabel(title, this);
-    _titleLabel->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 13px; color: #1a1a1a;"));
     _titleLabel->setWordWrap(true);
     layout->addWidget(_titleLabel);
 
     if (!description.isEmpty()) {
         _descriptionLabel = new QLabel(description, this);
-        _descriptionLabel->setStyleSheet(QStringLiteral("font-size: 11px; color: #666666;"));
         _descriptionLabel->setWordWrap(true);
         layout->addWidget(_descriptionLabel);
     }
 
     layout->addStretch();
+
+    applyTheme();
+    connect(SouveraTheme::instance(), &SouveraTheme::themeChanged, this, [this]() {
+        applyTheme();
+    });
+}
+
+void DeckCardWidget::applyTheme()
+{
+    const auto *theme = SouveraTheme::instance();
+    setStyleSheet(QStringLiteral(
+        "DeckCardWidget { background-color: %1; border-radius: 8px; border: 1px solid %2; }"
+        "DeckCardWidget:hover { border-color: %3; }")
+        .arg(theme->color(SouveraTheme::Color::Surface).name(),
+             theme->color(SouveraTheme::Color::Border).name(),
+             theme->color(SouveraTheme::Color::Accent).name()));
+
+    _titleLabel->setStyleSheet(QStringLiteral(
+        "font-weight: bold; font-size: 13px; color: %1; background: transparent;")
+        .arg(theme->color(SouveraTheme::Color::TextPrimary).name()));
+
+    if (_descriptionLabel) {
+        applyLabelTheme(_descriptionLabel, false);
+    }
+}
+
+void DeckCardWidget::applyLabelTheme(QLabel *label, bool bold)
+{
+    const auto *theme = SouveraTheme::instance();
+    label->setStyleSheet(QStringLiteral(
+        "font-size: %1px; color: %2; background: transparent; font-weight: %3;")
+        .arg(bold ? 13 : 11)
+        .arg(theme->color(bold ? SouveraTheme::Color::TextPrimary
+                               : SouveraTheme::Color::TextSecondary).name(),
+             bold ? "bold" : "normal"));
 }
 
 void DeckCardWidget::setTitle(const QString &title)
@@ -61,8 +84,8 @@ void DeckCardWidget::setDescription(const QString &description)
 {
     if (!_descriptionLabel) {
         _descriptionLabel = new QLabel(description, this);
-        _descriptionLabel->setStyleSheet(QStringLiteral("font-size: 11px; color: #666666;"));
         _descriptionLabel->setWordWrap(true);
+        applyLabelTheme(_descriptionLabel, false);
         auto *parentLayout = qobject_cast<QVBoxLayout *>(layout());
         if (parentLayout) {
             parentLayout->insertWidget(parentLayout->count() - 1, _descriptionLabel);

@@ -87,6 +87,27 @@ chmod a+x ${APPIMAGE_NAME}
 rm ./${APPIMAGE_NAME}
 cp -r ./squashfs-root ./linuxdeploy-squashfs-root
 
+# ---- Bundle LibreOffice for offline office editing ("Souvera Office") ----
+export LO_VERSION=${LO_VERSION:-25.8.7}
+if [ ! -d AppDir/usr/bin/libreoffice/program ]; then
+    echo "== Bundling LibreOffice ${LO_VERSION} for offline office =="
+    if curl -fsSL -o /tmp/lo.tar.gz "https://download.documentfoundation.org/libreoffice/stable/${LO_VERSION}/rpm/x86_64/LibreOffice_${LO_VERSION}_Linux_x86-64_rpm.tar.gz" \
+       && mkdir -p /tmp/lo && tar -xzf /tmp/lo.tar.gz -C /tmp/lo; then
+        mkdir -p /tmp/lo-extract
+        for rpm in /tmp/lo/LibreOffice*/RPMS/*.rpm; do
+            rpm2cpio "$rpm" | (cd /tmp/lo-extract && cpio -idm --quiet) || true
+        done
+        if [ -d /tmp/lo-extract/opt ]; then
+            mkdir -p AppDir/usr/bin/libreoffice
+            cp -a /tmp/lo-extract/opt/libreoffice*/* AppDir/usr/bin/libreoffice/ || true
+        else
+            echo "WARNING: LibreOffice extraction failed - offline office disabled in this build."
+        fi
+    else
+        echo "WARNING: LibreOffice download failed - offline office disabled in this build."
+    fi
+fi
+
 export LD_LIBRARY_PATH=${QT_BASE_DIR}/lib:/app/usr/lib64:/app/usr/lib:/usr/local/lib/x86_64-linux-gnu:/usr/local/lib:/usr/local/lib64
 ./linuxdeploy-squashfs-root/AppRun --desktop-file=${DESKTOP_FILE} --icon-file=usr/share/icons/hicolor/512x512/apps/${ICON_NAME}.png --executable=usr/bin/${EXECUTABLE_NAME} --appdir=AppDir
 

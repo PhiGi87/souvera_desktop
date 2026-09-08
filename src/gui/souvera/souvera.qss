@@ -201,6 +201,29 @@ QPushButton#MailDeleteBtn:disabled {
     border-color: @border@;
 }
 
+/* Mail status bar + search */
+QLabel#MailStatusLabel {
+    background-color: @background@;
+    color: @textMuted@;
+    border-top: 1px solid @border@;
+    min-height: 22px;
+    max-height: 22px;
+}
+
+QLineEdit#MailSearchEdit {
+    background-color: @surface@;
+    color: @textPrimary@;
+    border: 1px solid @borderStrong@;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    min-height: 16px;
+}
+
+QLineEdit#MailSearchEdit:focus {
+    border: 1px solid @accent@;
+}
+
 QComboBox#MailSendAsCombo {
     background-color: @surface@;
     color: @textPrimary@;
@@ -428,6 +451,108 @@ QProgressBar#FolderProgressBar {
 QProgressBar#FolderProgressBar::chunk {
     background: @accent@;
     border-radius: 3px;
+}
+
+
+/* ==========================================================================
+   Shared panel styles (Talk, Deck, Kalender, Notizen)
+   ========================================================================== */
+
+#PanelToolbar {
+    background-color: @background@;
+    border-bottom: 1px solid @border@;
+    min-height: 44px;
+}
+
+QLabel#PanelTitle {
+    color: @textPrimary@;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+QPushButton#PanelPrimaryBtn {
+    background: @accentGradient@;
+    color: @onAccent@;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 16px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QPushButton#PanelPrimaryBtn:hover {
+    background: @accentHover@;
+}
+
+QPushButton#PanelPrimaryBtn:pressed {
+    background: @accentPressed@;
+}
+
+QPushButton#PanelSecondaryBtn {
+    background: transparent;
+    color: @textSecondary@;
+    border: 1px solid @borderStrong@;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 12px;
+}
+
+QPushButton#PanelSecondaryBtn:hover {
+    background: @surface@;
+    color: @textPrimary@;
+}
+
+QLabel#PanelPlaceholder {
+    color: @textMuted@;
+    font-size: 15px;
+}
+
+QScrollArea#PanelScroll {
+    border: none;
+    background: transparent;
+}
+
+/* ---- Talk ---- */
+
+QScrollArea#TalkChatArea {
+    border: none;
+    background: @contentBackground@;
+}
+
+QLineEdit#TalkMessageInput {
+    background-color: @surface@;
+    color: @textPrimary@;
+    border: 1px solid @borderStrong@;
+    border-radius: 18px;
+    padding: 8px 16px;
+    font-size: 13px;
+}
+
+QLineEdit#TalkMessageInput:focus {
+    border: 1px solid @accent@;
+}
+
+/* ---- Deck ---- */
+
+QLabel#DeckColumnTitle {
+    color: @textPrimary@;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+QLabel#SettingsCardTitle {
+    color: @textPrimary@;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+QLabel#DeckColumnCount {
+    color: @textSecondary@;
+    background: @surfaceHover@;
+    border-radius: 8px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 600;
 }
 
 /* ==========================================================================

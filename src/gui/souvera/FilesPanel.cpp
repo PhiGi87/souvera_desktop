@@ -6,6 +6,8 @@
 #include "FilesPanel.h"
 
 #include "files/RemoteFilesModel.h"
+#include "office/OfficeManager.h"
+#include "office/LokOffice.h"
 #include "account.h"
 #include "accountstate.h"
 #include "capabilities.h"
@@ -265,10 +267,9 @@ void FilesPanel::onEditInOffice()
         return;
     }
 
-    const auto url = officeUrl(file.fileId, file.path);
-    if (!url.isEmpty()) {
-        QDesktopServices::openUrl(QUrl(url));
-    }
+    // Embedded editor: bundled engine on Windows/Linux, Collabora on macOS.
+    OfficeManager::instance()->openDocument(
+        _accountState, file.path, file.name, file.fileId, localPathForRemote(file.path));
 }
 
 void FilesPanel::onEditLocally()

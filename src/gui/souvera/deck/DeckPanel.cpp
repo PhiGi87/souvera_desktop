@@ -6,6 +6,7 @@
 #include "DeckPanel.h"
 #include "DeckOcsApi.h"
 #include "DeckCardWidget.h"
+#include "theme/SouveraTheme.h"
 
 #include <QLabel>
 #include <QComboBox>
@@ -24,27 +25,26 @@ DeckColumnWidget::DeckColumnWidget(const QString &title, QWidget *parent)
     : QFrame(parent)
 {
     setFixedWidth(280);
-    setStyleSheet(QStringLiteral(
-        "DeckColumnWidget { background-color: #f0f2f5; border-radius: 10px; padding: 8px; }"));
+    applyColumnTheme();
+    connect(SouveraTheme::instance(), &SouveraTheme::themeChanged, this, [this]() {
+        applyColumnTheme();
+    });
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(8, 8, 8, 8);
     layout->setSpacing(6);
 
     auto *headerWidget = new QWidget(this);
-    headerWidget->setStyleSheet(QStringLiteral("background: transparent;"));
+    headerWidget->setObjectName(QStringLiteral("DeckColumnHeader"));
     auto *headerLayout = new QHBoxLayout(headerWidget);
     headerLayout->setContentsMargins(4, 0, 4, 0);
 
     _headerLabel = new QLabel(title, headerWidget);
-    _headerLabel->setStyleSheet(QStringLiteral(
-        "font-weight: bold; font-size: 14px; color: #333; background: transparent;"));
+    _headerLabel->setObjectName(QStringLiteral("DeckColumnTitle"));
     headerLayout->addWidget(_headerLabel);
 
     _countLabel = new QLabel(QStringLiteral("0"), headerWidget);
-    _countLabel->setStyleSheet(QStringLiteral(
-        "font-size: 12px; color: #888; background: #ddd; border-radius: 8px;"
-        "padding: 1px 7px; font-weight: bold;"));
+    _countLabel->setObjectName(QStringLiteral("DeckColumnCount"));
     _countLabel->setFixedHeight(18);
     headerLayout->addWidget(_countLabel);
     headerLayout->addStretch();
@@ -101,6 +101,14 @@ void DeckColumnWidget::updateCardCount()
 {
     const auto count = _cardsLayout->count() - 1;
     _countLabel->setText(QString::number(count));
+}
+
+void DeckColumnWidget::applyColumnTheme()
+{
+    const auto *theme = SouveraTheme::instance();
+    setStyleSheet(QStringLiteral(
+        "DeckColumnWidget { background-color: %1; border-radius: 10px; }")
+        .arg(theme->color(SouveraTheme::Color::Background).name()));
 }
 
 DeckPanel::DeckPanel(QWidget *parent)
@@ -189,21 +197,20 @@ void DeckPanel::setupUi()
     layout->setSpacing(0);
 
     auto *toolbar = new QWidget(this);
+    toolbar->setObjectName(QStringLiteral("PanelToolbar"));
     auto *toolbarLayout = new QHBoxLayout(toolbar);
-    toolbarLayout->setContentsMargins(12, 8, 12, 8);
+    toolbarLayout->setContentsMargins(16, 8, 16, 8);
 
     auto *title = new QLabel(QStringLiteral("Deck"), toolbar);
-    title->setStyleSheet(QStringLiteral("font-size: 18px; font-weight: bold;"));
+    title->setObjectName(QStringLiteral("PanelTitle"));
     toolbarLayout->addWidget(title);
 
     toolbarLayout->addSpacing(12);
 
     _boardComboBox = new QComboBox(toolbar);
+    _boardComboBox->setObjectName(QStringLiteral("MailSendAsCombo"));
     _boardComboBox->setMinimumWidth(200);
-    _boardComboBox->setPlaceholderText(QStringLiteral("Board auswählen…"));
-    _boardComboBox->setStyleSheet(QStringLiteral(
-        "QComboBox { padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px;"
-        "  background: white; font-size: 13px; }"));
+    _boardComboBox->setPlaceholderText(QStringLiteral("Board ausw\u00E4hlen\u2026"));
     connect(_boardComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, [this](int index) {
         if (index >= 0) {
@@ -215,30 +222,19 @@ void DeckPanel::setupUi()
     toolbarLayout->addStretch();
 
     _newCardButton = new QPushButton(QStringLiteral("+ Neue Karte"), toolbar);
-    _newCardButton->setStyleSheet(QStringLiteral(
-        "QPushButton { background-color: #4a90d9; color: white; border: none;"
-        "  border-radius: 4px; padding: 6px 14px; font-size: 13px; font-weight: bold; }"
-        "QPushButton:hover { background-color: #357abd; }"
-        "QPushButton:pressed { background-color: #2a5f9e; }"));
+    _newCardButton->setObjectName(QStringLiteral("PanelPrimaryBtn"));
     connect(_newCardButton, &QPushButton::clicked, this, &DeckPanel::onNewCard);
     toolbarLayout->addWidget(_newCardButton);
 
     layout->addWidget(toolbar);
 
-    auto *separator = new QFrame(this);
-    separator->setFrameShape(QFrame::HLine);
-    separator->setStyleSheet(QStringLiteral("color: #e0e0e0;"));
-    layout->addWidget(separator);
+
 
     _scrollArea = new QScrollArea(this);
     _scrollArea->setWidgetResizable(true);
     _scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     _scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    _scrollArea->setStyleSheet(QStringLiteral(
-        "QScrollArea { border: none; background: transparent; }"
-        "QScrollBar:horizontal { height: 8px; }"
-        "QScrollBar::handle:horizontal { background: #ccc; border-radius: 4px; }"
-        "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }"));
+    _scrollArea->setObjectName(QStringLiteral("PanelScroll"));
 
     _columnsContainer = new QWidget(_scrollArea);
     _columnsLayout = new QHBoxLayout(_columnsContainer);

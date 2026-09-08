@@ -122,6 +122,21 @@ jobs:
               throw "MSI assets missing in archive dir - BUILD_WIN_MSI patch did not apply?"
           }
 
+          # Bundle LibreOffice for offline office editing ("Souvera Office").
+          # Administrative MSI install extracts the full engine tree.
+          $loVersion = "25.8.7"
+          $loMsi = "${{ github.workspace }}\libreoffice.msi"
+          $loExtract = "${{ github.workspace }}\lo-extract"
+          if (-not (Test-Path "$archive\libreoffice\program")) {
+              curl.exe -fsSL -o $loMsi "https://download.documentfoundation.org/libreoffice/stable/$loVersion/win/x86_64/LibreOffice_${loVersion}_Win_x86-64.msi"
+              if ($LASTEXITCODE -ne 0) { throw "LibreOffice download failed." }
+              Start-Process msiexec -ArgumentList "/a","`"$loMsi`"","/qn","TARGETDIR=`"$loExtract`"" -Wait -NoNewWindow
+              if (-not (Test-Path "$loExtract\program")) { throw "LibreOffice extraction failed." }
+              New-Item -ItemType Directory -Force -Path "$archive\libreoffice" | Out-Null
+              Copy-Item "$loExtract\*" "$archive\libreoffice\" -Recurse -Force
+              Write-Host "== Bundled LibreOffice $loVersion for offline office =="
+          }
+
           # Flatten bin\ (and any usr\bin FHS-style dir) into the archive root
           # so souvera.exe and its DLLs sit at the top level. The Start Menu /
           # Desktop shortcuts in Souvera.wxs target [INSTALLDIR]souvera.exe, so

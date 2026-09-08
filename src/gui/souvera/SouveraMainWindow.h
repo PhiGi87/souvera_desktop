@@ -19,6 +19,7 @@ class DeckPanel;
 class CalendarPanel;
 class FilesPanel;
 class NotesPanel;
+class SettingsPanel;
 class StatusHeader;
 class LeftSidebar;
 
@@ -57,6 +58,7 @@ private:
     DeckPanel *_deckPanel = nullptr;
     CalendarPanel *_calendarPanel = nullptr;
     NotesPanel *_notesPanel = nullptr;
+    SettingsPanel *_settingsPanel = nullptr;
 };
 
 } // namespace OCC

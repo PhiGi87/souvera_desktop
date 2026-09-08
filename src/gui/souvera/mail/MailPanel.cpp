@@ -5,17 +5,20 @@
 
 #include "MailPanel.h"
 #include "MailComposer.h"
+#include "EmailListDelegate.h"
 #include "account.h"
 #include "accountstate.h"
 #include "creds/abstractcredentials.h"
 #include "theme/SouveraTheme.h"
 
+#include <QDesktopServices>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLoggingCategory>
 #include <QHeaderView>
 #include <QMessageBox>
+#include <QUrlQuery>
 
 Q_LOGGING_CATEGORY(lcMailPanel, "souvera.mail.panel")
 
@@ -62,13 +65,17 @@ void MailPanel::wireAccount(AccountState *accountState)
     _jmapClient = new JmapClient(accountState, this);
     _jmapClient->setCredentials(user, password);
 
+    setStatus(QStringLiteral("Verbinde mit Mail-Server\u2026"));
+
     connect(_jmapClient, &JmapClient::sessionResolved, this, [this](const QString &, const QString &) {
         qCInfo(lcMailPanel) << "JMAP session resolved, fetching mailboxes";
+        setStatus(QStringLiteral("Angemeldet \u2014 Postf\u00E4cher werden geladen\u2026"));
         _jmapClient->fetchMailboxes();
     });
 
     connect(_jmapClient, &JmapClient::sessionError, this, [this](const QString &err) {
         qCWarning(lcMailPanel) << "JMAP session error:" << err;
+        setStatus(err, true);
     });
 
     connect(_jmapClient, &JmapClient::mailboxesFetched, this, [this](const QList<JmapMailbox> &boxes) {
@@ -77,33 +84,86 @@ void MailPanel::wireAccount(AccountState *accountState)
         if (_folderModel->rowCount() > 0) {
             _folderView->setCurrentIndex(_folderModel->index(0, 0));
         }
+        setStatus(QStringLiteral("Bereit \u2014 %1 Ordner").arg(boxes.size()));
     });
 
     connect(_jmapClient, &JmapClient::emailsFetched, this, [this](const QList<JmapEmail> &emails, int total) {
         qCInfo(lcMailPanel) << "Emails fetched:" << emails.size() << "total:" << total;
         _messageModel->setEmails(emails);
         _messageModel->setTotal(total);
+        setStatus(total > static_cast<int>(emails.size())
+                      ? QStringLiteral("%1 von %2 Nachrichten").arg(emails.size()).arg(total)
+                      : QStringLiteral("%1 Nachrichten").arg(emails.size()));
     });
 
     connect(_jmapClient, &JmapClient::emailBodyFetched, this, [this](const JmapEmailBody &body) {
-        if (!body.htmlBody.isEmpty()) {
-            _preview->setHtml(body.htmlBody);
-        } else if (!body.plainBody.isEmpty()) {
-            _preview->setPlainText(body.plainBody);
+        const auto *theme = SouveraTheme::instance();
+        const auto textPrimary = theme->color(SouveraTheme::Color::TextPrimary).name();
+        const auto textMuted = theme->color(SouveraTheme::Color::TextMuted).name();
+        const auto border = theme->color(SouveraTheme::Color::Border).name();
+        const auto accent = theme->color(SouveraTheme::Color::Accent).name();
+
+        auto html = body.htmlBody.isEmpty()
+            ? body.plainBody.toHtmlEscaped().replace(QLatin1Char('\n'), QStringLiteral("<br>"))
+            : body.htmlBody;
+
+        if (!body.attachments.isEmpty()) {
+            QStringList chips;
+            for (const auto &att : body.attachments) {
+                chips << QStringLiteral(
+                    "<a href='souvera-attachment:%1?name=%2' "
+                    "style='color:%4; text-decoration: none;'>\U0001F4CE %3</a>")
+                    .arg(att.blobId,
+                         QString::fromUtf8(QUrl::toPercentEncoding(att.fileName)),
+                         att.fileName.toHtmlEscaped(),
+                         accent);
+            }
+            html += QStringLiteral(
+                "<hr style='border:none; border-top:1px solid %1;' />"
+                "<p style='color:%2; font-size:12px;'><b>Anh\u00E4nge:</b></p>"
+                "<p style='color:%3; line-height:2;'>%4</p>")
+                .arg(border, textMuted, textPrimary, chips.join(QStringLiteral("&nbsp;&nbsp;")));
         }
+
+        if (!html.isEmpty()) {
+            _preview->setHtml(html);
+        }
+    });
+
+    connect(_jmapClient, &JmapClient::attachmentDownloaded, this, [this](const QString &fileName, const QString &localPath) {
+        Q_UNUSED(fileName)
+        setStatus(QStringLiteral("Anhang gespeichert: %1").arg(localPath));
+        QDesktopServices::openUrl(QUrl::fromLocalFile(localPath));
+    });
+
+    connect(_jmapClient, &JmapClient::attachmentDownloadFailed, this, [this](const QString &fileName, const QString &error) {
+        QMessageBox::warning(this, QStringLiteral("Anhang"),
+            QStringLiteral("Anhang \u201E%1\u201C konnte nicht geladen werden:\n%2").arg(fileName, error));
     });
 
     connect(_jmapClient, &JmapClient::operationCompleted, this, [this](bool) {
         if (!_currentMailboxId.isEmpty()) {
-            _jmapClient->queryEmails(_currentMailboxId);
+            _jmapClient->queryEmails(_currentMailboxId, 50, 0, _searchEdit ? _searchEdit->text() : QString());
         }
     });
 
     connect(_jmapClient, &JmapClient::networkError, this, [this](const QString &err) {
         qCWarning(lcMailPanel) << "JMAP network error:" << err;
+        setStatus(err, true);
     });
 
     _jmapClient->resolveSession();
+}
+
+void MailPanel::setStatus(const QString &text, bool isError)
+{
+    if (!_statusLabel) return;
+    _statusLabel->setText(text);
+    const auto *theme = SouveraTheme::instance();
+    _statusLabel->setProperty("error", isError);
+    _statusLabel->setStyleSheet(QStringLiteral("color: %1; padding: 2px 14px; font-size: 11px; background: transparent;")
+        .arg(isError ? theme->color(SouveraTheme::Color::Danger).name()
+                     : theme->color(SouveraTheme::Color::TextMuted).name()));
 }
 
 void MailPanel::setupUi()
@@ -156,7 +216,8 @@ void MailPanel::setupUi()
 
     _preview = new QTextBrowser(previewPanel);
     _preview->setObjectName(QStringLiteral("MailPreview"));
-    _preview->setOpenExternalLinks(true);
+    _preview->setOpenExternalLinks(false);
+    _preview->setOpenLinks(false);
     _preview->setPlaceholderText(QStringLiteral("Nachricht ausw\u00E4hlen\u2026"));
     previewLayout->addWidget(_preview);
     _splitter->addWidget(previewPanel);
@@ -168,11 +229,22 @@ void MailPanel::setupUi()
 
     layout->addWidget(_splitter, 1);
 
+    _statusLabel = new QLabel(QStringLiteral("Kein Konto verbunden."), this);
+    _statusLabel->setObjectName(QStringLiteral("MailStatusLabel"));
+    setStatus(QStringLiteral("Kein Konto verbunden."));
+    layout->addWidget(_statusLabel);
+
     _folderModel = new JmapMailboxModel(this);
     _folderView->setModel(_folderModel);
 
     _messageModel = new JmapEmailListModel(this);
     _messageView->setModel(_messageModel);
+
+    _messageDelegate = new EmailListDelegate(_messageView);
+    _messageView->setItemDelegate(_messageDelegate);
+    _messageView->setAlternatingRowColors(false);
+    _messageView->setUniformItemSizes(false);
+    _messageView->setMouseTracking(true);
 
     setupConnections();
 }
@@ -211,6 +283,15 @@ void MailPanel::setupToolbar()
 
     toolbarLayout->addStretch();
 
+    _searchEdit = new QLineEdit(_toolbar);
+    _searchEdit->setObjectName(QStringLiteral("MailSearchEdit"));
+    _searchEdit->setPlaceholderText(QStringLiteral("Nachrichten durchsuchen\u2026"));
+    _searchEdit->setMinimumWidth(200);
+    _searchEdit->setClearButtonEnabled(true);
+    toolbarLayout->addWidget(_searchEdit);
+
+    toolbarLayout->addSpacing(8);
+
     auto *sendAsLabel = new QLabel(QStringLiteral("Senden als:"), _toolbar);
     sendAsLabel->setObjectName(QStringLiteral("MailSendAsLabel"));
     toolbarLayout->addWidget(sendAsLabel);
@@ -228,6 +309,7 @@ void MailPanel::setupConnections()
     connect(_deleteBtn, &QPushButton::clicked, this, &MailPanel::onDelete);
     connect(_refreshBtn, &QPushButton::clicked, this, [this]() {
         if (_jmapClient) {
+            setStatus(QStringLiteral("Aktualisiere\u2026"));
             _jmapClient->fetchMailboxes();
         }
     });
@@ -240,6 +322,37 @@ void MailPanel::setupConnections()
             this, [this](const QModelIndex &cur, const QModelIndex &) {
         onMessageSelected(cur);
     });
+
+    // Attachment links and external links from the preview
+    connect(_preview, &QTextBrowser::anchorClicked, this, [this](const QUrl &url) {
+        if (url.toString().startsWith(QLatin1String("souvera-attachment:"))) {
+            const auto blobId = url.toString().mid(QStringLiteral("souvera-attachment:").size()).section(QLatin1Char('?'), 0, 0);
+            const auto name = QUrlQuery(url).queryItemValue(QStringLiteral("name"));
+            if (_jmapClient && !blobId.isEmpty()) {
+                setStatus(QStringLiteral("Lade Anhang \u201E%1\u201C\u2026").arg(name));
+                _jmapClient->downloadAttachment(blobId, name);
+            }
+            return;
+        }
+        if (url.scheme().startsWith(QLatin1String("http"))) {
+            QDesktopServices::openUrl(url);
+        }
+    });
+
+    // Debounced search
+    _searchTimer.setSingleShot(true);
+    _searchTimer.setInterval(400);
+    connect(&_searchTimer, &QTimer::timeout, this, &MailPanel::runSearch);
+    connect(_searchEdit, &QLineEdit::textChanged, this, [this]() {
+        _searchTimer.start();
+    });
+}
+
+void MailPanel::runSearch()
+{
+    if (!_jmapClient || _currentMailboxId.isEmpty()) return;
+    setStatus(QStringLiteral("Suche\u2026"));
+    _jmapClient->queryEmails(_currentMailboxId, 50, 0, _searchEdit->text().trimmed());
 }
 
 void MailPanel::onFolderSelected(const QModelIndex &index)
@@ -259,7 +372,8 @@ void MailPanel::onFolderSelected(const QModelIndex &index)
     _selectedEmailId.clear();
 
     if (_jmapClient) {
-        _jmapClient->queryEmails(mailboxId);
+        _jmapClient->queryEmails(mailboxId, 50, 0,
+                                  _searchEdit ? _searchEdit->text().trimmed() : QString());
     }
 }
 

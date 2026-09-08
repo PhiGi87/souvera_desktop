@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: 2025 Souvera (Host-On Service Provider GmbH)
+ * SPDX-FileCopyrightText: 2026 Souvera (Host-On Service Provider GmbH)
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "TalkMessageWidget.h"
+#include "theme/SouveraTheme.h"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -39,13 +40,11 @@ TalkMessageWidget::TalkMessageWidget(bool isOwn, QWidget *parent)
     headerLayout->addWidget(_avatarLabel);
 
     _nameLabel = new QLabel(_bubble);
-    _nameLabel->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 12px;"));
     headerLayout->addWidget(_nameLabel);
 
     headerLayout->addStretch();
 
     _timestampLabel = new QLabel(_bubble);
-    _timestampLabel->setStyleSheet(QStringLiteral("font-size: 11px; color: #888;"));
     headerLayout->addWidget(_timestampLabel);
 
     bubbleLayout->addLayout(headerLayout);
@@ -53,7 +52,6 @@ TalkMessageWidget::TalkMessageWidget(bool isOwn, QWidget *parent)
     _textLabel = new QLabel(_bubble);
     _textLabel->setWordWrap(true);
     _textLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    _textLabel->setStyleSheet(QStringLiteral("font-size: 13px;"));
     bubbleLayout->addWidget(_textLabel);
 
     if (_isOwn) {
@@ -65,6 +63,10 @@ TalkMessageWidget::TalkMessageWidget(bool isOwn, QWidget *parent)
     }
 
     applyBubbleStyle();
+
+    connect(SouveraTheme::instance(), &SouveraTheme::themeChanged, this, [this]() {
+        applyBubbleStyle();
+    });
 }
 
 void TalkMessageWidget::setMessage(const QJsonObject &msg)
@@ -89,7 +91,7 @@ void TalkMessageWidget::setMessage(const QJsonObject &msg)
         p.setRenderHint(QPainter::Antialiasing);
         const auto initial = actorDisplayName.isEmpty() ? QStringLiteral("?") : actorDisplayName.at(0).toUpper();
         const auto hue = qHash(actorDisplayName) % 360;
-        p.setBrush(QColor::fromHsl(hue, 160, 140));
+        p.setBrush(QColor::fromHsl(hue, 130, 130));
         p.setPen(Qt::NoPen);
         p.drawEllipse(0, 0, 24, 24);
         p.setPen(Qt::white);
@@ -100,26 +102,38 @@ void TalkMessageWidget::setMessage(const QJsonObject &msg)
         p.drawText(QRect(0, 0, 24, 24), Qt::AlignCenter, initial);
     }
     _avatarLabel->setPixmap(avatar);
-
-    qCInfo(lcTalkMsgWidget) << "Message widget set:" << actorDisplayName << messageText;
 }
 
 void TalkMessageWidget::applyBubbleStyle()
 {
+    const auto *theme = SouveraTheme::instance();
+
     if (_isOwn) {
         _bubble->setStyleSheet(QStringLiteral(
-            "background-color: #4a90d9; border-radius: 12px; color: white;"));
+            "background-color: %1; border-radius: 12px;")
+            .arg(theme->color(SouveraTheme::Color::Accent).name()));
         _nameLabel->setStyleSheet(QStringLiteral(
-            "font-weight: bold; font-size: 12px; color: rgba(255,255,255,0.85);"));
+            "font-weight: bold; font-size: 12px; color: %1;")
+            .arg(theme->color(SouveraTheme::Color::OnAccent).name()));
         _textLabel->setStyleSheet(QStringLiteral(
-            "font-size: 13px; color: white;"));
+            "font-size: 13px; color: %1;")
+            .arg(theme->color(SouveraTheme::Color::OnAccent).name()));
+        _timestampLabel->setStyleSheet(QStringLiteral(
+            "font-size: 11px; color: %1;")
+            .arg(theme->color(SouveraTheme::Color::OnAccent).name()));
     } else {
         _bubble->setStyleSheet(QStringLiteral(
-            "background-color: #e8e8e8; border-radius: 12px; color: #111;"));
+            "background-color: %1; border-radius: 12px;")
+            .arg(theme->color(SouveraTheme::Color::Surface).name()));
         _nameLabel->setStyleSheet(QStringLiteral(
-            "font-weight: bold; font-size: 12px; color: #333;"));
+            "font-weight: bold; font-size: 12px; color: %1;")
+            .arg(theme->color(SouveraTheme::Color::TextPrimary).name()));
         _textLabel->setStyleSheet(QStringLiteral(
-            "font-size: 13px; color: #111;"));
+            "font-size: 13px; color: %1;")
+            .arg(theme->color(SouveraTheme::Color::TextPrimary).name()));
+        _timestampLabel->setStyleSheet(QStringLiteral(
+            "font-size: 11px; color: %1;")
+            .arg(theme->color(SouveraTheme::Color::TextMuted).name()));
     }
 }
 

@@ -107,6 +107,10 @@ set( MAC_INSTALLER_BACKGROUND_FILE "${CMAKE_SOURCE_DIR}/admin/osx/installer-back
 ## Updater options
 option( BUILD_UPDATER "Build updater" ON )
 
+## Embedded web views (video calls, Collabora). Falls back to the system
+## browser when QtWebEngineWidgets is not available at build time.
+option( BUILD_WITH_WEBENGINE "Build with QtWebEngine for embedded web views" ON )
+
 option( WITH_PROVIDERS "Build with providers list" ON )
 
 option( ENFORCE_VIRTUAL_FILES_SYNC_FOLDER "Enforce use of virtual files sync folder when available" OFF )

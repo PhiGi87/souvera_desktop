@@ -68,10 +68,7 @@ void MailComposer::setupUi()
     buttonLayout->addWidget(cancelButton);
 
     _sendButton = new QPushButton(QStringLiteral("Senden"), this);
-    _sendButton->setStyleSheet(QStringLiteral(
-        "QPushButton { background-color: #4a90d9; color: white; border: none;"
-        "  border-radius: 4px; padding: 8px 20px; font-weight: bold; }"
-        "QPushButton:hover { background-color: #357abd; }"));
+    _sendButton->setObjectName(QStringLiteral("PanelPrimaryBtn"));
     connect(_sendButton, &QPushButton::clicked, this, &MailComposer::onSendClicked);
     buttonLayout->addWidget(_sendButton);
 

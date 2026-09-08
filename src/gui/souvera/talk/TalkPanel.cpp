@@ -4,6 +4,9 @@
  */
 
 #include "TalkPanel.h"
+#include "CallWindow.h"
+#include "account.h"
+#include "accountstate.h"
 #include "TalkConversationModel.h"
 #include "TalkOcsApi.h"
 #include "TalkMessageWidget.h"
@@ -49,6 +52,7 @@ TalkPanel::TalkPanel(QWidget *parent)
 
 void TalkPanel::setAccountState(AccountState *state)
 {
+    _accountState = state;
     _ocsApi->setAccountState(state);
     if (state && state->account()) {
         _currentUserId = state->account()->davUser();
@@ -62,19 +66,17 @@ void TalkPanel::setupUi()
     layout->setContentsMargins(0, 0, 0, 0);
 
     auto *toolbar = new QWidget(this);
+    toolbar->setObjectName(QStringLiteral("PanelToolbar"));
     auto *toolbarLayout = new QHBoxLayout(toolbar);
-    toolbarLayout->setContentsMargins(12, 8, 12, 8);
+    toolbarLayout->setContentsMargins(16, 8, 16, 8);
 
     auto *title = new QLabel(QStringLiteral("Talk"), toolbar);
-    title->setStyleSheet(QStringLiteral("font-size: 18px; font-weight: bold;"));
+    title->setObjectName(QStringLiteral("PanelTitle"));
     toolbarLayout->addWidget(title);
     toolbarLayout->addStretch();
 
-    auto *refreshBtn = new QPushButton(QStringLiteral("Refresh"), toolbar);
-    refreshBtn->setStyleSheet(QStringLiteral(
-        "QPushButton { background-color: #4a90d9; color: white; border: none;"
-        "  border-radius: 4px; padding: 8px 16px; font-weight: bold; }"
-        "QPushButton:hover { background-color: #357abd; }"));
+    auto *refreshBtn = new QPushButton(QStringLiteral("Aktualisieren"), toolbar);
+    refreshBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
     connect(refreshBtn, &QPushButton::clicked, this, [this]() {
         _ocsApi->fetchConversations();
         if (!_currentToken.isEmpty()) {
@@ -89,6 +91,7 @@ void TalkPanel::setupUi()
     _splitter = new QSplitter(Qt::Horizontal, this);
 
     _conversationList = new QListView(_splitter);
+    _conversationList->setObjectName(QStringLiteral("RemoteFilesView"));
     _conversationList->setModel(_conversationModel);
     _conversationList->setFixedWidth(260);
     _conversationList->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -102,7 +105,7 @@ void TalkPanel::setupUi()
     _chatScroll = new QScrollArea(chatWidget);
     _chatScroll->setWidgetResizable(true);
     _chatScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    _chatScroll->setStyleSheet(QStringLiteral("QScrollArea { border: none; background: #f5f5f5; }"));
+    _chatScroll->setObjectName(QStringLiteral("TalkChatArea"));
 
     _chatContainer = new QWidget(_chatScroll);
     auto *containerLayout = new QVBoxLayout(_chatContainer);
@@ -110,9 +113,9 @@ void TalkPanel::setupUi()
     containerLayout->setSpacing(4);
     containerLayout->addStretch();
 
-    auto *placeholder = new QLabel(QStringLiteral("Select a conversation"), _chatContainer);
+    auto *placeholder = new QLabel(QStringLiteral("W\u00E4hle eine Konversation aus"), _chatContainer);
     placeholder->setAlignment(Qt::AlignCenter);
-    placeholder->setStyleSheet(QStringLiteral("color: #999; font-size: 16px;"));
+    placeholder->setObjectName(QStringLiteral("PanelPlaceholder"));
     containerLayout->addWidget(placeholder);
 
     _chatScroll->setWidget(_chatContainer);
@@ -123,21 +126,20 @@ void TalkPanel::setupUi()
     inputLayout->setContentsMargins(8, 4, 8, 8);
 
     _messageInput = new QLineEdit(inputBar);
-    _messageInput->setPlaceholderText(QStringLiteral("Type a message…"));
-    _messageInput->setStyleSheet(QStringLiteral(
-        "QLineEdit { border: 1px solid #ccc; border-radius: 18px;"
-        "  padding: 8px 16px; font-size: 13px; background: white; }"));
+    _messageInput->setObjectName(QStringLiteral("TalkMessageInput"));
+    _messageInput->setPlaceholderText(QStringLiteral("Nachricht schreiben…"));
     connect(_messageInput, &QLineEdit::returnPressed, this, &TalkPanel::sendMessage);
     inputLayout->addWidget(_messageInput, 1);
 
-    _sendBtn = new QPushButton(QStringLiteral("Send"), inputBar);
-    _sendBtn->setStyleSheet(QStringLiteral(
-        "QPushButton { background-color: #4a90d9; color: white; border: none;"
-        "  border-radius: 18px; padding: 8px 20px; font-weight: bold; }"
-        "QPushButton:hover { background-color: #357abd; }"
-        "QPushButton:disabled { background-color: #ccc; }"));
+    _sendBtn = new QPushButton(QStringLiteral("Senden"), inputBar);
+    _sendBtn->setObjectName(QStringLiteral("PanelPrimaryBtn"));
     connect(_sendBtn, &QPushButton::clicked, this, &TalkPanel::sendMessage);
     inputLayout->addWidget(_sendBtn);
+
+    _callBtn = new QPushButton(QStringLiteral("\U0001F4DE Anrufen"), inputBar);
+    _callBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+    connect(_callBtn, &QPushButton::clicked, this, &TalkPanel::startCall);
+    inputLayout->addWidget(_callBtn);
 
     chatLayout->addWidget(inputBar);
 
@@ -176,6 +178,22 @@ void TalkPanel::sendMessage()
 
     _messageInput->clear();
     _ocsApi->sendMessage(_currentToken, text);
+}
+
+void TalkPanel::startCall()
+{
+    if (_currentToken.isEmpty() || !_accountState) return;
+
+    const auto acc = _accountState->account();
+    if (!acc) return;
+
+    const auto displayName = _conversationList->currentIndex()
+        .data(TalkConversationModel::DisplayNameRole).toString();
+    auto url = acc->url();
+    url.setPath(QStringLiteral("/index.php/call/") + _currentToken);
+
+    auto *callWindow = new CallWindow(url, displayName.isEmpty() ? _currentToken : displayName, this);
+    callWindow->show();
 }
 
 void TalkPanel::pollMessages()

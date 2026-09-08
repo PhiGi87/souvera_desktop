@@ -29,6 +29,7 @@ public:
 
 private:
     void setupUi();
+    void applyCalendarTheme();
     void onDateSelected(const QDate &date);
     void onNewEvent();
     void onCalendarsLoaded(const QVariantList &calendars);

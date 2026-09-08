@@ -8,6 +8,7 @@
 #include "CalendarEventDialog.h"
 
 #include "accountstate.h"
+#include "theme/SouveraTheme.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -48,19 +49,17 @@ void CalendarPanel::setupUi()
     layout->setContentsMargins(0, 0, 0, 0);
 
     auto *toolbar = new QWidget(this);
+    toolbar->setObjectName(QStringLiteral("PanelToolbar"));
     auto *toolbarLayout = new QHBoxLayout(toolbar);
-    toolbarLayout->setContentsMargins(12, 8, 12, 8);
+    toolbarLayout->setContentsMargins(16, 8, 16, 8);
 
     auto *title = new QLabel(QStringLiteral("Kalender"), toolbar);
-    title->setStyleSheet(QStringLiteral("font-size: 18px; font-weight: bold;"));
+    title->setObjectName(QStringLiteral("PanelTitle"));
     toolbarLayout->addWidget(title);
     toolbarLayout->addStretch();
 
     _newEventBtn = new QPushButton(QStringLiteral("+ Neuer Termin"), toolbar);
-    _newEventBtn->setStyleSheet(QStringLiteral(
-        "QPushButton { background-color: #4a90d9; color: white; border: none;"
-        "  border-radius: 4px; padding: 8px 16px; font-weight: bold; }"
-        "QPushButton:hover { background-color: #357abd; }"));
+    _newEventBtn->setObjectName(QStringLiteral("PanelPrimaryBtn"));
     connect(_newEventBtn, &QPushButton::clicked, this, &CalendarPanel::onNewEvent);
     toolbarLayout->addWidget(_newEventBtn);
 
@@ -70,22 +69,41 @@ void CalendarPanel::setupUi()
 
     _calendar = new QCalendarWidget(_splitter);
     _calendar->setGridVisible(true);
-    _calendar->setStyleSheet(QStringLiteral(
-        "QCalendarWidget { background-color: white; }"
-        "QCalendarWidget QAbstractItemView:enabled { font-size: 13px; }"));
+    applyCalendarTheme();
+    connect(SouveraTheme::instance(), &SouveraTheme::themeChanged, this, [this]() {
+        applyCalendarTheme();
+    });
     connect(_calendar, &QCalendarWidget::clicked, this, &CalendarPanel::onDateSelected);
     _splitter->addWidget(_calendar);
 
     _eventList = new QListWidget(_splitter);
-    _eventList->setStyleSheet(QStringLiteral(
-        "QListWidget { border: 1px solid #ddd; border-radius: 4px; }"
-        "QListWidget::item { padding: 6px 8px; }"));
+    _eventList->setObjectName(QStringLiteral("RemoteFilesView"));
     _splitter->addWidget(_eventList);
 
     _splitter->setStretchFactor(0, 2);
     _splitter->setStretchFactor(1, 3);
 
     layout->addWidget(_splitter, 1);
+}
+
+void CalendarPanel::applyCalendarTheme()
+{
+    const auto *theme = SouveraTheme::instance();
+    const auto bg = theme->color(SouveraTheme::Color::ContentBackground).name();
+    const auto text = theme->color(SouveraTheme::Color::TextPrimary).name();
+    const auto muted = theme->color(SouveraTheme::Color::TextMuted).name();
+    const auto border = theme->color(SouveraTheme::Color::Border).name();
+    const auto accent = theme->color(SouveraTheme::Color::Accent).name();
+    _calendar->setStyleSheet(QStringLiteral(
+        "QCalendarWidget { background-color: %1; color: %2; }"
+        "QCalendarWidget QAbstractItemView { background-color: %1; color: %2; "
+        "  alternate-background-color: %3; selection-background-color: %4; "
+        "  selection-color: %2; font-size: 13px; outline: none; }"
+        "QCalendarWidget QToolButton { color: %2; background: transparent; border: none; }"
+        "QCalendarWidget QWidget#qt_calendar_navigationbar { background-color: %3; }"
+        "QCalendarWidget QSpinBox { color: %2; background: transparent; }")
+        .arg(bg, text, border, accent));
+    Q_UNUSED(muted)
 }
 
 void CalendarPanel::onDateSelected(const QDate &date)

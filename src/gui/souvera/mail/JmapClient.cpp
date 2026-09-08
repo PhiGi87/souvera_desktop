@@ -10,8 +10,12 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QStandardPaths>
 #include <QUrl>
 #include <QUrlQuery>
 
@@ -51,6 +55,27 @@ void JmapClient::setBearerToken(const QString &token)
 
 // ————————————————————————————————————————————————— Session Discovery (like Android)
 
+QString JmapClient::httpStatus(QNetworkReply *reply) const
+{
+    const auto status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    return status > 0 ? QString::number(status) : QString();
+}
+
+QString JmapClient::userVisibleError(QNetworkReply *reply) const
+{
+    const auto status = httpStatus(reply);
+    if (status == QLatin1String("401") || status == QLatin1String("403")) {
+        return QStringLiteral("Anmeldung am Mail-Server fehlgeschlagen (%1). Bitte Konto-Passwort/App-Passwort pr\u00FCfen.").arg(status);
+    }
+    if (status == QLatin1String("404")) {
+        return QStringLiteral("Mail-Server nicht gefunden (404). Ist JMAP auf dieser Domain aktiv?");
+    }
+    if (!status.isEmpty()) {
+        return QStringLiteral("Mail-Server Fehler %1: %2").arg(status, reply->errorString());
+    }
+    return QStringLiteral("Netzwerkfehler: %1").arg(reply->errorString());
+}
+
 void JmapClient::resolveSession()
 {
     QUrl url(baseUrl() + QLatin1String("/jmap/session"));
@@ -61,22 +86,25 @@ void JmapClient::resolveSession()
     auto *reply = _nam->get(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
-        if (reply->error() == 401 && _bearerToken.isEmpty()) {
+        const auto status = httpStatus(reply);
+        if (status == QLatin1String("401") && _bearerToken.isEmpty()) {
             emit needsBearerToken();
+            emit sessionError(userVisibleError(reply));
             return;
         }
         if (reply->error() != QNetworkReply::NoError) {
-            emit sessionError(reply->errorString());
+            emit sessionError(userVisibleError(reply));
             return;
         }
         const auto doc = QJsonDocument::fromJson(reply->readAll());
         const auto obj = doc.object();
         const auto sessionApiUrl = obj.value(QLatin1String("apiUrl")).toString();
         _apiUrl = !sessionApiUrl.isEmpty() ? sessionApiUrl : (baseUrl() + QLatin1String("/jmap"));
+        _blobDownloadUrl = obj.value(QLatin1String("blobDownloadUrl")).toString();
         const auto primary = obj.value(QLatin1String("primaryAccounts")).toObject();
         _accountId = primary.value(QLatin1String("urn:ietf:params:jmap:mail")).toString();
         if (_accountId.isEmpty()) {
-            emit sessionError(QLatin1String("No JMAP mail accountId in session"));
+            emit sessionError(QStringLiteral("Kein JMAP-Postfach in der Server-Antwort gefunden."));
             return;
         }
         emit sessionResolved(_accountId, _apiUrl);
@@ -123,13 +151,15 @@ void JmapClient::jmapBatch(const QList<QPair<QString, QJsonObject>> &calls,
     auto *reply = _nam->post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
     connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
         reply->deleteLater();
-        if (reply->error() == 401 && _bearerToken.isEmpty()) {
+        const auto status = httpStatus(reply);
+        if (status == QLatin1String("401") && _bearerToken.isEmpty()) {
             emit needsBearerToken();
+            emit networkError(userVisibleError(reply));
             callback({});
             return;
         }
         if (reply->error() != QNetworkReply::NoError) {
-            emit networkError(reply->errorString());
+            emit networkError(userVisibleError(reply));
             callback({});
             return;
         }
@@ -266,7 +296,75 @@ void JmapClient::fetchEmailBody(const QString &emailId)
             const auto partId = textArr.first().toObject().value(QLatin1String("partId")).toString();
             body.plainBody = bodyVals.value(partId).toObject().value(QLatin1String("value")).toString();
         }
+        const auto attachments = e.value(QLatin1String("attachments")).toArray();
+        for (const auto &a : attachments) {
+            const auto obj = a.toObject();
+            if (obj.value(QLatin1String("partType")).toString() != QLatin1String("attachment"))
+                continue;
+            JmapAttachment att;
+            att.blobId = obj.value(QLatin1String("blobId")).toString();
+            att.fileName = obj.value(QLatin1String("fileName")).toString();
+            att.mimeType = obj.value(QLatin1String("type")).toString();
+            att.size = static_cast<qint64>(obj.value(QLatin1String("size")).toDouble());
+            if (!att.blobId.isEmpty()) {
+                if (att.fileName.isEmpty()) {
+                    att.fileName = QStringLiteral("anhang-%1").arg(body.attachments.size() + 1);
+                }
+                body.attachments.append(att);
+            }
+        }
         emit emailBodyFetched(body);
+    });
+}
+
+void JmapClient::downloadAttachment(const QString &blobId, const QString &fileName)
+{
+    if (blobId.isEmpty()) {
+        emit attachmentDownloadFailed(fileName, QStringLiteral("Ung\u00FCltige Anhang-Referenz."));
+        return;
+    }
+
+    QString templateUrl = _blobDownloadUrl;
+    if (templateUrl.isEmpty()) {
+        templateUrl = QStringLiteral("%1/jmap/download/%2/%3").arg(baseUrl(), _accountId, blobId);
+    } else {
+        templateUrl.replace(QLatin1String("{accountId}"), _accountId);
+        templateUrl.replace(QLatin1String("{blobId}"), blobId);
+        if (templateUrl.startsWith(QLatin1Char('/'))) {
+            templateUrl = baseUrl() + templateUrl;
+        }
+    }
+
+    QNetworkRequest req(QUrl(templateUrl));
+    req.setRawHeader("Authorization", authHeader().toUtf8());
+
+    auto *reply = _nam->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, fileName]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit attachmentDownloadFailed(fileName, userVisibleError(reply));
+            return;
+        }
+
+        const auto downloadDir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+        auto target = QDir(downloadDir).filePath(fileName);
+        auto counter = 1;
+        while (QFileInfo::exists(target)) {
+            const auto baseName = QFileInfo(fileName).completeBaseName();
+            const auto suffix = QFileInfo(fileName).suffix();
+            target = QDir(downloadDir).filePath(QStringLiteral("%1 (%2)%3")
+                .arg(baseName).arg(counter++)
+                .arg(suffix.isEmpty() ? QString() : QLatin1Char('.') + suffix));
+        }
+
+        QFile out(target);
+        if (!out.open(QIODevice::WriteOnly)) {
+            emit attachmentDownloadFailed(fileName, QStringLiteral("Datei konnte nicht gespeichert werden: %1").arg(target));
+            return;
+        }
+        out.write(reply->readAll());
+        out.close();
+        emit attachmentDownloaded(fileName, target);
     });
 }
 

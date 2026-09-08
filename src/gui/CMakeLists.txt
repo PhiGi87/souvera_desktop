@@ -3,6 +3,16 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 project(gui)
 find_package(Qt${QT_MAJOR_VERSION} REQUIRED COMPONENTS Widgets Svg Qml Quick QuickControls2 QuickWidgets Xml Network)
+
+if(BUILD_WITH_WEBENGINE)
+    find_package(Qt${QT_MAJOR_VERSION} COMPONENTS WebEngineWidgets)
+    if(Qt${QT_MAJOR_VERSION}WebEngineWidgets_FOUND)
+        set(HAVE_WEBENGINE ON)
+    else()
+        message(STATUS "QtWebEngineWidgets not found - embedded web views disabled, falling back to the system browser.")
+    endif()
+endif()
+
 find_package(KF6Archive REQUIRED)
 find_package(KF6GuiAddons)
 
@@ -274,6 +284,16 @@ set(client_SRCS
     souvera/StatusHeader.cpp
     souvera/FilesPanel.h
     souvera/FilesPanel.cpp
+    souvera/SettingsPanel.h
+    souvera/SettingsPanel.cpp
+    souvera/office/LokOffice.h
+    souvera/office/LokOffice.cpp
+    souvera/office/OfficeDocumentView.h
+    souvera/office/OfficeDocumentView.cpp
+    souvera/office/OfficeWindow.h
+    souvera/office/OfficeWindow.cpp
+    souvera/office/OfficeManager.h
+    souvera/office/OfficeManager.cpp
     souvera/files/RemoteFilesModel.h
     souvera/files/RemoteFilesModel.cpp
     souvera/mail/MailPanel.h
@@ -292,6 +312,8 @@ set(client_SRCS
      souvera/mail/JmapMailboxModel.cpp
      souvera/mail/JmapEmailListModel.h
      souvera/mail/JmapEmailListModel.cpp
+     souvera/mail/EmailListDelegate.h
+     souvera/mail/EmailListDelegate.cpp
      souvera/LeftSidebar.h
      souvera/LeftSidebar.cpp
      souvera/notes/NotesPanel.h
@@ -304,6 +326,8 @@ set(client_SRCS
     souvera/talk/TalkConversationModel.cpp
     souvera/talk/TalkMessageWidget.h
     souvera/talk/TalkMessageWidget.cpp
+    souvera/talk/CallWindow.h
+    souvera/talk/CallWindow.cpp
     souvera/deck/DeckPanel.h
     souvera/deck/DeckPanel.cpp
     souvera/deck/DeckOcsApi.h
@@ -613,6 +637,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
 endif()
 
 add_library(nextcloudCore STATIC ${final_src})
+
+if(HAVE_WEBENGINE)
+    target_link_libraries(nextcloudCore PUBLIC Qt::WebEngineWidgets)
+    target_compile_definitions(nextcloudCore PUBLIC BUILD_WITH_WEBENGINE=1)
+endif()
 
 target_link_libraries(nextcloudCore
   PUBLIC

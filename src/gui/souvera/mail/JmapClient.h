@@ -16,13 +16,16 @@
 #include <QDateTime>
 #include <functional>
 
+class QNetworkReply;
+
 namespace OCC {
 
 class AccountState;
 
 struct JmapMailbox { QString id; QString name; QString role; int totalEmails = 0; int unreadEmails = 0; QString parentId; };
 struct JmapEmail { QString id; QString subject; QString fromAddress; QString fromName; QString toAddresses; QDateTime receivedAt; bool isRead = false; bool isFlagged = false; bool hasAttachments = false; QString preview; QString threadId; qint64 size = 0; };
-struct JmapEmailBody { QString htmlBody; QString plainBody; QList<QPair<QString, QString>> attachments; };
+struct JmapAttachment { QString blobId; QString fileName; QString mimeType; qint64 size = 0; };
+struct JmapEmailBody { QString htmlBody; QString plainBody; QList<JmapAttachment> attachments; };
 
 /**
  * @brief Direct Stalwart JMAP client (like Android JmapClient.kt).
@@ -45,6 +48,7 @@ public:
     void queryEmails(const QString &mailboxId, int limit = 50, int offset = 0,
                      const QString &searchQuery = QString(), const QString &filterType = QString());
     void fetchEmailBody(const QString &emailId);
+    void downloadAttachment(const QString &blobId, const QString &fileName);
     void markRead(const QString &emailId, bool read);
     void moveEmail(const QString &emailId, const QString &targetMailboxId);
     void deleteEmail(const QString &emailId);
@@ -59,6 +63,8 @@ signals:
     void mailboxesFetched(const QList<JmapMailbox> &mailboxes);
     void emailsFetched(const QList<JmapEmail> &emails, int total);
     void emailBodyFetched(const JmapEmailBody &body);
+    void attachmentDownloaded(const QString &fileName, const QString &localPath);
+    void attachmentDownloadFailed(const QString &fileName, const QString &error);
     void emailSent(bool success, const QString &error);
     void operationCompleted(bool success);
     void networkError(const QString &error);
@@ -71,8 +77,11 @@ private:
 
     QString baseUrl() const;
     QString authHeader() const;
+    QString httpStatus(QNetworkReply *reply) const;
+    QString userVisibleError(QNetworkReply *reply) const;
 
     QString _apiUrl;
+    QString _blobDownloadUrl;
     QString _accountId;
     QString _user;
     QString _password;

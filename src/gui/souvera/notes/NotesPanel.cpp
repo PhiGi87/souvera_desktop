@@ -34,9 +34,9 @@ NotesPanel::NotesPanel(AccountState *accountState, QWidget *parent)
     mainLayout->setContentsMargins(0, 0, 0, 0);
 
     auto *toolbar = new QHBoxLayout;
-    auto *newBtn = new QPushButton(QStringLiteral("+ New Note"));
-    auto *saveBtn = new QPushButton(QStringLiteral("Save"));
-    auto *delBtn = new QPushButton(QStringLiteral("Delete"));
+    auto *newBtn = new QPushButton(QStringLiteral("+ Neue Notiz"));
+    auto *saveBtn = new QPushButton(QStringLiteral("Speichern"));
+    auto *delBtn = new QPushButton(QStringLiteral("L\u00F6schen"));
     toolbar->addWidget(newBtn);
     toolbar->addWidget(saveBtn);
     toolbar->addWidget(delBtn);
@@ -123,7 +123,7 @@ void NotesPanel::fetchNotes()
             n.content = o.value(QLatin1String("content")).toString();
             n.modified = QDateTime::fromString(o.value(QLatin1String("modified")).toString(), Qt::ISODate);
             _notes.append(n);
-            _noteList->addItem(n.title.isEmpty() ? QLatin1String("Untitled") : n.title);
+            _noteList->addItem(n.title.isEmpty() ? QStringLiteral("Ohne Titel") : n.title);
         }
     });
 }
@@ -150,7 +150,7 @@ void NotesPanel::createNote()
     req.setRawHeader("Authorization", QByteArray("Basic ") + cred);
     req.setHeader(QNetworkRequest::ContentTypeHeader, QLatin1String("application/json"));
     QJsonObject body;
-    body[QLatin1String("title")] = QLatin1String("New Note");
+    body[QLatin1String("title")] = QStringLiteral("Neue Notiz");
     body[QLatin1String("content")] = QString();
     auto *reply = _nam->post(req, QJsonDocument(body).toJson());
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {

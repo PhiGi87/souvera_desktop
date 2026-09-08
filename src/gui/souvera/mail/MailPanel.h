@@ -17,10 +17,14 @@
 #include <QTextBrowser>
 #include <QPushButton>
 #include <QComboBox>
+#include <QLabel>
+#include <QLineEdit>
+#include <QTimer>
 
 namespace OCC {
 
 class AccountState;
+class EmailListDelegate;
 
 class MailPanel : public QWidget
 {
@@ -36,6 +40,7 @@ private:
     void setupToolbar();
     void setupConnections();
     void wireAccount(AccountState *accountState);
+    void setStatus(const QString &text, bool isError = false);
 
     void onFolderSelected(const QModelIndex &index);
     void onMessageSelected(const QModelIndex &index);
@@ -43,17 +48,22 @@ private:
     void onReply();
     void onDelete();
     void onRefresh();
+    void runSearch();
 
     QSplitter *_splitter = nullptr;
     QTreeView *_folderView = nullptr;
     QListView *_messageView = nullptr;
     QTextBrowser *_preview = nullptr;
     QWidget *_toolbar = nullptr;
+    QLabel *_statusLabel = nullptr;
+    QLineEdit *_searchEdit = nullptr;
+    QTimer _searchTimer;
     QPushButton *_newMsgBtn = nullptr;
     QPushButton *_replyBtn = nullptr;
     QPushButton *_deleteBtn = nullptr;
     QPushButton *_refreshBtn = nullptr;
     QComboBox *_sendAsCombo = nullptr;
+    EmailListDelegate *_messageDelegate = nullptr;
 
     JmapMailboxModel *_folderModel = nullptr;
     JmapEmailListModel *_messageModel = nullptr;

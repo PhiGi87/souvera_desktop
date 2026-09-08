@@ -13,6 +13,7 @@
 #include "deck/DeckPanel.h"
 #include "calendar/CalendarPanel.h"
 #include "notes/NotesPanel.h"
+#include "SettingsPanel.h"
 #include "accountmanager.h"
 #include "accountstate.h"
 #include "theme/SouveraTheme.h"
@@ -24,6 +25,7 @@
 #include <QLoggingCategory>
 #include <QScreen>
 #include <QSettings>
+#include <QShortcut>
 #include <QVBoxLayout>
 
 Q_LOGGING_CATEGORY(lcSouveraMainWindow, "souvera.mainwindow")
@@ -45,6 +47,7 @@ SouveraMainWindow::SouveraMainWindow(QWidget *parent)
     QSettings settings;
     settings.beginGroup(QStringLiteral("souveraMainWindow"));
     const auto geometry = settings.value(QStringLiteral("geometry"));
+    const auto maximized = settings.value(QStringLiteral("maximized"), true).toBool();
     settings.endGroup();
 
     if (geometry.isValid()) {
@@ -56,6 +59,16 @@ SouveraMainWindow::SouveraMainWindow(QWidget *parent)
             move((geo.width() - width()) / 2, (geo.height() - height()) / 2);
         }
     }
+    if (maximized) {
+        setWindowState(windowState() | Qt::WindowMaximized);
+    }
+
+    // Fullscreen toggle (F11)
+    auto *fullscreenShortcut = new QShortcut(QKeySequence(Qt::Key_F11), this);
+    connect(fullscreenShortcut, &QShortcut::activated, this, [this]() {
+        setWindowState(isFullScreen() ? (windowState() & ~Qt::WindowFullScreen)
+                                      : (windowState() | Qt::WindowFullScreen));
+    });
 
     switchToTab(0);
 
@@ -69,6 +82,7 @@ SouveraMainWindow::SouveraMainWindow(QWidget *parent)
             _calendarPanel->setAccountState(accountState);
             _notesPanel->setAccountState(accountState);
             _filesPanel->setAccountState(accountState);
+            _settingsPanel->setAccountState(accountState);
         }
     }
 }
@@ -89,6 +103,7 @@ void SouveraMainWindow::setupUi()
     _sidebar->addItem(QStringLiteral("board"), QStringLiteral("Deck"));
     _sidebar->addItem(QStringLiteral("calendar"), QStringLiteral("Kalender"));
     _sidebar->addItem(QStringLiteral("notes"), QStringLiteral("Notizen"));
+    _sidebar->addItem(QStringLiteral("settings"), QStringLiteral("Einstellungen"));
     rootLayout->addWidget(_sidebar);
 
     auto *contentArea = new QWidget(root);
@@ -98,8 +113,10 @@ void SouveraMainWindow::setupUi()
     contentLayout->setSpacing(0);
 
     _statusHeader = new StatusHeader(contentArea);
-    connect(_statusHeader, &StatusHeader::settingsClicked,
-            this, &SouveraMainWindow::settingsRequested);
+    connect(_statusHeader, &StatusHeader::settingsClicked, this, [this]() {
+        switchToTab(_contentStack->count() - 1);
+        emit settingsRequested();
+    });
     contentLayout->addWidget(_statusHeader);
 
     _mailPanel = new MailPanel(contentArea);
@@ -108,6 +125,7 @@ void SouveraMainWindow::setupUi()
     _deckPanel = new DeckPanel(contentArea);
     _calendarPanel = new CalendarPanel(contentArea);
     _notesPanel = new NotesPanel(nullptr, contentArea);
+    _settingsPanel = new SettingsPanel(contentArea);
 
     _contentStack = new QStackedWidget(contentArea);
     _contentStack->setObjectName(QStringLiteral("ContentArea"));
@@ -117,6 +135,7 @@ void SouveraMainWindow::setupUi()
     _contentStack->addWidget(_deckPanel);
     _contentStack->addWidget(_calendarPanel);
     _contentStack->addWidget(_notesPanel);
+    _contentStack->addWidget(_settingsPanel);
     contentLayout->addWidget(_contentStack, 1);
 
     rootLayout->addWidget(contentArea, 1);
@@ -143,6 +162,7 @@ void SouveraMainWindow::closeEvent(QCloseEvent *event)
     QSettings settings;
     settings.beginGroup(QStringLiteral("souveraMainWindow"));
     settings.setValue(QStringLiteral("geometry"), saveGeometry());
+    settings.setValue(QStringLiteral("maximized"), isMaximized());
     settings.endGroup();
 
     hide();

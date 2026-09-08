@@ -34,6 +34,7 @@ private:
     void setupUi();
     void onConversationSelected();
     void sendMessage();
+    void startCall();
     void pollMessages();
     void onConversationsReceived(const QJsonArray &conversations);
     void onMessagesReceived(const QJsonArray &messages, const QString &token);
@@ -45,6 +46,8 @@ private:
     QWidget *_chatContainer = nullptr;
     QLineEdit *_messageInput = nullptr;
     QPushButton *_sendBtn = nullptr;
+    QPushButton *_callBtn = nullptr;
+    AccountState *_accountState = nullptr;
     QTimer *_pollTimer = nullptr;
 
     TalkConversationModel *_conversationModel = nullptr;
