@@ -638,6 +638,12 @@ endif()
 
 add_library(nextcloudCore STATIC ${final_src})
 
+# LibreOfficeKit loads the engine via dlopen: link libdl explicitly
+# (el8/glibc-2.28 still requires it).
+if(UNIX)
+    target_link_libraries(nextcloudCore PRIVATE ${CMAKE_DL_LIBS})
+endif()
+
 # LibreOfficeKit: the unstable API block (postKeyEvent, paintTile, ...) must be
 # visible in every translation unit - also under CMAKE_UNITY_BUILD, where the
 # first include of the header wins for the whole unity chunk.
