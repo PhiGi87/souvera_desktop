@@ -30,6 +30,9 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
 
 private:
+    void applyTheme();
+    void applyLabelTheme(QLabel *label, bool bold);
+
     QLabel *_titleLabel = nullptr;
     QLabel *_descriptionLabel = nullptr;
     QWidget *_labelsContainer = nullptr;
