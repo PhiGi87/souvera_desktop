@@ -5,7 +5,7 @@
 
 #include "SettingsPanel.h"
 
-#include "JmapClient.h"
+#include "mail/JmapClient.h"
 #include "account.h"
 #include "accountstate.h"
 #include "creds/abstractcredentials.h"

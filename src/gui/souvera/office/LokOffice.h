@@ -8,7 +8,8 @@
 
 #include <QString>
 
-struct LibreOfficeKit;
+struct _LibreOfficeKit;
+typedef struct _LibreOfficeKit LibreOfficeKit;
 
 namespace OCC {
 

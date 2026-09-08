@@ -20,10 +20,12 @@ Q_LOGGING_CATEGORY(lcLokOffice, "souvera.office.lok")
 
 namespace OCC {
 
+#if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
 namespace {
 LibreOfficeKit *g_office = nullptr;
 bool g_initTried = false;
 }
+#endif
 
 bool LokOffice::isSupported()
 {

@@ -335,7 +335,8 @@ void JmapClient::downloadAttachment(const QString &blobId, const QString &fileNa
         }
     }
 
-    QNetworkRequest req(QUrl(templateUrl));
+    const QUrl url(templateUrl);
+    QNetworkRequest req(url);
     req.setRawHeader("Authorization", authHeader().toUtf8());
 
     auto *reply = _nam->get(req);

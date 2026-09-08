@@ -10,7 +10,8 @@
 #include <QImage>
 #include <QHash>
 
-struct LibreOfficeKitDocument;
+struct _LibreOfficeKitDocument;
+typedef struct _LibreOfficeKitDocument LibreOfficeKitDocument;
 
 namespace OCC {
 
