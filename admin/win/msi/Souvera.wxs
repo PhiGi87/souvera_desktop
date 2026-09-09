@@ -135,7 +135,7 @@
     </UI>
 
     <!-- "Launch" checkbox -->
-    <Property Id="WixShellExecTarget" Value="[#MainExecutable]" />
+    <Property Id="WixShellExecTarget" Value="[INSTALLDIR]souvera.exe" />
     <CustomAction Id="LaunchApplication" BinaryKey="WixCA" DllEntry="WixShellExec" Impersonate="yes" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch $(var.AppName)" />
     <SetProperty Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" Before="CostInitialize">NOT (LAUNCH=0)</SetProperty>

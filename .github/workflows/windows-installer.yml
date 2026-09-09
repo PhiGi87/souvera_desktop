@@ -100,6 +100,24 @@ jobs:
 
           craft --src-dir ${{ github.workspace }} nextcloud-client
 
+      - name: Patch blueprint blacklist (allow Souvera executables)
+        shell: pwsh
+        run: |
+          # The upstream blueprint blacklist strips all bin/*.exe except
+          # nextcloud/nextcloudcmd/QtWebEngineProcess. Our executable is named
+          # souvera.exe and would be silently dropped from the package.
+          $bl = "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\etc\blueprints\locations\craft-blueprints-nextcloud\nextcloud-client\blacklist.txt"
+          if (Test-Path $bl) {
+              $c = Get-Content -Raw $bl
+              $c = $c -replace [regex]::Escape('bin/(?!(nextcloud|nextcloudcmd|QtWebEngineProcess))'),
+                        'bin/(?!(nextcloud|nextcloudcmd|QtWebEngineProcess|souvera|souveracmd))'
+              [System.IO.File]::WriteAllText($bl, $c)
+              Write-Host "== Patched blacklist =="
+              Get-Content $bl | Select-String -Pattern 'souvera'
+          } else {
+              Write-Host "WARNING: blacklist.txt not found at $bl"
+          }
+
       - name: Build MSI installer
         shell: pwsh
         run: |
@@ -151,9 +169,36 @@ jobs:
               }
           }
 
+          # Fail fast: heat must have harvested the main executable.
+          if (-not (Test-Path "$archive\souvera.exe")) {
+              throw "souvera.exe missing from archive root (flatten failed?)."
+          }
+
           cmd /c "cd /d `"$msiDir`" && make-msi.bat `"$archive`""
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-ChildItem $msiDir -Filter *.msi | Format-Table Name,Length
+
+          # Hard verification: the MSI must actually install souvera.exe at
+          # INSTALLDIR root - otherwise the shortcuts point into the void
+          # ("Fehlende Verknuepfung" on first launch).
+          $msiFile = (Get-ChildItem $msiDir -Filter *.msi | Select-Object -First 1).FullName
+          $installer = New-Object -ComObject WindowsInstaller.Installer
+          $db = $installer.GetType().InvokeMember('OpenDatabase','InvokeMethod',$null,$installer,@("$msiFile",0))
+          $view = $db.GetType().InvokeMember('OpenView','InvokeMethod',$null,$db,@("SELECT FileName FROM File"))
+          $view.GetType().InvokeMember('Execute','InvokeMethod',$null,$view,$null)
+          $foundExe = $false
+          while ($true) {
+              $rec = $view.GetType().InvokeMember('Fetch','InvokeMethod',$null,$view,$null)
+              if ($null -eq $rec) { break }
+              $name = $rec.GetType().InvokeMember('StringData','GetProperty',$null,$rec,1)
+              if ($name -match 'souvera\.exe$') { $foundExe = $true; break }
+          }
+          if (-not $foundExe) {
+              Write-Host "=== DIAGNOSTIC: exe files harvested by heat ==="
+              Select-String -Path "$msiDir\collect.wxs" -Pattern '\.exe' | Select-Object -First 40 | ForEach-Object { $_.Line.Trim() }
+              throw "souvera.exe is NOT in the MSI File table - shortcuts would be broken."
+          }
+          Write-Host "== MSI verified: souvera.exe present =="
 
       - name: Collect installer artifacts
         shell: pwsh
