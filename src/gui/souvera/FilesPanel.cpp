@@ -375,7 +375,7 @@ void FilesPanel::addFolderRow(Folder *folder)
     auto *topRow = new QHBoxLayout;
     topRow->setContentsMargins(0, 0, 0, 0);
 
-    auto *aliasLabel = new QLabel(folder->alias(), row);
+    auto *aliasLabel = new QLabel(folder->shortGuiLocalPath(), row);
     aliasLabel->setObjectName(QStringLiteral("FolderAliasLabel"));
     topRow->addWidget(aliasLabel);
 

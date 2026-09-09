@@ -249,7 +249,7 @@ void SettingsPanel::addFolderRow(Folder *folder, QVBoxLayout *container)
     rowLayout->setContentsMargins(0, 0, 0, 0);
     rowLayout->setSpacing(8);
 
-    auto *nameLabel = new QLabel(folder->alias(), row);
+    auto *nameLabel = new QLabel(folder->shortGuiLocalPath(), row);
     nameLabel->setObjectName(QStringLiteral("FolderAliasLabel"));
     rowLayout->addWidget(nameLabel);
 
@@ -339,7 +339,7 @@ void SettingsPanel::onExportDiagnostics()
     const auto folders = FolderMan::instance()->map();
     for (const auto *folder : folders) {
         folderLines << QStringLiteral("  - %1 (%2) %3")
-            .arg(folder->alias(), folder->path(),
+            .arg(folder->shortGuiLocalPath(), folder->path(),
                  folder->syncPaused() ? QStringLiteral("pausiert")
                                       : QStringLiteral("aktiv"));
     }

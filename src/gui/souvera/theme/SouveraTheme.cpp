@@ -242,7 +242,8 @@ QString SouveraTheme::styleSheet() const
 {
     QFile file(QStringLiteral(":/souvera/souvera.qss"));
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        qCWarning(lcSouveraTheme) << "Could not load souvera.qss";
+        qCCritical(lcSouveraTheme) << "Could not load souvera.qss - the app will run UNSTYLED. "
+                                      "Check that Q_INIT_RESOURCE(souvera) was called in main().";
         return {};
     }
 
@@ -294,9 +295,15 @@ QString SouveraTheme::styleSheet() const
 
 void SouveraTheme::applyStyleSheet() const
 {
-    if (qApp) {
-        qApp->setStyleSheet(styleSheet());
+    if (!qApp) {
+        return;
     }
+    auto sheet = styleSheet();
+    if (sheet.isEmpty()) {
+        qCCritical(lcSouveraTheme) << "Refusing to apply an empty stylesheet.";
+        return;
+    }
+    qApp->setStyleSheet(sheet);
 }
 
 } // namespace OCC

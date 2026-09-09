@@ -15,6 +15,7 @@
 #include "notes/NotesPanel.h"
 #include "SettingsPanel.h"
 #include "accountmanager.h"
+#include "owncloudsetupwizard.h"
 #include "accountstate.h"
 #include "theme/SouveraTheme.h"
 
@@ -25,6 +26,7 @@
 #include <QLoggingCategory>
 #include <QScreen>
 #include <QSettings>
+#include <QTimer>
 #include <QShortcut>
 #include <QVBoxLayout>
 
@@ -72,19 +74,81 @@ SouveraMainWindow::SouveraMainWindow(QWidget *parent)
 
     switchToTab(0);
 
-    if (auto *am = AccountManager::instance()) {
-        const auto accounts = am->accounts();
-        if (!accounts.isEmpty()) {
-            const auto accountState = accounts.first().data();
-            _mailPanel->setAccountState(accountState);
-            _talkPanel->setAccountState(accountState);
-            _deckPanel->setAccountState(accountState);
-            _calendarPanel->setAccountState(accountState);
-            _notesPanel->setAccountState(accountState);
-            _filesPanel->setAccountState(accountState);
-            _settingsPanel->setAccountState(accountState);
+    setupAccountGate();
+}
+
+void SouveraMainWindow::setupAccountGate()
+{
+    auto *am = AccountManager::instance();
+    if (!am) return;
+
+    // As soon as a workspace account exists, unlock the window and wire
+    // every panel to it (the wizard adds the account at runtime).
+    connect(am, &AccountManager::accountAdded, this, [this](AccountState *state) {
+        if (_setupPending) {
+            _setupPending = false;
+            setEnabled(true);
         }
+        connectAccount(state);
+    });
+
+    connect(am, &AccountManager::accountRemoved, this, [this]() {
+        auto *manager = AccountManager::instance();
+        if (manager && manager->accounts().isEmpty()) {
+            // Mandatory setup again - nothing is clickable until connected.
+            _setupPending = true;
+            setEnabled(false);
+            QTimer::singleShot(200, this, &SouveraMainWindow::enforceWorkspaceSetup);
+        }
+    });
+
+    const auto accounts = am->accounts();
+    if (accounts.isEmpty()) {
+        // Mandatory workspace setup: the wizard stays in front until the
+        // connection to *.souvera.work exists; nothing is clickable before.
+        _setupPending = true;
+        setEnabled(false);
+        QTimer::singleShot(200, this, &SouveraMainWindow::enforceWorkspaceSetup);
+    } else {
+        connectAccount(accounts.first().data());
     }
+}
+
+void SouveraMainWindow::connectAccount(AccountState *accountState)
+{
+    if (!accountState) return;
+    _mailPanel->setAccountState(accountState);
+    _talkPanel->setAccountState(accountState);
+    _deckPanel->setAccountState(accountState);
+    _calendarPanel->setAccountState(accountState);
+    _notesPanel->setAccountState(accountState);
+    _filesPanel->setAccountState(accountState);
+    _settingsPanel->setAccountState(accountState);
+}
+
+void SouveraMainWindow::enforceWorkspaceSetup()
+{
+    auto *am = AccountManager::instance();
+    if (!am || !am->accounts().isEmpty()) {
+        return; // setup completed in the meantime
+    }
+    if (OwncloudSetupWizard::bringWizardToFrontIfVisible()) {
+        return; // wizard is already open
+    }
+    OwncloudSetupWizard::runWizard(this, SLOT(slotWorkspaceWizardDone(int)), this);
+}
+
+void SouveraMainWindow::slotWorkspaceWizardDone(int result)
+{
+    Q_UNUSED(result)
+    if (!_setupPending) return;
+
+    auto *am = AccountManager::instance();
+    if (am && !am->accounts().isEmpty()) {
+        return; // accountAdded handler takes over
+    }
+    // Mandatory setup: re-open the wizard until the workspace is connected.
+    QTimer::singleShot(200, this, &SouveraMainWindow::enforceWorkspaceSetup);
 }
 
 void SouveraMainWindow::setupUi()

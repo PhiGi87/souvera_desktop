@@ -58,6 +58,10 @@ int main(int argc, char **argv)
 
     Q_INIT_RESOURCE(resources);
     Q_INIT_RESOURCE(theme);
+    // Souvera Workspace resources (stylesheet + sidebar icons) live in a
+    // static library; without explicit initialisation the linker drops them
+    // and the app would run with a completely unstyled UI.
+    Q_INIT_RESOURCE(souvera);
 
     // OpenSSL 1.1.0: No explicit initialisation or de-initialisation is necessary.
 #ifdef Q_OS_MACOS

@@ -44,8 +44,14 @@ signals:
 protected:
     void closeEvent(QCloseEvent *event) override;
 
+private slots:
+    void enforceWorkspaceSetup();
+    void slotWorkspaceWizardDone(int result);
+
 private:
     void setupUi();
+    void setupAccountGate();
+    void connectAccount(class AccountState *accountState);
     void loadStyleSheet();
 
     LeftSidebar *_sidebar = nullptr;
@@ -59,6 +65,7 @@ private:
     CalendarPanel *_calendarPanel = nullptr;
     NotesPanel *_notesPanel = nullptr;
     SettingsPanel *_settingsPanel = nullptr;
+    bool _setupPending = false;
 };
 
 } // namespace OCC

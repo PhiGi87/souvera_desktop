@@ -29,18 +29,30 @@ StatusHeader::StatusHeader(QWidget *parent)
     auto *layout = new QHBoxLayout(this);
     layout->setContentsMargins(16, 0, 16, 0);
 
-    auto accounts = AccountManager::instance()->accounts();
-    auto email = accounts.isEmpty() ? QStringLiteral("Nicht verbunden")
-                                    : accounts.first()->account()->credentials()->user();
-    auto host = accounts.isEmpty() ? QString()
-                                   : accounts.first()->account()->url().host();
+    auto refreshUser = [this]() {
+        const auto accounts = AccountManager::instance()->accounts();
+        if (accounts.isEmpty()) {
+            _userLabel->setText(QStringLiteral("Nicht verbunden"));
+            return;
+        }
+        const auto acc = accounts.first()->account();
+        const auto creds = acc ? acc->credentials() : nullptr;
+        const auto user = creds ? creds->user() : QString();
+        const auto host = acc ? acc->url().host() : QString();
+        _userLabel->setText(user.isEmpty()
+            ? QStringLiteral("Nicht verbunden")
+            : QStringLiteral("%1@%2").arg(user, host));
+    };
 
-    auto displayText = accounts.isEmpty() ? QStringLiteral("Nicht verbunden")
-                                          : QStringLiteral("%1@%2").arg(email, host);
-
-    _userLabel = new QLabel(displayText, this);
+    _userLabel = new QLabel(this);
     _userLabel->setObjectName(QStringLiteral("UserEmailLabel"));
+    refreshUser();
     layout->addWidget(_userLabel);
+
+    connect(AccountManager::instance(), &AccountManager::accountAdded,
+            this, refreshUser);
+    connect(AccountManager::instance(), &AccountManager::accountRemoved,
+            this, refreshUser);
 
     layout->addStretch();
 
@@ -61,11 +73,17 @@ StatusHeader::StatusHeader(QWidget *parent)
     _settingsButton->setToolTip(QStringLiteral("Einstellungen"));
     _settingsButton->setIcon(SouveraTheme::instance()->icon(QStringLiteral("settings"), SouveraTheme::Color::TextMuted));
     _settingsButton->setIconSize(QSize(18, 18));
+    if (_settingsButton->icon().isNull()) {
+        _settingsButton->setText(QStringLiteral("\u2699"));
+    }
     connect(_settingsButton, &QPushButton::clicked, this, &StatusHeader::settingsClicked);
     layout->addWidget(_settingsButton);
 
     connect(SouveraTheme::instance(), &SouveraTheme::themeChanged, this, [this]() {
         _settingsButton->setIcon(SouveraTheme::instance()->icon(QStringLiteral("settings"), SouveraTheme::Color::TextMuted));
+        if (_settingsButton->icon().isNull()) {
+            _settingsButton->setText(QStringLiteral("\u2699"));
+        }
     });
 
     updateSyncStatus();
