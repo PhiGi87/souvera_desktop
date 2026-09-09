@@ -314,6 +314,8 @@ set(client_SRCS
      souvera/mail/JmapEmailListModel.cpp
      souvera/mail/EmailListDelegate.h
      souvera/mail/EmailListDelegate.cpp
+     souvera/mail/MailLoginFlow.h
+     souvera/mail/MailLoginFlow.cpp
      souvera/LeftSidebar.h
      souvera/LeftSidebar.cpp
      souvera/notes/NotesPanel.h

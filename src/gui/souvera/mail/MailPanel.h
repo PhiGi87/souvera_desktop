@@ -7,6 +7,7 @@
 #define MAILPANEL_H
 
 #include "JmapClient.h"
+#include "MailLoginFlow.h"
 #include "JmapMailboxModel.h"
 #include "JmapEmailListModel.h"
 
@@ -19,6 +20,7 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPointer>
 #include <QTimer>
 
 namespace OCC {
@@ -40,6 +42,8 @@ private:
     void setupToolbar();
     void setupConnections();
     void wireAccount(AccountState *accountState);
+    void startJmap(const QString &user, const QString &mailPassword);
+    void remintMailPassword();
     void setStatus(const QString &text, bool isError = false);
 
     void onFolderSelected(const QModelIndex &index);
@@ -64,6 +68,8 @@ private:
     QPushButton *_refreshBtn = nullptr;
     QComboBox *_sendAsCombo = nullptr;
     EmailListDelegate *_messageDelegate = nullptr;
+    QString _mailUser;
+    bool _mailRemintTried = false;
 
     JmapMailboxModel *_folderModel = nullptr;
     JmapEmailListModel *_messageModel = nullptr;

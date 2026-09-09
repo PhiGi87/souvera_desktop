@@ -49,7 +49,6 @@ void MailPanel::wireAccount(AccountState *accountState)
     const auto creds = acc->credentials();
     if (!creds) return;
     const auto user = creds->user();
-    const auto password = creds->password();
     const auto host = acc->url().host();
 
     auto email = QStringLiteral("%1@%2").arg(user, host);
@@ -61,11 +60,37 @@ void MailPanel::wireAccount(AccountState *accountState)
         _sendAsCombo->setItemText(0, QStringLiteral("%1 <%2>").arg(displayName, email));
     }
 
-    delete _jmapClient;
-    _jmapClient = new JmapClient(accountState, this);
-    _jmapClient->setCredentials(user, password);
+    // The Nextcloud app password X is NOT accepted by Stalwart/JMAP.
+    // Like the Android/iOS clients, mint the combined mail password Y via
+    // souvera_mail's login-flow endpoint and use THAT for JMAP.
+    _mailUser = user;
+    _mailRemintTried = false;
+    setStatus(QStringLiteral("Mail-Anmeldung wird eingerichtet\u2026"));
+    const auto accountGuard = QPointer<AccountState>(accountState);
+    MailLoginFlow::ensureCombinedPassword(accountState,
+        [this, accountGuard, accountState](const CombinedAppPassword &result) {
+            if (!accountGuard || accountState != _accountState) return;
+            startJmap(_mailUser, result.appPassword);
+        },
+        [this, accountGuard](const QString &error) {
+            if (!accountGuard) return;
+            setStatus(error, true);
+        });
+}
+
+void MailPanel::startJmap(const QString &user, const QString &mailPassword)
+{
+    auto *accountState = _accountState;
+    if (!accountState) return;
 
     setStatus(QStringLiteral("Verbinde mit Mail-Server\u2026"));
+
+    if (_jmapClient) {
+        _jmapClient->deleteLater();
+        _jmapClient = nullptr;
+    }
+    _jmapClient = new JmapClient(accountState, this);
+    _jmapClient->setCredentials(user, mailPassword);
 
     connect(_jmapClient, &JmapClient::sessionResolved, this, [this](const QString &, const QString &) {
         qCInfo(lcMailPanel) << "JMAP session resolved, fetching mailboxes";
@@ -75,6 +100,13 @@ void MailPanel::wireAccount(AccountState *accountState)
 
     connect(_jmapClient, &JmapClient::sessionError, this, [this](const QString &err) {
         qCWarning(lcMailPanel) << "JMAP session error:" << err;
+        // A rejected combined password means the server re-provisioned:
+        // re-mint once, then retry the session.
+        if (!_mailRemintTried && err.contains(QStringLiteral("401"))) {
+            _mailRemintTried = true;
+            remintMailPassword();
+            return;
+        }
         setStatus(err, true);
     });
 
@@ -153,6 +185,31 @@ void MailPanel::wireAccount(AccountState *accountState)
     });
 
     _jmapClient->resolveSession();
+}
+
+void MailPanel::remintMailPassword()
+{
+    auto *accountState = _accountState;
+    if (!accountState) return;
+
+    setStatus(QStringLiteral("Mail-Passwort abgelehnt \u2014 neues wird angefordert\u2026"));
+
+    const auto staleId = MailLoginFlow::cachedStalwartId(accountState);
+    if (!staleId.isEmpty()) {
+        MailLoginFlow::deleteCombinedPassword(accountState, staleId);
+    }
+    MailLoginFlow::clearCachedPassword(accountState);
+
+    const auto accountGuard = QPointer<AccountState>(accountState);
+    MailLoginFlow::ensureCombinedPassword(accountState,
+        [this, accountGuard, accountState](const CombinedAppPassword &result) {
+            if (!accountGuard || accountState != _accountState) return;
+            startJmap(_mailUser, result.appPassword);
+        },
+        [this, accountGuard](const QString &error) {
+            if (!accountGuard) return;
+            setStatus(error, true);
+        });
 }
 
 void MailPanel::setStatus(const QString &text, bool isError)

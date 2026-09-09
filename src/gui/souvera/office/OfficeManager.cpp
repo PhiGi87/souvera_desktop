@@ -47,7 +47,8 @@ OfficeManager::OfficeManager(QObject *parent)
 
 QUrl OfficeManager::davUrlFor(AccountState *accountState, const QString &remotePath) const
 {
-    const auto acc = accountState->account();
+    const auto acc = accountState ? accountState->account() : nullptr;
+    if (!acc) return {};
     auto url = acc->url();
     url.setPath(acc->url().path() + QStringLiteral("/remote.php/dav/files/%1/%2")
         .arg(acc->davUser(), remotePath));
@@ -86,7 +87,8 @@ void OfficeManager::downloadThenOpen(AccountState *accountState, const QUrl &dav
                                      const QString &remotePath, const QString &fileName,
                                      const QString &fileId)
 {
-    const auto acc = accountState->account();
+    const auto acc = accountState ? accountState->account() : nullptr;
+    if (!acc) return;
 
     QNetworkRequest req(davUrl);
     const auto auth = authBytes(accountState);

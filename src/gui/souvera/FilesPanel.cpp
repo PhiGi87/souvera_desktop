@@ -44,9 +44,10 @@ namespace OCC {
 namespace {
 const QStringList officeMimeExtensions{
     QStringLiteral("odt"), QStringLiteral("ods"), QStringLiteral("odp"), QStringLiteral("odg"),
-    QStringLiteral("doc"), QStringLiteral("docx"), QStringLiteral("xls"), QStringLiteral("xlsx"),
-    QStringLiteral("ppt"), QStringLiteral("pptx"), QStringLiteral("csv"), QStringLiteral("rtf"),
-    QStringLiteral("txt"), QStringLiteral("md"),
+    QStringLiteral("doc"), QStringLiteral("docx"), QStringLiteral("docm"), QStringLiteral("xls"),
+    QStringLiteral("xlsx"), QStringLiteral("xlsm"), QStringLiteral("ppt"), QStringLiteral("pptx"),
+    QStringLiteral("ppsx"), QStringLiteral("pps"), QStringLiteral("ppx"), QStringLiteral("csv"),
+    QStringLiteral("rtf"), QStringLiteral("txt"), QStringLiteral("md"),
 };
 }
 
@@ -241,6 +242,11 @@ void FilesPanel::onRemoteFileActivated(const QModelIndex &index)
         _remoteModel->load(file.path);
         return;
     }
+    if (isOfficeMime(file.name)) {
+        // Office documents open embedded (Souvera Office), not externally.
+        onEditInOffice();
+        return;
+    }
     onEditLocally();
 }
 
@@ -256,6 +262,7 @@ void FilesPanel::onOpenInBrowser()
 
 void FilesPanel::onEditInOffice()
 {
+    if (!_accountState || !_accountState->account()) return;
     const auto file = selectedFile();
     if (file.path.isEmpty()) return;
 
@@ -324,6 +331,9 @@ void FilesPanel::onEditLocally()
             out.write(reply->readAll());
             out.close();
             QDesktopServices::openUrl(QUrl::fromLocalFile(target));
+        } else {
+            QMessageBox::warning(this, QStringLiteral("Speichern fehlgeschlagen"),
+                QStringLiteral("Die Datei konnte nicht unter %1 gespeichert werden.").arg(target));
         }
     });
 }
@@ -332,9 +342,10 @@ void FilesPanel::updateRemoteActions()
 {
     const auto file = selectedFile();
     const auto hasFile = !file.path.isEmpty();
-    const auto officeAvailable = !officeKind().isEmpty() && isOfficeMime(file.name);
+    // Souvera Office uses the bundled LibreOffice engine - no server
+    // Collabora capability required (macOS falls back to Collabora/web).
     _openBtn->setEnabled(hasFile);
-    _officeBtn->setEnabled(hasFile && !file.isDir && officeAvailable);
+    _officeBtn->setEnabled(hasFile && !file.isDir && isOfficeMime(file.name));
     _editLocalBtn->setEnabled(hasFile && !file.isDir);
 }
 

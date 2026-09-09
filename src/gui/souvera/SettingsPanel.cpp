@@ -23,6 +23,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLoggingCategory>
+#include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSaveFile>
@@ -69,6 +70,9 @@ SettingsPanel::SettingsPanel(QWidget *parent)
 void SettingsPanel::setAccountState(AccountState *accountState)
 {
     if (_accountState == accountState) return;
+    if (_accountState) {
+        disconnect(_accountState, &AccountState::stateChanged, this, nullptr);
+    }
     _accountState = accountState;
 
     if (!accountState) {
@@ -300,20 +304,39 @@ void SettingsPanel::onTestMail()
     _mailTestResult->setText(QStringLiteral("Teste\u2026"));
     _mailTestBtn->setEnabled(false);
 
-    delete _testClient;
-    _testClient = new JmapClient(_accountState, this);
-    _testClient->setCredentials(creds->user(), creds->password());
+    // The JMAP server only accepts the combined Nextcloud+Stalwart password
+    // minted via souvera_mail - the plain app password X returns 401.
+    const auto accountGuard = QPointer<AccountState>(_accountState);
+    MailLoginFlow::ensureCombinedPassword(_accountState,
+        [this, accountGuard](const CombinedAppPassword &result) {
+            if (!accountGuard || accountGuard != _accountState) return;
+            const auto user = accountGuard->account()
+                && accountGuard->account()->credentials()
+                    ? accountGuard->account()->credentials()->user() : QString();
 
-    connect(_testClient, &JmapClient::sessionResolved, this, [this](const QString &accountId, const QString &) {
-        _mailTestResult->setText(QStringLiteral("OK \u2014 Postfach %1 erreichbar.").arg(accountId));
-        _mailTestBtn->setEnabled(true);
-    });
-    connect(_testClient, &JmapClient::sessionError, this, [this](const QString &error) {
-        _mailTestResult->setText(error);
-        _mailTestBtn->setEnabled(true);
-    });
+            if (_testClient) {
+                _testClient->deleteLater();
+                _testClient = nullptr;
+            }
+            _testClient = new JmapClient(accountGuard, this);
+            _testClient->setCredentials(user, result.appPassword);
 
-    _testClient->resolveSession();
+            connect(_testClient, &JmapClient::sessionResolved, this, [this](const QString &accountId, const QString &) {
+                _mailTestResult->setText(QStringLiteral("OK \u2014 Postfach %1 erreichbar.").arg(accountId));
+                _mailTestBtn->setEnabled(true);
+            });
+            connect(_testClient, &JmapClient::sessionError, this, [this](const QString &error) {
+                _mailTestResult->setText(error);
+                _mailTestBtn->setEnabled(true);
+            });
+
+            _testClient->resolveSession();
+        },
+        [this, accountGuard](const QString &error) {
+            if (!accountGuard) return;
+            _mailTestResult->setText(error);
+            _mailTestBtn->setEnabled(true);
+        });
 }
 
 void SettingsPanel::onExportDiagnostics()
