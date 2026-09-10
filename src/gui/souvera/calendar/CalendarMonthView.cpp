@@ -210,6 +210,12 @@ void CalendarMonthView::rebuildLayout()
     setEvents(_events);
 }
 
+void CalendarMonthView::resizeEvent(QResizeEvent *event)
+{
+    Q_UNUSED(event)
+    update(); // cells are computed from current size in paintEvent
+}
+
 void CalendarMonthView::mousePressEvent(QMouseEvent *event)
 {
     const auto cell = dayCellIndex(event->pos());
