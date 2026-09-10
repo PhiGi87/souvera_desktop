@@ -21,7 +21,7 @@ LeftSidebar::LeftSidebar(QWidget *parent)
     : QWidget(parent)
 {
     setObjectName(QStringLiteral("LeftSidebar"));
-    setFixedWidth(64);
+    setFixedWidth(72);
 
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);

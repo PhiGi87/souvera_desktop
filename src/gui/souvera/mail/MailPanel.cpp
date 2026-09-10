@@ -323,15 +323,18 @@ void MailPanel::applyViewSettings()
     settings.endGroup();
 
     _messageDelegate->setShowPreview(_showPreviewLines);
+    _messageView->doItemsLayout();
 
-    if (!_rootSplitter || !_rightSplitter) return;
+    if (!_rightSplitter) return;
     _rightSplitter->setOrientation(_verticalLayout ? Qt::Vertical : Qt::Horizontal);
     if (_verticalLayout) {
         _rightSplitter->setSizes({400, 400});
     } else {
         _rightSplitter->setSizes({320, 620});
     }
-    _rootSplitter->setSizes({_folderView->width(), width() - _folderView->width()});
+    // NOTE: _rootSplitter sizes are set in setupUi() with explicit pixel
+    // values and must not be touched here — calling setSizes with the
+    // current (pre-show) widget width of 0 collapses both panes.
 }
 
 void MailPanel::setupToolbar()

@@ -409,7 +409,11 @@ void TalkPanel::pollMessages()
 void TalkPanel::onConversationsReceived(const QJsonArray &conversations)
 {
     _conversationModel->setConversations(conversations);
-    setApiStatus(QString());
+    if (conversations.isEmpty()) {
+        setApiStatus(QStringLiteral("Keine Konversationen gefunden. Ist Nextcloud Talk auf dem Server aktiv?"));
+    } else {
+        setApiStatus(QString());
+    }
     qCInfo(lcTalkPanel) << "Conversations updated:" << conversations.size();
 }
 

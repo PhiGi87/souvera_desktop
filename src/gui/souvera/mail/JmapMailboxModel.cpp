@@ -126,25 +126,38 @@ QVariant JmapMailboxModel::data(const QModelIndex &index, int role) const
     case TotalCountRole: return mailbox.totalEmails;
     case ParentIdRole: return mailbox.parentId;
     case Qt::DisplayRole: {
+        QString name;
         if (mailbox.role.compare(QStringLiteral("inbox"), Qt::CaseInsensitive) == 0) {
-            return QStringLiteral("Posteingang");
+            name = QStringLiteral("Posteingang");
+        } else if (mailbox.role.compare(QStringLiteral("drafts"), Qt::CaseInsensitive) == 0) {
+            name = QStringLiteral("Entw\u00FCrfe");
+        } else if (mailbox.role.compare(QStringLiteral("sent"), Qt::CaseInsensitive) == 0) {
+            name = QStringLiteral("Gesendet");
+        } else if (mailbox.role.compare(QStringLiteral("trash"), Qt::CaseInsensitive) == 0) {
+            name = QStringLiteral("Papierkorb");
+        } else if (mailbox.role.compare(QStringLiteral("junk"), Qt::CaseInsensitive) == 0) {
+            name = QStringLiteral("Spam");
+        } else if (mailbox.role.compare(QStringLiteral("archive"), Qt::CaseInsensitive) == 0) {
+            name = QStringLiteral("Archiv");
+        } else {
+            name = mailbox.name;
         }
-        if (mailbox.role.compare(QStringLiteral("drafts"), Qt::CaseInsensitive) == 0) {
-            return QStringLiteral("Entwürfe");
+        // Thunderbird-style: append unread count in parentheses
+        if (mailbox.unreadEmails > 0) {
+            name += QStringLiteral(" (%1)").arg(mailbox.unreadEmails);
         }
-        if (mailbox.role.compare(QStringLiteral("sent"), Qt::CaseInsensitive) == 0) {
-            return QStringLiteral("Gesendet");
-        }
-        if (mailbox.role.compare(QStringLiteral("trash"), Qt::CaseInsensitive) == 0) {
-            return QStringLiteral("Papierkorb");
-        }
-        if (mailbox.role.compare(QStringLiteral("junk"), Qt::CaseInsensitive) == 0) {
-            return QStringLiteral("Spam");
-        }
-        if (mailbox.role.compare(QStringLiteral("archive"), Qt::CaseInsensitive) == 0) {
-            return QStringLiteral("Archiv");
-        }
-        return mailbox.name;
+        return name;
+    }
+    case Qt::DecorationRole: {
+        // Folder icons per role
+        const auto role = mailbox.role.toLower();
+        if (role == QLatin1String("inbox")) return QStringLiteral("\U0001F4E5");
+        if (role == QLatin1String("sent")) return QStringLiteral("\U0001F4E4");
+        if (role == QLatin1String("drafts")) return QStringLiteral("\U0001F4DD");
+        if (role == QLatin1String("trash")) return QStringLiteral("\U0001F5D1");
+        if (role == QLatin1String("junk")) return QStringLiteral("\U0001F6A8");
+        if (role == QLatin1String("archive")) return QStringLiteral("\U0001F4E6");
+        return QStringLiteral("\U0001F4C1"); // generic folder
     }
     case Qt::ToolTipRole: return mailbox.name;
     default: return {};

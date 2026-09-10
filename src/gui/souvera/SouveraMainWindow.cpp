@@ -213,7 +213,9 @@ void SouveraMainWindow::setupUi()
 
 void SouveraMainWindow::loadStyleSheet()
 {
-    SouveraTheme::instance()->applyStyleSheet();
+    // Apply palette FIRST (always works, even if the QSS has a parse error),
+    // then the stylesheet for panel-specific styling on top.
+    SouveraTheme::applyTheme();
 }
 
 void SouveraMainWindow::switchToTab(int index)

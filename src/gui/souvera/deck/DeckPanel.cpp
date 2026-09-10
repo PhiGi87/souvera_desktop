@@ -130,6 +130,8 @@ DeckPanel::DeckPanel(QWidget *parent)
         if (_boardComboBox->count() > 0) {
             _boardComboBox->setCurrentIndex(0);
             loadBoard(_boardComboBox->currentData().toInt());
+        } else {
+            _boardComboBox->setPlaceholderText(QStringLiteral("Keine Boards \u2014 ist Nextcloud Deck aktiv?"));
         }
     });
 

@@ -33,7 +33,7 @@ QWidget#ContentArea {
     border: none;
     border-left: 3px solid transparent;
     color: @textMuted@;
-    min-width: 64px;
+    min-width: 72px;
     min-height: 56px;
     padding: 0;
     font-size: 10px;

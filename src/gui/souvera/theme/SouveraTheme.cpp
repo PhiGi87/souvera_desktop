@@ -179,6 +179,7 @@ void SouveraTheme::setTheme(Theme theme)
     settings.setValue(QStringLiteral("souvera/theme"),
                       _theme == Theme::Light ? QStringLiteral("light") : QStringLiteral("dark"));
 
+    applyPalette();
     applyStyleSheet();
     emit themeChanged();
 }
@@ -290,6 +291,9 @@ QString SouveraTheme::styleSheet() const
         qss.replace(QStringLiteral("@") + it.key() + QStringLiteral("@"), it.value());
     }
 
+    qCInfo(lcSouveraTheme) << "QSS loaded:" << qss.size() << "chars,"
+                           << (_theme == Theme::Dark ? "dark" : "light") << "theme,"
+                           << "accent=" << p.accent.name();
     return qss;
 }
 
@@ -304,6 +308,43 @@ void SouveraTheme::applyStyleSheet() const
         return;
     }
     qApp->setStyleSheet(sheet);
+}
+
+void SouveraTheme::applyPalette() const
+{
+    if (!qApp) {
+        return;
+    }
+
+    const auto &p = paletteFor(_theme);
+
+    QPalette palette;
+    palette.setColor(QPalette::All, QPalette::Window, p.background);
+    palette.setColor(QPalette::All, QPalette::WindowText, p.textPrimary);
+    palette.setColor(QPalette::All, QPalette::Base, p.contentBackground);
+    palette.setColor(QPalette::All, QPalette::AlternateBase, p.surface);
+    palette.setColor(QPalette::All, QPalette::Text, p.textPrimary);
+    palette.setColor(QPalette::All, QPalette::Button, p.surface);
+    palette.setColor(QPalette::All, QPalette::ButtonText, p.textPrimary);
+    palette.setColor(QPalette::All, QPalette::Highlight, p.accent);
+    palette.setColor(QPalette::All, QPalette::HighlightedText, p.onAccent);
+    palette.setColor(QPalette::All, QPalette::ToolTipBase, p.surface);
+    palette.setColor(QPalette::All, QPalette::ToolTipText, p.textPrimary);
+    palette.setColor(QPalette::All, QPalette::PlaceholderText, p.textMuted);
+    palette.setColor(QPalette::All, QPalette::Link, p.accent);
+    palette.setColor(QPalette::All, QPalette::LinkVisited, p.accentHover);
+    palette.setColor(QPalette::All, QPalette::Disabled, QPalette::Text, p.textDisabled);
+    palette.setColor(QPalette::All, QPalette::Disabled, QPalette::ButtonText, p.textDisabled);
+    palette.setColor(QPalette::All, QPalette::Disabled, QPalette::Button, p.background);
+
+    qApp->setPalette(palette);
+}
+
+void SouveraTheme::applyTheme()
+{
+    auto *theme = instance();
+    theme->applyPalette();
+    theme->applyStyleSheet();
 }
 
 } // namespace OCC

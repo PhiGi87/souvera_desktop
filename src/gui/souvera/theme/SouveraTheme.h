@@ -65,6 +65,19 @@ public:
     [[nodiscard]] QString styleSheet() const;
     void applyStyleSheet() const;
 
+    /**
+     * @brief Sets the global QPalette from the current theme.
+     *
+     * Unlike the stylesheet (which Qt silently discards on a single parse
+     * error), a palette always applies and colors every standard widget
+     * (buttons, lists, backgrounds, text) automatically. Called before
+     * applyStyleSheet() so panels get consistent base colors even if the
+     * QSS fails to load.
+     */
+    void applyPalette() const;
+
+    static void applyTheme();
+
 signals:
     void themeChanged();
 
