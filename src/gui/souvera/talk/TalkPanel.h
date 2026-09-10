@@ -8,6 +8,7 @@
 
 #include <QWidget>
 #include <QJsonArray>
+#include <QLabel>
 #include <QPointer>
 #include <QSplitter>
 #include <QListView>
@@ -21,7 +22,6 @@ namespace OCC {
 class TalkConversationModel;
 class TalkOcsApi;
 class AccountState;
-class QLabel;
 
 class TalkPanel : public QWidget
 {
