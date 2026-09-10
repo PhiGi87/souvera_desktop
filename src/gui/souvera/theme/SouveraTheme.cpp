@@ -334,9 +334,9 @@ void SouveraTheme::applyPalette() const
     palette.setColor(QPalette::All, QPalette::PlaceholderText, p.textMuted);
     palette.setColor(QPalette::All, QPalette::Link, p.accent);
     palette.setColor(QPalette::All, QPalette::LinkVisited, p.accentHover);
-    palette.setColor(QPalette::All, QPalette::Disabled, QPalette::Text, p.textDisabled);
-    palette.setColor(QPalette::All, QPalette::Disabled, QPalette::ButtonText, p.textDisabled);
-    palette.setColor(QPalette::All, QPalette::Disabled, QPalette::Button, p.background);
+    palette.setColor(QPalette::Disabled, QPalette::Text, p.textDisabled);
+    palette.setColor(QPalette::Disabled, QPalette::ButtonText, p.textDisabled);
+    palette.setColor(QPalette::Disabled, QPalette::Button, p.background);
 
     qApp->setPalette(palette);
 }
