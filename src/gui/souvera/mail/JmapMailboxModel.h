@@ -7,36 +7,59 @@
 #define JMAPMAILBOXMODEL_H
 
 #include "JmapClient.h"
-#include <QAbstractListModel>
+
+#include <QAbstractItemModel>
+#include <QHash>
 
 namespace OCC {
 
-class JmapMailboxModel : public QAbstractListModel
+/**
+ * @brief Hierarchical mailbox model sorted Thunderbird-style:
+ *        Inbox first, then the special folders, then alphabetically.
+ */
+class JmapMailboxModel : public QAbstractItemModel
 {
     Q_OBJECT
 public:
     enum Roles {
-        IdRole = Qt::UserRole + 1,
+        MailboxIdRole = Qt::UserRole + 1,
         NameRole,
-        RoleRole,
-        UnreadRole,
-        TotalRole,
+        RoleNameRole,
+        UnreadCountRole,
+        TotalCountRole,
         ParentIdRole,
     };
 
     explicit JmapMailboxModel(QObject *parent = nullptr);
 
-    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
-    QHash<int, QByteArray> roleNames() const override;
+    [[nodiscard]] QModelIndex index(int row, int column,
+                                   const QModelIndex &parent = QModelIndex()) const override;
+    [[nodiscard]] QModelIndex parent(const QModelIndex &child) const override;
+    [[nodiscard]] int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    [[nodiscard]] int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+    [[nodiscard]] QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
 
     void setMailboxes(const QList<JmapMailbox> &mailboxes);
 
-    QString mailboxIdForRow(int row) const;
-    QList<QString> roleIds() const;
+    [[nodiscard]] QModelIndex indexForMailboxId(const QString &mailboxId) const;
+    [[nodiscard]] QString mailboxIdForIndex(const QModelIndex &index) const;
+    [[nodiscard]] QModelIndex inboxIndex() const;
 
 private:
+    struct Node {
+        JmapMailbox mailbox;
+        Node *parent = nullptr;
+        QList<Node *> children;
+        int row = 0;
+    };
+
+    void rebuild();
+    [[nodiscard]] static int sortWeight(const JmapMailbox &mailbox);
+
     QList<JmapMailbox> _mailboxes;
+    QList<Node *> _roots;
+    QHash<QString, Node *> _byId;
 };
 
 } // namespace OCC

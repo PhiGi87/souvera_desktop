@@ -45,7 +45,7 @@ NotesPanel::NotesPanel(AccountState *accountState, QWidget *parent)
 
     auto *splitter = new QSplitter(Qt::Horizontal, this);
     _noteList->setMaximumWidth(280);
-    _editor->setPlaceholderText(QStringLiteral("Write your note in Markdown…"));
+    _editor->setPlaceholderText(QStringLiteral("Notiz in Markdown schreiben…"));
     _preview->setOpenExternalLinks(true);
     splitter->addWidget(_noteList);
     splitter->addWidget(_editor);

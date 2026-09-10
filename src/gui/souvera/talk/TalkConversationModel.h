@@ -19,10 +19,13 @@ public:
     enum Roles {
         DisplayNameRole = Qt::DisplayRole,
         LastMessageRole = Qt::UserRole + 1,
+        LastTimestampRole,
         UnreadCountRole,
         TokenRole,
         IsFavoriteRole,
         HasUnreadMentionRole,
+        IsGroupRole,
+        AvatarInitialRole,
     };
 
     explicit TalkConversationModel(QObject *parent = nullptr);

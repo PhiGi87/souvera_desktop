@@ -1,0 +1,62 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Souvera (Host-On Service Provider GmbH)
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+
+#ifndef OCSDAVCLIENT_H
+#define OCSDAVCLIENT_H
+
+#include <functional>
+
+class QByteArray;
+class QJsonDocument;
+class QJsonObject;
+class QString;
+class QUrl;
+
+namespace OCC {
+
+class AccountState;
+
+/**
+ * @brief Central HTTP layer for OCS and DAV requests of the workspace panels.
+ *
+ * All requests carry explicit Basic credentials (the Nextcloud app password),
+ * the JSON/XML accept headers and a transfer timeout. Failures are reported
+ * with user-readable German messages instead of being silently dropped.
+ */
+class OcsDavClient
+{
+public:
+    using JsonCallback = std::function<void(const QJsonObject &payload, int httpStatus)>;
+    using ErrorCallback = std::function<void(int httpStatus, const QString &message)>;
+    using RawCallback = std::function<void(const QByteArray &body, int httpStatus)>;
+    using HeaderList = QList<QPair<QByteArray, QByteArray>>;
+
+    /**
+     * OCS request (Talk, Deck, ...). The payload passed to onJson is the
+     * parsed OCS "data" element. Non-2xx and OCS meta errors call onError.
+     */
+    static void ocsRequest(AccountState *accountState, const QByteArray &verb,
+                           const QString &ocsPath, const QByteArray &body,
+                           const JsonCallback &onJson, const ErrorCallback &onError,
+                           const HeaderList &extraHeaders = {});
+
+    /**
+     * Plain JSON request (Deck REST API returns bare arrays). The callback
+     * receives the parsed JSON document root.
+     */
+    static void jsonRequest(AccountState *accountState, const QByteArray &verb,
+                            const QUrl &url, const QByteArray &jsonBody,
+                            const std::function<void(const QJsonDocument &, int)> &onJson,
+                            const ErrorCallback &onError);
+
+    /** DAV request (PROPFIND/REPORT/...) returning the raw XML body. */
+    static void davRequest(AccountState *accountState, const QByteArray &verb,
+                           const QUrl &url, const QByteArray &xmlBody,
+                           const RawCallback &onBody, const ErrorCallback &onError);
+};
+
+} // namespace OCC
+
+#endif // OCSDAVCLIENT_H

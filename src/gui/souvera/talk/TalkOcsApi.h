@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2025 Souvera (Host-On Service Provider GmbH)
+ * SPDX-FileCopyrightText: 2026 Souvera (Host-On Service Provider GmbH)
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
@@ -9,7 +9,6 @@
 #include <QObject>
 #include <QJsonArray>
 #include <QJsonObject>
-#include <QNetworkReply>
 
 namespace OCC {
 
@@ -31,9 +30,12 @@ signals:
     void conversationsReceived(const QJsonArray &conversations);
     void messagesReceived(const QJsonArray &messages, const QString &token);
     void messageSent(const QString &token);
+    void apiError(const QString &message);
 
 private:
-    [[nodiscard]] QString ocsUrl(const QString &path) const;
+    void conversationsRequest(const QString &apiBase);
+    void messagesRequest(const QString &apiBase, const QString &token, qint64 lastKnownId);
+    void sendRequest(const QString &apiBase, const QString &token, const QString &text);
 
     AccountState *_accountState = nullptr;
 };

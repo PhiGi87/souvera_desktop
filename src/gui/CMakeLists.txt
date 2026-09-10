@@ -286,6 +286,12 @@ set(client_SRCS
     souvera/FilesPanel.cpp
     souvera/SettingsPanel.h
     souvera/SettingsPanel.cpp
+    souvera/mail/MailReaderWindow.h
+    souvera/mail/MailReaderWindow.cpp
+    souvera/calendar/CalendarMonthView.h
+    souvera/calendar/CalendarMonthView.cpp
+    souvera/net/OcsDavClient.h
+    souvera/net/OcsDavClient.cpp
     souvera/office/LokOffice.h
     souvera/office/LokOffice.cpp
     souvera/office/OfficeDocumentView.h

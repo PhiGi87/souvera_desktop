@@ -19,6 +19,8 @@ class AccountState;
 class Folder;
 class JmapClient;
 
+class QCheckBox;
+
 class SettingsPanel : public QWidget
 {
     Q_OBJECT
@@ -26,6 +28,9 @@ public:
     explicit SettingsPanel(QWidget *parent = nullptr);
 
     void setAccountState(AccountState *accountState);
+
+signals:
+    void viewSettingsChanged();
 
 private:
     void setupUi();
@@ -43,6 +48,8 @@ private:
     QPushButton *_mailTestBtn = nullptr;
     QWidget *_syncFolderContainer = nullptr;
     JmapClient *_testClient = nullptr;
+    QCheckBox *_verticalLayoutCheck = nullptr;
+    QCheckBox *_previewLinesCheck = nullptr;
 };
 
 } // namespace OCC

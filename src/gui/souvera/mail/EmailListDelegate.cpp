@@ -15,6 +15,7 @@ namespace OCC {
 
 namespace {
 constexpr int RowHeight = 68;
+constexpr int RowHeightCompact = 50;
 constexpr int Padding = 14;
 }
 
@@ -112,16 +113,18 @@ void EmailListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
                           QStringLiteral("\U0001F4CE"));
     }
 
-    // Preview (third line)
-    QFont previewFont = option.font;
-    previewFont.setPointSizeF(option.font.pointSizeF() * 0.9);
-    const auto previewFm = QFontMetrics(previewFont);
-    const auto previewY = subjectY + 4 + previewFm.ascent();
-    painter->setFont(previewFont);
-    painter->setPen(theme->color(SouveraTheme::Color::TextMuted));
-    const auto previewText = previewFm.elidedText(preview, Qt::ElideRight,
-                                                  rect.width() - Padding * 2);
-    painter->drawText(QPoint(rect.left() + Padding, previewY), previewText);
+    // Preview (third line) - only when enabled in the mail view settings
+    if (_showPreview) {
+        QFont previewFont = option.font;
+        previewFont.setPointSizeF(option.font.pointSizeF() * 0.9);
+        const auto previewFm = QFontMetrics(previewFont);
+        const auto previewY = subjectY + 4 + previewFm.ascent();
+        painter->setFont(previewFont);
+        painter->setPen(theme->color(SouveraTheme::Color::TextMuted));
+        const auto previewText = previewFm.elidedText(preview, Qt::ElideRight,
+                                                      rect.width() - Padding * 2);
+        painter->drawText(QPoint(rect.left() + Padding, previewY), previewText);
+    }
 
     // Flagged star (next to date, second line)
     if (isFlagged) {
@@ -134,7 +137,7 @@ void EmailListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
 
 QSize EmailListDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &) const
 {
-    return QSize(option.rect.width(), RowHeight);
+    return QSize(option.rect.width(), _showPreview ? RowHeight : RowHeightCompact);
 }
 
 } // namespace OCC

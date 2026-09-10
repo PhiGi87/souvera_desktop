@@ -24,10 +24,12 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLoggingCategory>
+#include <QCheckBox>
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSaveFile>
+#include <QSettings>
 #include <QVBoxLayout>
 
 Q_LOGGING_CATEGORY(lcSettingsPanel, "souvera.settings.panel")
@@ -184,6 +186,39 @@ void SettingsPanel::setupUi()
     themeRowLayout->addWidget(themeBtn);
     themeLayout->addWidget(themeRow);
     contentLayout->addWidget(themeCard);
+
+    // ---- Mail-Ansicht ----
+    QVBoxLayout *mailViewLayout = nullptr;
+    auto *mailViewCard = makeCard(QStringLiteral("Mail-Ansicht"), content, &mailViewLayout);
+
+    _verticalLayoutCheck = new QCheckBox(QStringLiteral("Nachrichten untereinander anzeigen (vertikale Ansicht)"), mailViewCard);
+    _previewLinesCheck = new QCheckBox(QStringLiteral("Vorschauzeilen in der Nachrichtenliste zeigen"), mailViewCard);
+    mailViewLayout->addWidget(_verticalLayoutCheck);
+    mailViewLayout->addWidget(_previewLinesCheck);
+
+    {
+        QSettings settings;
+        settings.beginGroup(QStringLiteral("souvera/mailview"));
+        _verticalLayoutCheck->setChecked(settings.value(QStringLiteral("verticalLayout"), false).toBool());
+        _previewLinesCheck->setChecked(settings.value(QStringLiteral("previewLines"), true).toBool());
+        settings.endGroup();
+    }
+
+    connect(_verticalLayoutCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        QSettings settings;
+        settings.beginGroup(QStringLiteral("souvera/mailview"));
+        settings.setValue(QStringLiteral("verticalLayout"), checked);
+        settings.endGroup();
+        emit viewSettingsChanged();
+    });
+    connect(_previewLinesCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        QSettings settings;
+        settings.beginGroup(QStringLiteral("souvera/mailview"));
+        settings.setValue(QStringLiteral("previewLines"), checked);
+        settings.endGroup();
+        emit viewSettingsChanged();
+    });
+    contentLayout->addWidget(mailViewCard);
 
     // ---- Diagnose ----
     QVBoxLayout *diagLayout = nullptr;

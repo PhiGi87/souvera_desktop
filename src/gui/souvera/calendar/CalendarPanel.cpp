@@ -4,6 +4,7 @@
  */
 
 #include "CalendarPanel.h"
+#include "CalendarMonthView.h"
 #include "CalDavSync.h"
 #include "CalendarEventDialog.h"
 
@@ -56,6 +57,26 @@ void CalendarPanel::setupUi()
     auto *title = new QLabel(QStringLiteral("Kalender"), toolbar);
     title->setObjectName(QStringLiteral("PanelTitle"));
     toolbarLayout->addWidget(title);
+
+    toolbarLayout->addSpacing(12);
+
+    auto *prevBtn = new QPushButton(QStringLiteral("\u2039"), toolbar);
+    prevBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+    prevBtn->setFixedWidth(36);
+    connect(prevBtn, &QPushButton::clicked, this, [this]() { onMonthChanged(-1); });
+    toolbarLayout->addWidget(prevBtn);
+
+    _todayBtn = new QPushButton(QStringLiteral("Heute"), toolbar);
+    _todayBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+    connect(_todayBtn, &QPushButton::clicked, this, &CalendarPanel::onGoToday);
+    toolbarLayout->addWidget(_todayBtn);
+
+    auto *nextBtn = new QPushButton(QStringLiteral("\u203A"), toolbar);
+    nextBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+    nextBtn->setFixedWidth(36);
+    connect(nextBtn, &QPushButton::clicked, this, [this]() { onMonthChanged(1); });
+    toolbarLayout->addWidget(nextBtn);
+
     toolbarLayout->addStretch();
 
     _newEventBtn = new QPushButton(QStringLiteral("+ Neuer Termin"), toolbar);
@@ -67,43 +88,44 @@ void CalendarPanel::setupUi()
 
     _splitter = new QSplitter(Qt::Vertical, this);
 
-    _calendar = new QCalendarWidget(_splitter);
-    _calendar->setGridVisible(true);
-    applyCalendarTheme();
-    connect(SouveraTheme::instance(), &SouveraTheme::themeChanged, this, [this]() {
-        applyCalendarTheme();
+    _monthView = new CalendarMonthView(_splitter);
+    connect(_monthView, &CalendarMonthView::dateClicked, this, &CalendarPanel::onDateSelected);
+    connect(_monthView, &CalendarMonthView::dateDoubleClicked, this, [this](const QDate &date) {
+        _selectedDate = date;
+        onNewEvent();
     });
-    connect(_calendar, &QCalendarWidget::clicked, this, &CalendarPanel::onDateSelected);
-    _splitter->addWidget(_calendar);
+    _splitter->addWidget(_monthView);
 
     _eventList = new QListWidget(_splitter);
     _eventList->setObjectName(QStringLiteral("RemoteFilesView"));
     _splitter->addWidget(_eventList);
 
-    _splitter->setStretchFactor(0, 2);
-    _splitter->setStretchFactor(1, 3);
+    _splitter->setStretchFactor(0, 3);
+    _splitter->setStretchFactor(1, 1);
 
     layout->addWidget(_splitter, 1);
 }
 
-void CalendarPanel::applyCalendarTheme()
+void CalendarPanel::onMonthChanged(int months)
 {
-    const auto *theme = SouveraTheme::instance();
-    const auto bg = theme->color(SouveraTheme::Color::ContentBackground).name();
-    const auto text = theme->color(SouveraTheme::Color::TextPrimary).name();
-    const auto muted = theme->color(SouveraTheme::Color::TextMuted).name();
-    const auto border = theme->color(SouveraTheme::Color::Border).name();
-    const auto accent = theme->color(SouveraTheme::Color::Accent).name();
-    _calendar->setStyleSheet(QStringLiteral(
-        "QCalendarWidget { background-color: %1; color: %2; }"
-        "QCalendarWidget QAbstractItemView { background-color: %1; color: %2; "
-        "  alternate-background-color: %3; selection-background-color: %4; "
-        "  selection-color: %2; font-size: 13px; outline: none; }"
-        "QCalendarWidget QToolButton { color: %2; background: transparent; border: none; }"
-        "QCalendarWidget QWidget#qt_calendar_navigationbar { background-color: %3; }"
-        "QCalendarWidget QSpinBox { color: %2; background: transparent; }")
-        .arg(bg, text, border, accent));
-    Q_UNUSED(muted)
+    if (!_monthView) return;
+    const auto current = _monthView->month();
+    _monthView->setMonth(current.addMonths(months));
+    // Reload events for the new month (whole month range)
+    if (!_currentCalendarUri.isEmpty()) {
+        const auto from = QDate(current.year(), current.month(), 1).addMonths(months);
+        const auto to = QDate(from.year(), from.month(), from.daysInMonth());
+        _calDavSync->fetchEvents(_currentCalendarUri, from.addDays(-7), to.addDays(7));
+    }
+}
+
+void CalendarPanel::onGoToday()
+{
+    if (!_monthView) return;
+    const auto today = QDate::currentDate();
+    _monthView->setMonth(today);
+    _monthView->setSelectedDate(today);
+    onDateSelected(today);
 }
 
 void CalendarPanel::onDateSelected(const QDate &date)
@@ -111,7 +133,7 @@ void CalendarPanel::onDateSelected(const QDate &date)
     _eventList->clear();
     qCInfo(lcCalendarPanel) << "Date selected:" << date;
     if (!_currentCalendarUri.isEmpty()) {
-        _calDavSync->fetchEvents(_currentCalendarUri, date, date);
+        _calDavSync->fetchEvents(_currentCalendarUri, date.addDays(-1), date.addDays(1));
     }
 }
 
@@ -151,7 +173,10 @@ void CalendarPanel::onCalendarsLoaded(const QVariantList &calendars)
                            << first.value(QStringLiteral("displayname")).toString();
 
     auto today = QDate::currentDate();
-    _calendar->setSelectedDate(today);
+    if (_monthView) {
+        _monthView->setMonth(today);
+        _monthView->setSelectedDate(today);
+    }
     _calDavSync->fetchEvents(_currentCalendarUri, today, today);
 }
 
@@ -159,6 +184,28 @@ void CalendarPanel::onEventsLoaded(const QVariantList &events)
 {
     _eventList->clear();
     qCInfo(lcCalendarPanel) << "Events loaded:" << events.size();
+
+    if (_monthView) {
+        QVector<CalendarEventEntry> entries;
+        for (const auto &evVal : events) {
+            const auto ev = evVal.toMap();
+            CalendarEventEntry entry;
+            entry.uid = ev.value(QStringLiteral("uid")).toString();
+            entry.summary = ev.value(QStringLiteral("summary")).toString();
+            const auto dtStartStr = ev.value(QStringLiteral("dtstart")).toString();
+            const auto dtEndStr = ev.value(QStringLiteral("dtend")).toString();
+            entry.start = QDateTime::fromString(dtStartStr, QStringLiteral("yyyyMMdd'T'HHmmss"));
+            entry.end = QDateTime::fromString(dtEndStr, QStringLiteral("yyyyMMdd'T'HHmmss"));
+            entry.allDay = !dtStartStr.contains(QLatin1Char('T'));
+            if (!entry.start.isValid() && dtStartStr.size() >= 8) {
+                entry.start = QDateTime(QDate::fromString(dtStartStr.left(8), QStringLiteral("yyyyMMdd")),
+                                        QTime(0, 0));
+            }
+            if (entry.summary.isEmpty()) entry.summary = QStringLiteral("(Unbenannter Termin)");
+            entries.append(entry);
+        }
+        _monthView->setEvents(entries);
+    }
 
     if (events.isEmpty()) {
         _eventList->addItem(QStringLiteral("(Keine Termine)"));
@@ -202,7 +249,7 @@ void CalendarPanel::onEventCreated(bool success)
 {
     if (success) {
         qCInfo(lcCalendarPanel) << "Event created successfully";
-        auto today = _calendar->selectedDate();
+        auto today = QDate::currentDate();
         if (!_currentCalendarUri.isEmpty()) {
             _calDavSync->fetchEvents(_currentCalendarUri, today, today);
         }

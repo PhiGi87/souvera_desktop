@@ -6,6 +6,7 @@
 #include "MailPanel.h"
 #include "MailComposer.h"
 #include "EmailListDelegate.h"
+#include "MailReaderWindow.h"
 #include "account.h"
 #include "accountstate.h"
 #include "creds/abstractcredentials.h"
@@ -113,8 +114,11 @@ void MailPanel::startJmap(const QString &user, const QString &mailPassword)
     connect(_jmapClient, &JmapClient::mailboxesFetched, this, [this](const QList<JmapMailbox> &boxes) {
         qCInfo(lcMailPanel) << "Mailboxes fetched:" << boxes.size();
         _folderModel->setMailboxes(boxes);
-        if (_folderModel->rowCount() > 0) {
-            _folderView->setCurrentIndex(_folderModel->index(0, 0));
+        _folderView->expandAll();
+        // Always start in the inbox (Thunderbird-style), never in a random folder.
+        const auto inbox = _folderModel->inboxIndex();
+        if (inbox.isValid()) {
+            _folderView->setCurrentIndex(inbox);
         }
         setStatus(QStringLiteral("Bereit \u2014 %1 Ordner").arg(boxes.size()));
     });
@@ -232,8 +236,9 @@ void MailPanel::setupUi()
     setupToolbar();
     layout->addWidget(_toolbar);
 
-    _splitter = new QSplitter(Qt::Horizontal, this);
-    _splitter->setObjectName(QStringLiteral("MailSplitter"));
+    _rootSplitter = new QSplitter(Qt::Horizontal, this);
+    _rootSplitter->setObjectName(QStringLiteral("MailSplitter"));
+    _rightSplitter = new QSplitter(Qt::Horizontal, _rootSplitter);
 
     auto *folderPanel = new QWidget(_splitter);
     folderPanel->setObjectName(QStringLiteral("MailFolderPanel"));
@@ -249,7 +254,7 @@ void MailPanel::setupUi()
     _folderView->setAnimated(true);
     _folderView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     folderLayout->addWidget(_folderView);
-    _splitter->addWidget(folderPanel);
+    _rootSplitter->addWidget(folderPanel);
 
     auto *messagePanel = new QWidget(_splitter);
     messagePanel->setObjectName(QStringLiteral("MailMessagePanel"));
@@ -263,7 +268,7 @@ void MailPanel::setupUi()
     _messageView->setSelectionMode(QAbstractItemView::SingleSelection);
     _messageView->setAlternatingRowColors(true);
     messageLayout->addWidget(_messageView);
-    _splitter->addWidget(messagePanel);
+    _rightSplitter->addWidget(messagePanel);
 
     auto *previewPanel = new QWidget(_splitter);
     previewPanel->setObjectName(QStringLiteral("MailPreviewPanel"));
@@ -277,14 +282,14 @@ void MailPanel::setupUi()
     _preview->setOpenLinks(false);
     _preview->setPlaceholderText(QStringLiteral("Nachricht ausw\u00E4hlen\u2026"));
     previewLayout->addWidget(_preview);
-    _splitter->addWidget(previewPanel);
+    _rightSplitter->addWidget(previewPanel);
 
-    _splitter->setSizes({220, 320, 500});
-    _splitter->setStretchFactor(0, 0);
-    _splitter->setStretchFactor(1, 1);
-    _splitter->setStretchFactor(2, 2);
+    _rootSplitter->addWidget(_rightSplitter);
+    _rootSplitter->setStretchFactor(0, 0);
+    _rootSplitter->setStretchFactor(1, 1);
+    _rootSplitter->setSizes({220, 940});
 
-    layout->addWidget(_splitter, 1);
+    layout->addWidget(_rootSplitter, 1);
 
     _statusLabel = new QLabel(QStringLiteral("Kein Konto verbunden."), this);
     _statusLabel->setObjectName(QStringLiteral("MailStatusLabel"));
@@ -302,8 +307,30 @@ void MailPanel::setupUi()
     _messageView->setAlternatingRowColors(false);
     _messageView->setUniformItemSizes(false);
     _messageView->setMouseTracking(true);
+    connect(_messageView, &QListView::doubleClicked, this, &MailPanel::onMessageDoubleClicked);
+    applyViewSettings();
 
     setupConnections();
+}
+
+void MailPanel::applyViewSettings()
+{
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("souvera/mailview"));
+    _verticalLayout = settings.value(QStringLiteral("verticalLayout"), false).toBool();
+    _showPreviewLines = settings.value(QStringLiteral("previewLines"), true).toBool();
+    settings.endGroup();
+
+    _messageDelegate->setShowPreview(_showPreviewLines);
+
+    if (!_rootSplitter || !_rightSplitter) return;
+    _rightSplitter->setOrientation(_verticalLayout ? Qt::Vertical : Qt::Horizontal);
+    if (_verticalLayout) {
+        _rightSplitter->setSizes({400, 400});
+    } else {
+        _rightSplitter->setSizes({320, 620});
+    }
+    _rootSplitter->setSizes({_folderView->width(), width() - _folderView->width()});
 }
 
 void MailPanel::setupToolbar()
@@ -416,7 +443,7 @@ void MailPanel::onFolderSelected(const QModelIndex &index)
 {
     if (!index.isValid()) return;
 
-    const auto mailboxId = _folderModel->mailboxIdForRow(index.row());
+    const auto mailboxId = _folderModel->mailboxIdForIndex(index);
     if (mailboxId.isEmpty()) return;
 
     _currentMailboxId = mailboxId;
@@ -473,6 +500,29 @@ void MailPanel::onMessageSelected(const QModelIndex &index)
     if (_jmapClient) {
         _jmapClient->fetchEmailBody(_selectedEmailId);
         _jmapClient->markRead(_selectedEmailId, true);
+    }
+}
+
+void MailPanel::onMessageDoubleClicked(const QModelIndex &index)
+{
+    if (!index.isValid() || !_accountState) return;
+    const auto emailId = _messageModel->emailIdForRow(index.row());
+    if (emailId.isEmpty()) return;
+
+    JmapEmail email;
+    email.id = emailId;
+    email.subject = index.data(JmapEmailListModel::SubjectRole).toString();
+    email.fromName = index.data(JmapEmailListModel::FromNameRole).toString();
+    email.fromAddress = index.data(JmapEmailListModel::FromAddressRole).toString();
+    email.receivedAt = index.data(JmapEmailListModel::ReceivedAtRole).toDateTime();
+
+    auto *reader = new MailReaderWindow(_accountState, email, this);
+    reader->show();
+    reader->raise();
+    reader->activateWindow();
+
+    if (_jmapClient) {
+        _jmapClient->markRead(emailId, true);
     }
 }
 

@@ -205,6 +205,8 @@ void SouveraMainWindow::setupUi()
     rootLayout->addWidget(contentArea, 1);
 
     connect(_sidebar, &LeftSidebar::currentChanged, this, &SouveraMainWindow::switchToTab);
+    connect(_settingsPanel, &SettingsPanel::viewSettingsChanged,
+            _mailPanel, &MailPanel::applyViewSettings);
 
     setCentralWidget(root);
 }

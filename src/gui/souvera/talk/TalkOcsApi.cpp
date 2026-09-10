@@ -1,21 +1,40 @@
 /*
- * SPDX-FileCopyrightText: 2025 Souvera (Host-On Service Provider GmbH)
+ * SPDX-FileCopyrightText: 2026 Souvera (Host-On Service Provider GmbH)
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "TalkOcsApi.h"
+#include "net/OcsDavClient.h"
 
 #include "accountstate.h"
 #include "account.h"
 
 #include <QJsonDocument>
 #include <QLoggingCategory>
-#include <QNetworkRequest>
 #include <QUrlQuery>
 
 Q_LOGGING_CATEGORY(lcTalkOcsApi, "souvera.talk.ocsapi")
 
 namespace OCC {
+
+namespace {
+
+QString baseUrlOf(AccountState *state)
+{
+    if (!state || !state->account()) return QString();
+    auto base = state->account()->url().toString();
+    if (base.endsWith(QLatin1Char('/'))) base.chop(1);
+    return base;
+}
+
+QByteArray chatBody(const QString &text)
+{
+    QUrlQuery body;
+    body.addQueryItem(QStringLiteral("message"), text);
+    return body.toString(QUrl::FullyEncoded).toUtf8();
+}
+
+} // namespace
 
 TalkOcsApi::TalkOcsApi(QObject *parent)
     : QObject(parent)
@@ -27,49 +46,49 @@ void TalkOcsApi::setAccountState(AccountState *state)
     _accountState = state;
 }
 
-QString TalkOcsApi::ocsUrl(const QString &path) const
-{
-    if (!_accountState || !_accountState->account()) return {};
-    const auto base = _accountState->account()->url().toString();
-    const auto baseClean = base.endsWith(QLatin1Char('/')) ? base.chopped(1) : base;
-    return QStringLiteral("%1/ocs/v2.php/apps/spreed/api/v1%2").arg(baseClean, path);
-}
-
 void TalkOcsApi::fetchConversations()
 {
-    const auto url = ocsUrl(QStringLiteral("/room"));
-    if (url.isEmpty()) {
-        qCWarning(lcTalkOcsApi) << "Cannot fetch conversations: no account state";
+    const auto base = baseUrlOf(_accountState);
+    if (base.isEmpty()) {
+        emit apiError(QStringLiteral("Kein Konto verbunden."));
         return;
     }
+    // Talk 4.x endpoint; falls back to v1 when the server is older.
+    conversationsRequest(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), false);
+}
 
-    QNetworkRequest req;
-    req.setRawHeader("OCS-APIRequest", "true");
-
-    auto *account = _accountState->account().data();
-    auto *reply = account->sendRawRequest("GET", QUrl(url), req);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            qCWarning(lcTalkOcsApi) << "fetchConversations failed:" << reply->errorString();
-            return;
-        }
-        const auto doc = QJsonDocument::fromJson(reply->readAll());
-        const auto data = doc.object().value(QStringLiteral("ocs")).toObject()
-                              .value(QStringLiteral("data")).toArray();
-        qCInfo(lcTalkOcsApi) << "Fetched" << data.size() << "conversations";
-        emit conversationsReceived(data);
-    });
+void TalkOcsApi::conversationsRequest(const QString &apiBase, bool isV1Retry)
+{
+    const auto url = apiBase + QStringLiteral("/room");
+    ocsRequest(_accountState, "GET", url, {},
+        [this](const QJsonObject &payload, int) {
+            const auto data = payload.value(QStringLiteral("data")).toArray();
+            qCInfo(lcTalkOcsApi) << "Fetched" << data.size() << "conversations";
+            emit conversationsReceived(data);
+        },
+        [this, apiBase, isV1Retry](int status, const QString &message) {
+            if (status == 404 && !isV1Retry) {
+                conversationsRequest(QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), true);
+                return;
+            }
+            qCWarning(lcTalkOcsApi) << "fetchConversations failed:" << status << message;
+            emit apiError(message);
+        });
 }
 
 void TalkOcsApi::fetchMessages(const QString &token, qint64 lastKnownId)
 {
-    auto url = QUrl(ocsUrl(QStringLiteral("/chat/%1").arg(token)));
-    if (!url.isValid()) {
-        qCWarning(lcTalkOcsApi) << "Cannot fetch messages: no account state";
+    const auto base = baseUrlOf(_accountState);
+    if (base.isEmpty()) {
+        emit apiError(QStringLiteral("Kein Konto verbunden."));
         return;
     }
+    messagesRequest(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), token, lastKnownId);
+}
 
+void TalkOcsApi::messagesRequest(const QString &apiBase, const QString &token, qint64 lastKnownId)
+{
+    QUrl url(apiBase + QStringLiteral("/chat/%1").arg(token));
     QUrlQuery query;
     if (lastKnownId > 0) {
         query.addQueryItem(QStringLiteral("lookIntoFuture"), QStringLiteral("1"));
@@ -78,50 +97,49 @@ void TalkOcsApi::fetchMessages(const QString &token, qint64 lastKnownId)
     }
     url.setQuery(query);
 
-    QNetworkRequest req;
-    req.setRawHeader("OCS-APIRequest", "true");
-
-    auto *account = _accountState->account().data();
-    auto *reply = account->sendRawRequest("GET", url, req);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, token]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            qCWarning(lcTalkOcsApi) << "fetchMessages failed:" << reply->errorString();
-            return;
-        }
-        const auto doc = QJsonDocument::fromJson(reply->readAll());
-        const auto data = doc.object().value(QStringLiteral("ocs")).toObject()
-                              .value(QStringLiteral("data")).toArray();
-        emit messagesReceived(data, token);
-    });
+    ocsRequest(_accountState, "GET", url.toString(), {},
+        [this, token](const QJsonObject &payload, int) {
+            const auto data = payload.value(QStringLiteral("data")).toArray();
+            emit messagesReceived(data, token);
+        },
+        [this, apiBase, token, lastKnownId](int status, const QString &message) {
+            if (status == 404 && apiBase.contains(QStringLiteral("v4"))) {
+                messagesRequest(QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), token, lastKnownId);
+                return;
+            }
+            qCWarning(lcTalkOcsApi) << "fetchMessages failed:" << status << message;
+            emit apiError(message);
+        });
 }
 
 void TalkOcsApi::sendMessage(const QString &token, const QString &text)
 {
-    const auto url = QUrl(ocsUrl(QStringLiteral("/chat/%1").arg(token)));
-    if (!url.isValid()) {
-        qCWarning(lcTalkOcsApi) << "Cannot send message: no account state";
+    const auto base = baseUrlOf(_accountState);
+    if (base.isEmpty()) {
+        emit apiError(QStringLiteral("Kein Konto verbunden."));
         return;
     }
+    sendRequest(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), token, text);
+}
 
-    QNetworkRequest req;
-    req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/x-www-form-urlencoded"));
-    req.setRawHeader("OCS-APIRequest", "true");
-
-    QUrlQuery body;
-    body.addQueryItem(QStringLiteral("message"), text);
-
-    auto *account = _accountState->account().data();
-    auto *reply = account->sendRawRequest("POST", url, req, body.toString(QUrl::FullyEncoded).toUtf8());
-    connect(reply, &QNetworkReply::finished, this, [this, reply, token]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            qCWarning(lcTalkOcsApi) << "sendMessage failed:" << reply->errorString();
-            return;
-        }
-        qCInfo(lcTalkOcsApi) << "Message sent to" << token;
-        emit messageSent(token);
-    });
+void TalkOcsApi::sendRequest(const QString &apiBase, const QString &token, const QString &text)
+{
+    const auto url = apiBase + QStringLiteral("/chat/%1").arg(token);
+    // Talk API contract: form-urlencoded body with the "message" field.
+    ocsRequest(_accountState, "POST", url, chatBody(text),
+        [this, token](const QJsonObject &, int) {
+            qCInfo(lcTalkOcsApi) << "Message sent to" << token;
+            emit messageSent(token);
+        },
+        [this, apiBase, token, text](int status, const QString &message) {
+            if (status == 404 && apiBase.contains(QStringLiteral("v4"))) {
+                sendRequest(QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), token, text);
+                return;
+            }
+            qCWarning(lcTalkOcsApi) << "sendMessage failed:" << status << message;
+            emit apiError(message);
+        },
+        {{QByteArray("Content-Type"), QByteArray("application/x-www-form-urlencoded")}});
 }
 
 } // namespace OCC

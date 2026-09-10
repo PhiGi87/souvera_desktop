@@ -47,6 +47,8 @@ private:
     void setStatus(const QString &text, bool isError = false);
 
     void onFolderSelected(const QModelIndex &index);
+    void onMessageDoubleClicked(const QModelIndex &index);
+    void applyViewSettings();
     void onMessageSelected(const QModelIndex &index);
     void onNewMessage();
     void onReply();
@@ -54,7 +56,8 @@ private:
     void onRefresh();
     void runSearch();
 
-    QSplitter *_splitter = nullptr;
+    QSplitter *_rootSplitter = nullptr;
+    QSplitter *_rightSplitter = nullptr;
     QTreeView *_folderView = nullptr;
     QListView *_messageView = nullptr;
     QTextBrowser *_preview = nullptr;
@@ -70,6 +73,8 @@ private:
     EmailListDelegate *_messageDelegate = nullptr;
     QString _mailUser;
     bool _mailRemintTried = false;
+    bool _verticalLayout = false;
+    bool _showPreviewLines = true;
 
     JmapMailboxModel *_folderModel = nullptr;
     JmapEmailListModel *_messageModel = nullptr;

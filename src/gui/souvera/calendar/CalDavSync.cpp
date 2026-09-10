@@ -4,6 +4,7 @@
  */
 
 #include "CalDavSync.h"
+#include "net/OcsDavClient.h"
 
 #include "accountstate.h"
 #include "account.h"
@@ -37,21 +38,19 @@ void CalDavSync::fetchCalendars()
     }
 
     auto url = makeCalendarUrl(QString());
-    QNetworkRequest req(url);
-    req.setRawHeader("Depth", "1");
-    req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/xml; charset=utf-8"));
-
     auto body = buildPropfindBody();
-    auto *reply = _accountState->account()->sendRawRequest("PROPFIND", url, req, body);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            emit errorOccurred(reply->errorString());
-            return;
-        }
-        auto calendars = parseCalendars(reply->readAll());
-        emit calendarsLoaded(calendars);
-    });
+    OcsDavClient::davRequest(_accountState, "PROPFIND", url, body,
+        [this](const QByteArray &xml, int) {
+            auto calendars = parseCalendars(xml);
+            if (calendars.isEmpty()) {
+                qCWarning(lcCalDavSync) << "No calendars found via PROPFIND";
+            }
+            emit calendarsLoaded(calendars);
+        },
+        [this](int status, const QString &message) {
+            qCWarning(lcCalDavSync) << "fetchCalendars failed:" << status << message;
+            emit errorOccurred(message);
+        });
 }
 
 void CalDavSync::fetchEvents(const QString &calendarUri, const QDate &from, const QDate &to)
@@ -62,21 +61,16 @@ void CalDavSync::fetchEvents(const QString &calendarUri, const QDate &from, cons
     }
 
     auto url = makeCalendarUrl(calendarUri);
-    QNetworkRequest req(url);
-    req.setRawHeader("Depth", "1");
-    req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/xml; charset=utf-8"));
-
     auto body = buildReportBody(from, to);
-    auto *reply = _accountState->account()->sendRawRequest("REPORT", url, req, body);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            emit errorOccurred(reply->errorString());
-            return;
-        }
-        auto events = parseEvents(reply->readAll());
-        emit eventsLoaded(events);
-    });
+    OcsDavClient::davRequest(_accountState, "REPORT", url, body,
+        [this](const QByteArray &xml, int) {
+            auto events = parseEvents(xml);
+            emit eventsLoaded(events);
+        },
+        [this](int status, const QString &message) {
+            qCWarning(lcCalDavSync) << "fetchEvents failed:" << status << message;
+            emit errorOccurred(message);
+        });
 }
 
 void CalDavSync::createEvent(const QString &calendarUri, const QByteArray &iCalData)
@@ -88,23 +82,14 @@ void CalDavSync::createEvent(const QString &calendarUri, const QByteArray &iCalD
 
     auto uid = QUuid::createUuid().toString(QUuid::WithoutBraces);
     auto url = makeEventUrl(calendarUri, uid);
-    QNetworkRequest req(url);
-    req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("text/calendar; charset=utf-8"));
-
-    auto *reply = _accountState->account()->sendRawRequest("PUT", url, req, iCalData);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
+    OcsDavClient::davRequest(_accountState, "PUT", url, iCalData,
+        [this](const QByteArray &, int) {
+            emit eventCreated(true);
+        },
+        [this](int, const QString &message) {
+            qCWarning(lcCalDavSync) << "createEvent failed:" << message;
             emit eventCreated(false);
-            return;
-        }
-        auto statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        auto success = (statusCode == 201 || statusCode == 204);
-        if (!success) {
-            qCWarning(lcCalDavSync) << "createEvent returned" << statusCode;
-        }
-        emit eventCreated(success);
-    });
+        });
 }
 
 QByteArray CalDavSync::buildPropfindBody()

@@ -7,7 +7,7 @@
 #define CALENDARPANEL_H
 
 #include <QWidget>
-#include <QCalendarWidget>
+#include <QDate>
 #include <QListWidget>
 #include <QSplitter>
 #include <QPushButton>
@@ -29,7 +29,8 @@ public:
 
 private:
     void setupUi();
-    void applyCalendarTheme();
+    void onMonthChanged(int months);
+    void onGoToday();
     void onDateSelected(const QDate &date);
     void onNewEvent();
     void onCalendarsLoaded(const QVariantList &calendars);
@@ -37,7 +38,9 @@ private:
     void onEventCreated(bool success);
 
     QSplitter *_splitter = nullptr;
-    QCalendarWidget *_calendar = nullptr;
+    CalendarMonthView *_monthView = nullptr;
+    QPushButton *_todayBtn = nullptr;
+    QDate _selectedDate;
     QListWidget *_eventList = nullptr;
     QPushButton *_newEventBtn = nullptr;
 

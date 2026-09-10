@@ -21,10 +21,14 @@ public:
 
     void paint(QPainter *painter, const QStyleOptionViewItem &option,
                const QModelIndex &index) const override;
+
+    void setShowPreview(bool show) { _showPreview = show; }
+    [[nodiscard]] bool showPreview() const { return _showPreview; }
     [[nodiscard]] QSize sizeHint(const QStyleOptionViewItem &option,
                                  const QModelIndex &index) const override;
 
 private:
+    bool _showPreview = true;
     [[nodiscard]] static QString formatDate(const QDateTime &received);
 };
 
