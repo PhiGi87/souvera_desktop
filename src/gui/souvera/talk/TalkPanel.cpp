@@ -15,6 +15,8 @@
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QPainter>
+#include <QStyledItemDelegate>
 #include <QLabel>
 #include <QLoggingCategory>
 #include <QPushButton>

@@ -33,7 +33,7 @@ signals:
     void apiError(const QString &message);
 
 private:
-    void conversationsRequest(const QString &apiBase);
+    void conversationsRequest(const QString &apiBase, bool isV1Retry);
     void messagesRequest(const QString &apiBase, const QString &token, qint64 lastKnownId);
     void sendRequest(const QString &apiBase, const QString &token, const QString &text);
 
