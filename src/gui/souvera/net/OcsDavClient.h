@@ -6,6 +6,9 @@
 #ifndef OCSDAVCLIENT_H
 #define OCSDAVCLIENT_H
 
+#include <QByteArray>
+#include <QList>
+#include <QPair>
 #include <functional>
 
 class QByteArray;

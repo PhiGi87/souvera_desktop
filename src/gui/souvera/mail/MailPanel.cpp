@@ -19,6 +19,7 @@
 #include <QLoggingCategory>
 #include <QHeaderView>
 #include <QMessageBox>
+#include <QSettings>
 #include <QUrlQuery>
 
 Q_LOGGING_CATEGORY(lcMailPanel, "souvera.mail.panel")
@@ -240,7 +241,7 @@ void MailPanel::setupUi()
     _rootSplitter->setObjectName(QStringLiteral("MailSplitter"));
     _rightSplitter = new QSplitter(Qt::Horizontal, _rootSplitter);
 
-    auto *folderPanel = new QWidget(_splitter);
+    auto *folderPanel = new QWidget(_rootSplitter);
     folderPanel->setObjectName(QStringLiteral("MailFolderPanel"));
     auto *folderLayout = new QVBoxLayout(folderPanel);
     folderLayout->setContentsMargins(0, 0, 0, 0);
@@ -256,7 +257,7 @@ void MailPanel::setupUi()
     folderLayout->addWidget(_folderView);
     _rootSplitter->addWidget(folderPanel);
 
-    auto *messagePanel = new QWidget(_splitter);
+    auto *messagePanel = new QWidget(_rootSplitter);
     messagePanel->setObjectName(QStringLiteral("MailMessagePanel"));
     auto *messageLayout = new QVBoxLayout(messagePanel);
     messageLayout->setContentsMargins(0, 0, 0, 0);
@@ -270,7 +271,7 @@ void MailPanel::setupUi()
     messageLayout->addWidget(_messageView);
     _rightSplitter->addWidget(messagePanel);
 
-    auto *previewPanel = new QWidget(_splitter);
+    auto *previewPanel = new QWidget(_rootSplitter);
     previewPanel->setObjectName(QStringLiteral("MailPreviewPanel"));
     auto *previewLayout = new QVBoxLayout(previewPanel);
     previewLayout->setContentsMargins(0, 0, 0, 0);
