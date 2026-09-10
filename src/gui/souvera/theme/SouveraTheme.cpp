@@ -10,6 +10,7 @@
 #include <QHash>
 #include <QLoggingCategory>
 #include <QPainter>
+#include <QPalette>
 #include <QPixmapCache>
 #include <QSettings>
 #include <QSvgRenderer>
