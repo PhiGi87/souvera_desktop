@@ -184,7 +184,7 @@ void OfficeManager::lockRemote(AccountState *accountState, const QUrl &davUrl,
         auto token = QString::fromLatin1(reply->rawHeader("Lock-Token"));
         if (token.isEmpty()) {
             const auto match = QRegularExpression(
-                QStringLiteral("locktoken[^>]*>\s*<[^>]*>\s*<?(opaquelocktoken:[^<\s>]*)")).match(body);
+                QStringLiteral("locktoken[^>]*>\\s*<[^>]*>\\s*<?(opaquelocktoken:[^<\\s>]*)")).match(body);
             if (match.hasMatch()) {
                 token = match.captured(1);
             }

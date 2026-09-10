@@ -39,7 +39,7 @@ void DeckOcsApi::fetchBoards()
     const auto url = apiUrl(QStringLiteral("/boards"));
     if (url.isEmpty()) return;
 
-    jsonRequest(_accountState, "GET", QUrl(url), {},
+    OcsDavClient::jsonRequest(_accountState, "GET", QUrl(url), {},
         [this](const QJsonDocument &doc, int) {
             emit boardsReceived(doc.array());
         },
@@ -54,7 +54,7 @@ void DeckOcsApi::fetchStacks(int boardId)
     const auto url = apiUrl(QStringLiteral("/boards/%1/stacks").arg(boardId));
     if (url.isEmpty()) return;
 
-    jsonRequest(_accountState, "GET", QUrl(url), {},
+    OcsDavClient::jsonRequest(_accountState, "GET", QUrl(url), {},
         [this](const QJsonDocument &doc, int) {
             emit stacksReceived(doc.array());
         },
@@ -69,7 +69,7 @@ void DeckOcsApi::fetchCards(int stackId)
     const auto url = apiUrl(QStringLiteral("/stacks/%1/cards").arg(stackId));
     if (url.isEmpty()) return;
 
-    jsonRequest(_accountState, "GET", QUrl(url), {},
+    OcsDavClient::jsonRequest(_accountState, "GET", QUrl(url), {},
         [this, stackId](const QJsonDocument &doc, int) {
             emit cardsReceived(doc.array(), stackId);
         },
@@ -90,7 +90,7 @@ void DeckOcsApi::createCard(int stackId, const QString &title, const QString &de
     body[QStringLiteral("type")] = QStringLiteral("plain");
 
     const auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
-    jsonRequest(_accountState, "POST", QUrl(url), payload,
+    OcsDavClient::jsonRequest(_accountState, "POST", QUrl(url), payload,
         [this, stackId](const QJsonDocument &doc, int) {
             emit cardCreated(doc.object(), stackId);
         },
@@ -109,7 +109,7 @@ void DeckOcsApi::moveCard(int cardId, int stackId)
     body[QStringLiteral("order")] = 999;
 
     const auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
-    jsonRequest(_accountState, "PUT", QUrl(url), payload,
+    OcsDavClient::jsonRequest(_accountState, "PUT", QUrl(url), payload,
         [this](const QJsonDocument &, int) {
             emit cardMoved();
         },

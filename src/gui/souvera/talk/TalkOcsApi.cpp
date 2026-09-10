@@ -60,7 +60,7 @@ void TalkOcsApi::fetchConversations()
 void TalkOcsApi::conversationsRequest(const QString &apiBase, bool isV1Retry)
 {
     const auto url = apiBase + QStringLiteral("/room");
-    ocsRequest(_accountState, "GET", url, {},
+    OcsDavClient::ocsRequest(_accountState, "GET", url, {},
         [this](const QJsonObject &payload, int) {
             const auto data = payload.value(QStringLiteral("data")).toArray();
             qCInfo(lcTalkOcsApi) << "Fetched" << data.size() << "conversations";
@@ -97,7 +97,7 @@ void TalkOcsApi::messagesRequest(const QString &apiBase, const QString &token, q
     }
     url.setQuery(query);
 
-    ocsRequest(_accountState, "GET", url.toString(), {},
+    OcsDavClient::ocsRequest(_accountState, "GET", url.toString(), {},
         [this, token](const QJsonObject &payload, int) {
             const auto data = payload.value(QStringLiteral("data")).toArray();
             emit messagesReceived(data, token);
@@ -126,7 +126,7 @@ void TalkOcsApi::sendRequest(const QString &apiBase, const QString &token, const
 {
     const auto url = apiBase + QStringLiteral("/chat/%1").arg(token);
     // Talk API contract: form-urlencoded body with the "message" field.
-    ocsRequest(_accountState, "POST", url, chatBody(text),
+    OcsDavClient::ocsRequest(_accountState, "POST", url, chatBody(text),
         [this, token](const QJsonObject &, int) {
             qCInfo(lcTalkOcsApi) << "Message sent to" << token;
             emit messageSent(token);
