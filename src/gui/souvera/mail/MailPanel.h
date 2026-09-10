@@ -36,6 +36,7 @@ public:
     ~MailPanel() override;
 
     void setAccountState(AccountState *accountState);
+    void applyViewSettings();
 
 private:
     void setupUi();
@@ -48,7 +49,6 @@ private:
 
     void onFolderSelected(const QModelIndex &index);
     void onMessageDoubleClicked(const QModelIndex &index);
-    void applyViewSettings();
     void onMessageSelected(const QModelIndex &index);
     void onNewMessage();
     void onReply();

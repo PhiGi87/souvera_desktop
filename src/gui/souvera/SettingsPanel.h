@@ -19,8 +19,6 @@ class AccountState;
 class Folder;
 class JmapClient;
 
-class QCheckBox;
-
 class SettingsPanel : public QWidget
 {
     Q_OBJECT
