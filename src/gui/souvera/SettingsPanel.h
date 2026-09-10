@@ -13,6 +13,8 @@ class QPushButton;
 class QVBoxLayout;
 class QScrollArea;
 
+class QCheckBox;
+
 namespace OCC {
 
 class AccountState;

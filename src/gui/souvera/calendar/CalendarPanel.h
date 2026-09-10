@@ -13,6 +13,8 @@
 #include <QPushButton>
 #include <QVariantList>
 
+class CalendarMonthView;
+
 namespace OCC {
 
 class CalDavSync;
