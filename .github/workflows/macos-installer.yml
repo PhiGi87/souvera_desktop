@@ -75,9 +75,9 @@ jobs:
             perl -0pi -e 's/self\.description = "Nextcloud Desktop Client"/self.description = "Souvera Workspace Desktop Client"/' "$BP"
             perl -0pi -e 's/self\.displayName = "Nextcloud"/self.displayName = "Souvera Workspace"/' "$BP"
             perl -0pi -e 's{self\.webpage = "https://nextcloud\.com"}{self.webpage = "https://souvera.work"}' "$BP"
-            perl -0pi -e 's/self\.defines\["appname"\] = "nextcloud"/self.defines["appname"] = "souvera"\n        self.defines["productname"] = "Souvera Workspace"/' "$BP"
+            perl -0pi -e 's/self\.defines\["appname"\] = "nextcloud"/self.defines["appname"] = "Souvera Workspace"\n        self.defines["productname"] = "Souvera Workspace"/' "$BP"
             perl -0pi -e 's/self\.defines\["company"\] = "Nextcloud GmbH"/self.defines["company"] = "Host-On Service Provider GmbH"/' "$BP"
-            perl -0pi -e 's/self\.applicationExecutable = "nextcloud"/self.applicationExecutable = "souvera"/' "$BP"
+            perl -0pi -e 's/self\.applicationExecutable = "nextcloud"/self.applicationExecutable = "Souvera Workspace"/' "$BP"
             echo "== Patched blueprint =="
             grep -nE 'displayName|appname|productname|"company"|applicationExecutable|^import os' "$BP"
           else
