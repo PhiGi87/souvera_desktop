@@ -7,6 +7,7 @@
 #define TALKPANEL_H
 
 #include <QWidget>
+#include <QEvent>
 #include <QJsonArray>
 #include <QLabel>
 #include <QPointer>
@@ -32,10 +33,14 @@ public:
 
     void setAccountState(AccountState *state);
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private:
     void setupUi();
     void onConversationSelected();
     void sendMessage();
+    void startCall();
     void pollMessages();
     void onConversationsReceived(const QJsonArray &conversations);
     void onMessagesReceived(const QJsonArray &messages, const QString &token);
