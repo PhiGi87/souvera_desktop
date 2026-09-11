@@ -173,11 +173,11 @@ void OfficeWindow::setupView(const QString &localPath, const QUrl &collaboraUrl)
             return;
         }
         // Load failed: clean up and fall through to the browser fallback.
-        qCWarning(lcOfficeView) << "Embedded engine failed to load" << localPath;
+        qWarning() << "Embedded engine failed to load" << localPath;
         scroll->deleteLater();
         _view = nullptr;
     } else {
-        qCWarning(lcOfficeView) << "Bundled LibreOffice not found at" << loPath;
+        qWarning() << "Bundled LibreOffice not found at" << loPath;
     }
 #endif
 
