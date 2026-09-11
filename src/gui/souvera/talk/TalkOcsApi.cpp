@@ -67,7 +67,13 @@ void TalkOcsApi::conversationsRequest(const QString &apiBase, bool isV1Retry)
         [this](const QJsonValue &payload, int) {
             // OCS data for Talk rooms is an ARRAY of conversation objects
             const auto data = payload.toArray();
-            qCInfo(lcTalkOcsApi) << "Fetched" << data.size() << "conversations";
+            qCInfo(lcTalkOcsApi) << "Conversations received:" << data.size()
+                                  << "payload type:" << (payload.isArray() ? "array" : payload.isObject() ? "object" : "other")
+                                  << "payload preview:" << QJsonDocument(payload.toObject()).toJson(QJsonDocument::Compact).left(200);
+            if (data.isEmpty()) {
+                qCWarning(lcTalkOcsApi) << "Talk returned 0 conversations!"
+                                         << "Raw payload:" << QJsonDocument(payload.toObject()).toJson(QJsonDocument::Compact);
+            }
             emit conversationsReceived(data);
         },
         [this, apiBase, isV1Retry, url](int status, const QString &message) {

@@ -19,6 +19,7 @@
 #include <QSysInfo>
 
 #include <QDesktopServices>
+#include <QDir>
 #include <QFileDialog>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -242,6 +243,25 @@ void SettingsPanel::setupUi()
     _mailTestResult->setWordWrap(true);
     mailRowLayout->addWidget(_mailTestResult, 1);
     diagLayout->addWidget(mailRow);
+
+    auto *logPathLabel = new QLabel(QStringLiteral(
+        "Debug-Log: %LOCALAPPDATA%\\Souvera\\startup.log"), diagCard);
+    logPathLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
+    logPathLabel->setWordWrap(true);
+    diagLayout->addWidget(logPathLabel);
+
+    auto *logBtn = new QPushButton(QStringLiteral("Debug-Log \u00F6ffnen"), diagCard);
+    logBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+    connect(logBtn, &QPushButton::clicked, this, []() {
+#ifdef Q_OS_WIN
+        const auto base = qEnvironmentVariable("LOCALAPPDATA");
+        const auto logPath = base + QStringLiteral("\\Souvera\\startup.log");
+#else
+        const auto logPath = QDir::homePath() + QStringLiteral("/.local/share/Souvera/startup.log");
+#endif
+        QDesktopServices::openUrl(QUrl::fromLocalFile(logPath));
+    });
+    diagLayout->addWidget(logBtn);
 
     auto *exportBtn = new QPushButton(QStringLiteral("Diagnose-Bericht exportieren"), diagCard);
     exportBtn->setObjectName(QStringLiteral("PanelPrimaryBtn"));

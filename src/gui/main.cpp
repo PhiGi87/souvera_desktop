@@ -25,6 +25,7 @@
 
 #include <QDateTime>
 #include <QDir>
+#include <QFileInfo>
 #include <QFile>
 #include <QMutex>
 #include <QStandardPaths>
@@ -65,7 +66,7 @@ void startupMessageHandler(QtMsgType type, const QMessageLogContext &context, co
 {
     QMutexLocker locker(&g_logMutex);
 
-    const auto timestamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz"));
+    const auto timestamp = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz"));
     const auto category = context.category ? QString::fromLatin1(context.category) : QStringLiteral("default");
     const auto file = context.file ? QString::fromLatin1(context.file) : QString();
     const auto line = context.line > 0 ? QStringLiteral(":%1").arg(context.line) : QString();
@@ -79,7 +80,6 @@ void startupMessageHandler(QtMsgType type, const QMessageLogContext &context, co
     case QtFatalMsg:    level = QStringLiteral("FATAL"); break;
     }
 
-    // Write to file (always, with flush)
     if (g_logFile.isOpen()) {
         g_logStream << timestamp << " [" << level << "] [" << category << "] "
                     << msg
@@ -88,13 +88,11 @@ void startupMessageHandler(QtMsgType type, const QMessageLogContext &context, co
         g_logStream.flush();
     }
 
-    // Also write to stderr for console debugging
     fprintf(stderr, "%s [%s] [%s] %s\n",
             qPrintable(timestamp), qPrintable(level), qPrintable(category), qPrintable(msg));
     fflush(stderr);
 
     if (type == QtFatalMsg) {
-        // Make sure the log is written before aborting
         if (g_logFile.isOpen()) {
             g_logStream.flush();
             g_logFile.flush();
@@ -103,25 +101,38 @@ void startupMessageHandler(QtMsgType type, const QMessageLogContext &context, co
     }
 }
 
+QString startupLogPath()
+{
+    // Fixed path that does NOT depend on QApplication being created.
+    // %LOCALAPPDATA%\Souvera\startup.log on Windows,
+    // ~/.local/share/Souvera/startup.log on Linux,
+    // ~/Library/Application Support/Souvera/startup.log on macOS.
+#ifdef Q_OS_WIN
+    const auto base = qEnvironmentVariable("LOCALAPPDATA");
+    if (!base.isEmpty()) return base + QStringLiteral("/Souvera/startup.log");
+#endif
+    const auto home = QDir::homePath();
+    return home + QStringLiteral("/.local/share/Souvera/startup.log");
+}
+
 void installStartupLogger()
 {
-    // Determine the log directory
-    const auto logDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-        + QStringLiteral("/Souvera Workspace");
-    QDir().mkpath(logDir);
-    const auto logPath = logDir + QStringLiteral("/startup.log");
+    const auto logPath = startupLogPath();
+    QDir().mkpath(QFileInfo(logPath).absolutePath());
 
+    // Truncate: each session gets a fresh log so the last entry is always
+    // the last action before a crash.
     g_logFile.setFileName(logPath);
-    if (g_logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+    if (g_logFile.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
         g_logStream.setDevice(&g_logFile);
-        g_logStream << "\n=== Souvera Workspace started: "
+        g_logStream << "=== Souvera Workspace started: "
                     << QDateTime::currentDateTime().toString(Qt::ISODate)
                     << " ===" << Qt::endl;
         g_logStream.flush();
         qInstallMessageHandler(startupMessageHandler);
-        qDebug() << "Startup logger installed. Log file:" << logPath;
+        qDebug() << "Startup logger installed:" << logPath;
     } else {
-        fprintf(stderr, "WARNING: Could not open startup log file: %s\n", qPrintable(logPath));
+        fprintf(stderr, "FATAL: Could not open startup log: %s\n", qPrintable(logPath));
     }
 }
 

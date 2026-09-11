@@ -84,7 +84,13 @@ void runRequest(AccountState *accountState, const QByteArray &verb, const QUrl &
         reply = nam->sendCustomRequest(req, verb, body);
     }
 
-    qCInfo(lcOcsDavClient) << ">>>" << verb << url.toString();
+    // Log credentials state (NOT the password itself) for auth debugging
+    const auto creds = acc->credentials();
+    const auto credUser = creds ? creds->user() : QStringLiteral("NULL");
+    const auto credPwLen = creds ? creds->password().size() : -1;
+    qCInfo(lcOcsDavClient) << ">>>" << verb << url.toString()
+                            << "user:" << credUser
+                            << "password_length:" << credPwLen;
 
     QObject::connect(reply, &QNetworkReply::finished, reply, [guard, reply, onFinished, verb, url]() {
         reply->deleteLater();
@@ -94,13 +100,25 @@ void runRequest(AccountState *accountState, const QByteArray &verb, const QUrl &
         const auto status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         const auto errorStr = reply->errorString();
 
+        // Check for redirects — Qt strips the Authorization header on redirect
+        const auto redirectUrl = reply->attribute(QNetworkRequest::RedirectionTargetAttribute);
+        if (redirectUrl.isValid()) {
+            qCWarning(lcOcsDavClient) << "REDIRECT detected!" << url.toString()
+                                       << "->" << redirectUrl.toString()
+                                       << "(auth header may be stripped)";
+        }
+
+        const auto bodyPreview = QString::fromUtf8(reply->peek(500));
+
         if (status == 0 || (status < 200 || status >= 300)) {
             qCWarning(lcOcsDavClient) << "<<<" << verb << url.toString()
                                        << "status:" << status
-                                       << "error:" << errorStr;
+                                       << "error:" << errorStr
+                                       << "body:" << bodyPreview;
         } else {
             qCInfo(lcOcsDavClient) << "<<<" << verb << url.toString()
-                                    << "status:" << status;
+                                    << "status:" << status
+                                    << "body:" << bodyPreview;
         }
 
         onFinished(reply, status);
