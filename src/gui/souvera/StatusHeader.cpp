@@ -103,13 +103,13 @@ void StatusHeader::updateSyncStatus()
 
     if (folders.isEmpty()) {
         _syncIconLabel->setText(QStringLiteral("\u25CB"));
-        _syncTextLabel->setText(QStringLiteral("Keine Ordner"));
+        _syncTextLabel->setText(QStringLiteral("Keine Sync-Ordner"));
         return;
     }
 
     if (fm->isAnySyncRunning()) {
         _syncIconLabel->setText(QStringLiteral("\u25B6"));
-        _syncTextLabel->setText(QStringLiteral("Synchronisiere\u2026"));
+        _syncTextLabel->setText(QStringLiteral("Dateien werden synchronisiert\u2026"));
         return;
     }
 
@@ -143,13 +143,13 @@ void StatusHeader::updateSyncStatus()
 
     if (hasError) {
         _syncIconLabel->setText(QStringLiteral("\u2716"));
-        _syncTextLabel->setText(QStringLiteral("Sync-Fehler"));
+        _syncTextLabel->setText(QStringLiteral("Datei-Sync-Fehler"));
     } else if (hasWarning) {
         _syncIconLabel->setText(QStringLiteral("\u26A0"));
-        _syncTextLabel->setText(QStringLiteral("Warnung"));
+        _syncTextLabel->setText(QStringLiteral("Datei-Sync-Warnung"));
     } else if (allGood) {
         _syncIconLabel->setText(QStringLiteral("\u2714"));
-        _syncTextLabel->setText(QStringLiteral("Synchronisiert"));
+        _syncTextLabel->setText(QStringLiteral("Dateien synchron"));
     } else {
         _syncIconLabel->setText(QStringLiteral("\u25CB"));
         _syncTextLabel->setText(QStringLiteral("Warte\u2026"));

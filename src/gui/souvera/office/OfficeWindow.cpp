@@ -141,34 +141,51 @@ void OfficeWindow::setupView(const QString &localPath, const QUrl &collaboraUrl)
     auto *layout = qobject_cast<QVBoxLayout *>(this->layout());
 
 #if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
-    auto *scroll = new QScrollArea(this);
-    scroll->setObjectName(QStringLiteral("PanelScroll"));
-    scroll->setWidgetResizable(false);
-    scroll->setAlignment(Qt::AlignCenter);
+    // Guard: only try the embedded engine when the bundled LibreOffice is
+    // actually found. LokOffice::instance() can crash (segfault in
+    // lok_init_2) when the program directory does not exist.
+    const auto loPath = LokOffice::installPath();
+    if (LokOffice::isSupported() && !loPath.isEmpty()) {
+        auto *scroll = new QScrollArea(this);
+        scroll->setObjectName(QStringLiteral("PanelScroll"));
+        scroll->setWidgetResizable(false);
+        scroll->setAlignment(Qt::AlignCenter);
 
-    _view = new OfficeDocumentView(scroll);
-    _loaded = _view->load(localPath);
+        _view = new OfficeDocumentView(scroll);
+        _loaded = _view->load(localPath);
 
-    scroll->setWidget(_view);
-    layout->addWidget(scroll, 1);
+        if (_loaded) {
+            scroll->setWidget(_view);
+            layout->addWidget(scroll, 1);
 
-    connect(_view, &OfficeDocumentView::zoomChanged, this, [this](double zoom) {
-        _zoomLabel->setText(QStringLiteral("%1 %").arg(qRound(zoom * 100)));
-    });
-    connect(_view, &OfficeDocumentView::modifiedChanged, this, [this](bool modified) {
-        auto title = windowTitle();
-        if (modified && !title.endsWith(QStringLiteral(" *"))) {
-            setWindowTitle(title + QStringLiteral(" *"));
-        } else if (!modified && title.endsWith(QStringLiteral(" *"))) {
-            title.chop(2);
-            setWindowTitle(title);
+            connect(_view, &OfficeDocumentView::zoomChanged, this, [this](double zoom) {
+                _zoomLabel->setText(QStringLiteral("%1 %").arg(qRound(zoom * 100)));
+            });
+            connect(_view, &OfficeDocumentView::modifiedChanged, this, [this](bool modified) {
+                auto title = windowTitle();
+                if (modified && !title.endsWith(QStringLiteral(" *"))) {
+                    setWindowTitle(title + QStringLiteral(" *"));
+                } else if (!modified && title.endsWith(QStringLiteral(" *"))) {
+                    title.chop(2);
+                    setWindowTitle(title);
+                }
+            });
+            return;
         }
-    });
-#else
+        // Load failed: clean up and fall through to the browser fallback.
+        qCWarning(lcOfficeView) << "Embedded engine failed to load" << localPath;
+        scroll->deleteLater();
+        _view = nullptr;
+    } else {
+        qCWarning(lcOfficeView) << "Bundled LibreOffice not found at" << loPath;
+    }
+#endif
+
+    // Fallback: open in the system browser (macOS always, Win/Linux when
+    // the embedded engine is unavailable).
     Q_UNUSED(localPath)
-    // macOS: embed the Collabora editor from the workspace instead.
-#ifdef BUILD_WITH_WEBENGINE
     if (collaboraUrl.isValid() && !collaboraUrl.isEmpty()) {
+#ifdef BUILD_WITH_WEBENGINE
         auto *view = new QWebEngineView(this);
         auto *page = new QWebEnginePage(QWebEngineProfile::defaultProfile(), view);
         connect(page, &QWebEnginePage::featurePermissionRequested, this,
@@ -180,21 +197,19 @@ void OfficeWindow::setupView(const QString &localPath, const QUrl &collaboraUrl)
         _fallbackView = view;
         layout->addWidget(view, 1);
         _loaded = true;
-        return;
-    }
-#endif
-    auto *hint = new QLabel(QStringLiteral(
-        "Eingebettetes Office ist auf diesem System nicht verf\u00FCgbar.\n"
-        "Das Dokument wird im Browser ge\u00F6ffnet."), this);
-    hint->setObjectName(QStringLiteral("PanelPlaceholder"));
-    hint->setAlignment(Qt::AlignCenter);
-    _fallbackView = hint;
-    layout->addWidget(hint, 1);
-    if (collaboraUrl.isValid() && !collaboraUrl.isEmpty()) {
+#else
         QDesktopServices::openUrl(collaboraUrl);
         _loaded = true;
-    }
 #endif
+    } else {
+        auto *hint = new QLabel(QStringLiteral(
+            "Dokument konnte nicht geöffnet werden.\n"
+            "Kein eingebettetes Office verfügbar und keine Server-URL."), this);
+        hint->setObjectName(QStringLiteral("PanelPlaceholder"));
+        hint->setAlignment(Qt::AlignCenter);
+        _fallbackView = hint;
+        layout->addWidget(hint, 1);
+    }
 }
 
 bool OfficeWindow::isModified() const

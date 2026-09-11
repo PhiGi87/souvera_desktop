@@ -95,9 +95,11 @@ void SouveraMainWindow::setupAccountGate()
     connect(am, &AccountManager::accountRemoved, this, [this]() {
         auto *manager = AccountManager::instance();
         if (manager && manager->accounts().isEmpty()) {
-            // Mandatory setup again - nothing is clickable until connected.
+            // Mandatory setup again: close the workspace content, disable the
+            // window and bring the login wizard back to the front.
             _setupPending = true;
             setEnabled(false);
+            showNormal(); // un-fullscreen so the wizard is visible
             QTimer::singleShot(200, this, &SouveraMainWindow::enforceWorkspaceSetup);
         }
     });

@@ -54,7 +54,7 @@ void TalkOcsApi::fetchConversations()
         return;
     }
     // Talk 4.x endpoint; falls back to v1 when the server is older.
-    conversationsRequest(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), false);
+    conversationsRequest(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), false);
 }
 
 void TalkOcsApi::conversationsRequest(const QString &apiBase, bool isV1Retry)
@@ -68,7 +68,7 @@ void TalkOcsApi::conversationsRequest(const QString &apiBase, bool isV1Retry)
         },
         [this, apiBase, isV1Retry](int status, const QString &message) {
             if (status == 404 && !isV1Retry) {
-                conversationsRequest(QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), true);
+                conversationsRequest(QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), true);
                 return;
             }
             qCWarning(lcTalkOcsApi) << "fetchConversations failed:" << status << message;
@@ -83,7 +83,7 @@ void TalkOcsApi::fetchMessages(const QString &token, qint64 lastKnownId)
         emit apiError(QStringLiteral("Kein Konto verbunden."));
         return;
     }
-    messagesRequest(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), token, lastKnownId);
+    messagesRequest(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), token, lastKnownId);
 }
 
 void TalkOcsApi::messagesRequest(const QString &apiBase, const QString &token, qint64 lastKnownId)
@@ -103,8 +103,8 @@ void TalkOcsApi::messagesRequest(const QString &apiBase, const QString &token, q
             emit messagesReceived(data, token);
         },
         [this, apiBase, token, lastKnownId](int status, const QString &message) {
-            if (status == 404 && apiBase.contains(QStringLiteral("v4"))) {
-                messagesRequest(QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), token, lastKnownId);
+            if (status == 404 && apiBase.contains(QStringLiteral("v1"))) {
+                messagesRequest(QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), token, lastKnownId);
                 return;
             }
             qCWarning(lcTalkOcsApi) << "fetchMessages failed:" << status << message;
@@ -119,7 +119,7 @@ void TalkOcsApi::sendMessage(const QString &token, const QString &text)
         emit apiError(QStringLiteral("Kein Konto verbunden."));
         return;
     }
-    sendRequest(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), token, text);
+    sendRequest(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), token, text);
 }
 
 void TalkOcsApi::sendRequest(const QString &apiBase, const QString &token, const QString &text)
@@ -132,8 +132,8 @@ void TalkOcsApi::sendRequest(const QString &apiBase, const QString &token, const
             emit messageSent(token);
         },
         [this, apiBase, token, text](int status, const QString &message) {
-            if (status == 404 && apiBase.contains(QStringLiteral("v4"))) {
-                sendRequest(QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), token, text);
+            if (status == 404 && apiBase.contains(QStringLiteral("v1"))) {
+                sendRequest(QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), token, text);
                 return;
             }
             qCWarning(lcTalkOcsApi) << "sendMessage failed:" << status << message;

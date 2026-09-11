@@ -15,6 +15,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QUrlQuery>
 
 Q_LOGGING_CATEGORY(lcOcsDavClient, "souvera.net.ocsdav")
 
@@ -102,10 +103,18 @@ void OcsDavClient::ocsRequest(AccountState *accountState, const QByteArray &verb
     if (!extraHeaders.isEmpty()) {
         headers.append(extraHeaders);
     }
-    runRequest(accountState, verb, QUrl(ocsPath),
+
+    // Force JSON: some Nextcloud servers ignore the Accept header and
+    // return XML unless format=json is in the query string.
+    QUrl url(ocsPath);
+    QUrlQuery query(url);
+    query.addQueryItem(QStringLiteral("format"), QStringLiteral("json"));
+    url.setQuery(query);
+
+    runRequest(accountState, verb, url,
                headers,
                body,
-               [onJson, onError](QNetworkReply *reply, int status) {
+               [onJson, onError, ocsPath](QNetworkReply *reply, int status) {
         if (!reply) {
             onError(-1, QStringLiteral("Kein Konto verbunden."));
             return;
@@ -115,9 +124,18 @@ void OcsDavClient::ocsRequest(AccountState *accountState, const QByteArray &verb
             return;
         }
 
-        const auto doc = QJsonDocument::fromJson(reply->readAll());
+        const auto rawData = reply->readAll();
+        const auto doc = QJsonDocument::fromJson(rawData);
         if (doc.isNull()) {
-            onError(status, QStringLiteral("Ung\u00FCltige Server-Antwort (kein JSON)."));
+            // Log the first 300 bytes so the user report tells us exactly
+            // what the server returned (HTML login page, XML, empty, etc.)
+            const auto preview = QString::fromUtf8(rawData.left(300));
+            qCWarning(lcOcsDavClient) << "OCS non-JSON response for" << ocsPath
+                                      << "status:" << status
+                                      << "body:" << preview;
+            onError(status, QStringLiteral(
+                "Ung\u00FCltige Server-Antwort. Der Server hat kein JSON zur\u00FCckgegeben.\n"
+                "Antwort-Anfang: %1").arg(preview.left(120)));
             return;
         }
         const auto root = doc.object();
@@ -132,6 +150,33 @@ void OcsDavClient::ocsRequest(AccountState *accountState, const QByteArray &verb
             return;
         }
         onJson(payload.toObject(), status);
+    });
+}
+
+void OcsDavClient::davRequestDepth(AccountState *accountState, const QByteArray &verb,
+                                   const QUrl &url, const QByteArray &xmlBody, int depth,
+                                   const RawCallback &onBody, const ErrorCallback &onError)
+{
+    HeaderList headers = {{QByteArray("Accept"), QByteArray("application/xml")},
+                          {QByteArray("Content-Type"), QByteArray("application/xml; charset=utf-8")},
+                          {QByteArray("Depth"), QByteArray::number(depth)}};
+    runRequest(accountState, verb, url,
+               headers,
+               xmlBody,
+               [onBody, onError, url](QNetworkReply *reply, int status) {
+        if (!reply) {
+            onError(-1, QStringLiteral("Kein Konto verbunden."));
+            return;
+        }
+        if (status < 200 || status >= 300) {
+            const auto bodyPreview = QString::fromUtf8(reply->readAll().left(200));
+            qCWarning(lcOcsDavClient) << "DAV request failed:" << status
+                                      << "url:" << url.toString()
+                                      << "body:" << bodyPreview;
+            onError(status, statusMessage(status, reply->errorString()));
+            return;
+        }
+        onBody(reply->readAll(), status);
     });
 }
 
@@ -161,16 +206,24 @@ void OcsDavClient::davRequest(AccountState *accountState, const QByteArray &verb
                               const QUrl &url, const QByteArray &xmlBody,
                               const RawCallback &onBody, const ErrorCallback &onError)
 {
+    // PROPFIND/REPORT require a Depth header; default to 0 (collection only).
+    const auto isPropfind = (verb == "PROPFIND");
+    HeaderList headers = {{QByteArray("Accept"), QByteArray("application/xml")},
+                          {QByteArray("Content-Type"), QByteArray("application/xml; charset=utf-8")},
+                          {QByteArray("Depth"), isPropfind ? QByteArray("0") : QByteArray("1")}};
     runRequest(accountState, verb, url,
-               {{QByteArray("Accept"), QByteArray("application/xml")},
-                {QByteArray("Content-Type"), QByteArray("application/xml; charset=utf-8")}},
+               headers,
                xmlBody,
-               [onBody, onError](QNetworkReply *reply, int status) {
+               [onBody, onError, url](QNetworkReply *reply, int status) {
         if (!reply) {
             onError(-1, QStringLiteral("Kein Konto verbunden."));
             return;
         }
         if (status < 200 || status >= 300) {
+            const auto bodyPreview = QString::fromUtf8(reply->readAll().left(200));
+            qCWarning(lcOcsDavClient) << "DAV request failed:" << status
+                                      << "url:" << url.toString()
+                                      << "body:" << bodyPreview;
             onError(status, statusMessage(status, reply->errorString()));
             return;
         }

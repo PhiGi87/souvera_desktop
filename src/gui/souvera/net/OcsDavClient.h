@@ -58,6 +58,11 @@ public:
     static void davRequest(AccountState *accountState, const QByteArray &verb,
                            const QUrl &url, const QByteArray &xmlBody,
                            const RawCallback &onBody, const ErrorCallback &onError);
+
+    /** DAV request with explicit Depth header (0=collection only, 1=children too). */
+    static void davRequestDepth(AccountState *accountState, const QByteArray &verb,
+                                const QUrl &url, const QByteArray &xmlBody, int depth,
+                                const RawCallback &onBody, const ErrorCallback &onError);
 };
 
 } // namespace OCC

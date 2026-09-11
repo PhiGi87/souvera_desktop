@@ -39,7 +39,9 @@ void CalDavSync::fetchCalendars()
 
     auto url = makeCalendarUrl(QString());
     auto body = buildPropfindBody();
-    OcsDavClient::davRequest(_accountState, "PROPFIND", url, body,
+    // Depth: 1 lists all calendars in the user's calendar collection.
+    // OcsDavClient::davRequest defaults to Depth: 0 for PROPFIND.
+    OcsDavClient::davRequestDepth(_accountState, "PROPFIND", url, body, 1,
         [this](const QByteArray &xml, int) {
             auto calendars = parseCalendars(xml);
             if (calendars.isEmpty()) {
