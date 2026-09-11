@@ -336,6 +336,8 @@ set(client_SRCS
     souvera/talk/TalkConversationModel.cpp
     souvera/talk/TalkMessageWidget.h
     souvera/talk/TalkMessageWidget.cpp
+    souvera/talk/EmojiPicker.h
+    souvera/talk/EmojiPicker.cpp
     souvera/talk/CallWindow.h
     souvera/talk/CallWindow.cpp
     souvera/deck/DeckPanel.h

@@ -41,6 +41,10 @@ void DeckOcsApi::fetchBoards()
 
     OcsDavClient::jsonRequest(_accountState, "GET", QUrl(url), {},
         [this](const QJsonDocument &doc, int) {
+            if (!doc.isArray() || doc.array().isEmpty()) {
+                qCWarning(lcDeckOcsApi) << "Boards response is not a non-empty array; head:"
+                                        << QString::fromUtf8(doc.toJson(QJsonDocument::Compact).left(200));
+            }
             emit boardsReceived(doc.array());
         },
         [this](int, const QString &message) {

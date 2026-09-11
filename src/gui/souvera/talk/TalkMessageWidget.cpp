@@ -4,6 +4,8 @@
  */
 
 #include "TalkMessageWidget.h"
+#include <QPushButton>
+#include <QDesktopServices>
 #include "theme/SouveraTheme.h"
 
 #include <QHBoxLayout>
@@ -77,12 +79,25 @@ void TalkMessageWidget::setMessage(const QJsonObject &msg)
     const auto messageText = msg.value(QStringLiteral("message")).toString();
     const auto timestamp = static_cast<qint64>(msg.value(QStringLiteral("timestamp")).toDouble());
 
-    _nameLabel->setText(actorDisplayName);
+    _nameLabel->setText(actorDisplayName.isEmpty() ? QStringLiteral("\U0001F464") : actorDisplayName);
 
     const auto dt = QDateTime::fromSecsSinceEpoch(timestamp);
     _timestampLabel->setText(dt.toString(QStringLiteral("HH:mm")));
 
-    _textLabel->setText(messageText);
+    // File shares: render as an attachment card instead of plain text.
+    const auto messageParameters = msg.value(QStringLiteral("messageParameters")).toObject();
+    const auto fileParam = messageParameters.value(QStringLiteral("file")).toObject();
+    const auto messageType = msg.value(QStringLiteral("messageType")).toString();
+    if (!fileParam.isEmpty() || messageType == QLatin1String("file_message")
+        || messageType == QLatin1String("voice-message")) {
+        renderAttachment(fileParam);
+        return;
+    }
+    if (_attachmentCard) {
+        _attachmentCard->deleteLater();
+        _attachmentCard = nullptr;
+    }
+    setMessageText(messageText);
 
     QPixmap avatar(24, 24);
     avatar.fill(Qt::transparent);
@@ -102,6 +117,70 @@ void TalkMessageWidget::setMessage(const QJsonObject &msg)
         p.drawText(QRect(0, 0, 24, 24), Qt::AlignCenter, initial);
     }
     _avatarLabel->setPixmap(avatar);
+}
+
+void TalkMessageWidget::setMessageText(const QString &text)
+{
+    _textLabel->setVisible(true);
+    _textLabel->setText(text);
+}
+
+void TalkMessageWidget::renderAttachment(const QJsonObject &fileParam)
+{
+    if (_attachmentCard) {
+        _attachmentCard->deleteLater();
+        _attachmentCard = nullptr;
+    }
+    _textLabel->setVisible(false);
+
+    auto *bubbleLayout = qobject_cast<QVBoxLayout *>(_bubble->layout());
+    if (!bubbleLayout) return;
+
+    const auto name = fileParam.value(QStringLiteral("name")).toString(
+        QStringLiteral("Anhang"));
+    const auto link = fileParam.value(QStringLiteral("link")).toString();
+    const auto sizeBytes = static_cast<qint64>(fileParam.value(QStringLiteral("size")).toDouble());
+
+    auto sizeText = QString();
+    if (sizeBytes > 0) {
+        if (sizeBytes >= 1024 * 1024) {
+            sizeText = QStringLiteral(" \u00B7 %1 MB").arg(sizeBytes / (1024.0 * 1024.0), 0, 'f', 1);
+        } else if (sizeBytes >= 1024) {
+            sizeText = QStringLiteral(" \u00B7 %1 KB").arg(sizeBytes / 1024.0, 0, 'f', 0);
+        } else {
+            sizeText = QStringLiteral(" \u00B7 %1 B").arg(sizeBytes);
+        }
+    }
+
+    _attachmentCard = new QWidget(_bubble);
+    auto *cardLayout = new QHBoxLayout(_attachmentCard);
+    cardLayout->setContentsMargins(8, 8, 8, 8);
+    cardLayout->setSpacing(10);
+
+    auto *iconLabel = new QLabel(QStringLiteral("\U0001F4CE"), _attachmentCard);
+    iconLabel->setStyleSheet(QStringLiteral("font-size: 22px;"));
+    cardLayout->addWidget(iconLabel);
+
+    auto *nameLabel = new QLabel(name + sizeText, _attachmentCard);
+    nameLabel->setWordWrap(true);
+    nameLabel->setStyleSheet(QStringLiteral(
+        "font-size: 13px; color: %1;")
+        .arg(SouveraTheme::instance()->color(SouveraTheme::Color::TextPrimary).name()));
+    cardLayout->addWidget(nameLabel, 1);
+
+    auto *openBtn = new QPushButton(QStringLiteral("\u00D6ffnen"), _attachmentCard);
+    openBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+    openBtn->setEnabled(!link.isEmpty());
+    if (!link.isEmpty()) {
+        connect(openBtn, &QPushButton::clicked, this, [link]() {
+            QDesktopServices::openUrl(QUrl(link));
+        });
+    }
+    cardLayout->addWidget(openBtn);
+
+    _attachmentCard->setStyleSheet(QStringLiteral(
+        "background-color: rgba(128,128,128,40); border-radius: 8px;"));
+    bubbleLayout->addWidget(_attachmentCard);
 }
 
 void TalkMessageWidget::applyBubbleStyle()

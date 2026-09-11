@@ -4,6 +4,7 @@
  */
 
 #include "TalkPanel.h"
+#include "EmojiPicker.h"
 #include "CallWindow.h"
 #include "theme/SouveraTheme.h"
 #include "TalkConversationModel.h"
@@ -172,6 +173,12 @@ TalkPanel::TalkPanel(QWidget *parent)
 
     connect(_ocsApi, &TalkOcsApi::conversationsReceived,
             this, &TalkPanel::onConversationsReceived);
+    connect(_ocsApi, &TalkOcsApi::selfUserReceived, this, [this](const QString &userId) {
+        if (!userId.isEmpty() && userId != _currentUserId) {
+            qCInfo(lcTalkPanel) << "Own Talk actor id:" << userId;
+            _currentUserId = userId;
+        }
+    });
     connect(_ocsApi, &TalkOcsApi::messagesReceived,
             this, &TalkPanel::onMessagesReceived);
     connect(_ocsApi, &TalkOcsApi::messageSent,
@@ -192,6 +199,7 @@ void TalkPanel::setAccountState(AccountState *state)
     _ocsApi->setAccountState(state);
     if (state && state->account()) {
         _currentUserId = state->account()->davUser();
+        _ocsApi->fetchSelfUser();
         setApiStatus(QStringLiteral("Lade Chats\u2026"));
         _ocsApi->fetchConversations();
     } else {
@@ -290,10 +298,28 @@ void TalkPanel::setupUi()
 
     _messageInput = new QTextEdit(inputBar);
     _messageInput->setObjectName(QStringLiteral("TalkMessageInput"));
+    auto *emojiBtn = new QPushButton(QStringLiteral("\U0001F600"), inputBar);
+    emojiBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+    emojiBtn->setFixedSize(44, 44);
+    emojiBtn->setToolTip(QStringLiteral("Emoji ausw\u00E4hlen"));
+    inputLayout->addWidget(emojiBtn);
+
     _messageInput->setPlaceholderText(QStringLiteral("Nachricht schreiben\u2026"));
     _messageInput->setFixedHeight(44);
     _messageInput->setAcceptRichText(false);
     inputLayout->addWidget(_messageInput, 1);
+
+    connect(emojiBtn, &QPushButton::clicked, this, [this, emojiBtn]() {
+        if (!_emojiPicker) {
+            _emojiPicker = new EmojiPicker(this);
+            connect(_emojiPicker, &EmojiPicker::emojiClicked, this, [this](const QString &emoji) {
+                _messageInput->insertPlainText(emoji);
+                _messageInput->setFocus();
+            });
+        }
+        _emojiPicker->move(emojiBtn->mapToGlobal(QPoint(0, -_emojiPicker->sizeHint().height() - 6)));
+        _emojiPicker->show();
+    });
 
     auto *buttonColumn = new QVBoxLayout;
     buttonColumn->setContentsMargins(0, 0, 0, 0);

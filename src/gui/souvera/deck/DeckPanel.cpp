@@ -135,6 +135,9 @@ DeckPanel::DeckPanel(QWidget *parent)
             loadBoard(_boardComboBox->currentData().toInt());
         } else {
             _boardComboBox->setPlaceholderText(QStringLiteral("Keine Boards \u2014 ist Nextcloud Deck aktiv?"));
+            setStatus(QStringLiteral(
+                "Keine Boards empfangen. Entweder hat dein Konto keine Deck-Boards, "
+                "oder der Server blockiert die API. Diagnose: startup.log \u2192 'deck'"), true);
         }
     });
 

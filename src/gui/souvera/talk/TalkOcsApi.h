@@ -23,6 +23,7 @@ public:
     void setAccountState(AccountState *state);
 
     void fetchConversations();
+    void fetchSelfUser();
     void fetchMessages(const QString &token, qint64 lastKnownId = 0);
     void sendMessage(const QString &token, const QString &text);
 
@@ -30,6 +31,7 @@ signals:
     void conversationsReceived(const QJsonArray &conversations);
     void messagesReceived(const QJsonArray &messages, const QString &token);
     void messageSent(const QString &token);
+    void selfUserReceived(const QString &userId);
     void apiError(const QString &message);
 
 private:

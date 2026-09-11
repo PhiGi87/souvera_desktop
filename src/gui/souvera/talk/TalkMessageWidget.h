@@ -33,6 +33,10 @@ private:
     QLabel *_timestampLabel = nullptr;
     QLabel *_textLabel = nullptr;
     QWidget *_bubble = nullptr;
+    QWidget *_attachmentCard = nullptr;
+
+    void setMessageText(const QString &text);
+    void renderAttachment(const QJsonObject &fileParam);
 };
 
 } // namespace OCC

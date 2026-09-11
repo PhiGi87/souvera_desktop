@@ -19,6 +19,62 @@ QWidget#ContentArea {
     background-color: @contentBackground@;
 }
 
+/* Generic widgets inside the content area (incl. inherited Nextcloud
+   settings widgets) must never render dark-on-dark: force theme colors. */
+QWidget#ContentArea QLabel {
+    color: @textPrimary@;
+    background: transparent;
+}
+
+QWidget#ContentArea QCheckBox,
+QWidget#ContentArea QRadioButton {
+    color: @textPrimary@;
+    background: transparent;
+    spacing: 8px;
+}
+
+QWidget#ContentArea QGroupBox {
+    color: @textPrimary@;
+    border: 1px solid @border@;
+    border-radius: 8px;
+    margin-top: 10px;
+    padding-top: 8px;
+}
+
+QWidget#ContentArea QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 4px;
+    color: @textSecondary@;
+}
+
+QWidget#ContentArea QLineEdit,
+QWidget#ContentArea QSpinBox {
+    background-color: @surface@;
+    color: @textPrimary@;
+    border: 1px solid @border@;
+    border-radius: 6px;
+    padding: 5px 8px;
+    selection-background-color: @accent@;
+    selection-color: @onAccent@;
+}
+
+QWidget#ContentArea QComboBox {
+    background-color: @surface@;
+    color: @textPrimary@;
+    border: 1px solid @border@;
+    border-radius: 6px;
+    padding: 5px 8px;
+}
+
+QWidget#ContentArea QComboBox QAbstractItemView {
+    background-color: @surface@;
+    color: @textPrimary@;
+    border: 1px solid @borderStrong@;
+    selection-background-color: @accentOverlayHover@;
+    selection-color: @textPrimary@;
+}
+
 /* ==========================================================================
    Left Sidebar
    ========================================================================== */

@@ -5,6 +5,8 @@
 
 #include "TalkConversationModel.h"
 
+#include <algorithm>
+
 #include <QLoggingCategory>
 
 Q_LOGGING_CATEGORY(lcTalkConvModel, "souvera.talk.conversationmodel")
@@ -88,8 +90,17 @@ QHash<int, QByteArray> TalkConversationModel::roleNames() const
 
 void TalkConversationModel::setConversations(const QJsonArray &conversations)
 {
+    // Newest conversation always on top (like WhatsApp/Telegram).
+    auto list = conversations;
+    std::sort(list.begin(), list.end(), [](const QJsonValue &a, const QJsonValue &b) {
+        const auto ta = a.toObject().value(QStringLiteral("lastMessage")).toObject()
+                            .value(QStringLiteral("timestamp")).toDouble();
+        const auto tb = b.toObject().value(QStringLiteral("lastMessage")).toObject()
+                            .value(QStringLiteral("timestamp")).toDouble();
+        return ta > tb;
+    });
     beginResetModel();
-    _conversations = conversations;
+    _conversations = list;
     endResetModel();
     qCInfo(lcTalkConvModel) << "Model updated with" << _conversations.size() << "conversations";
 }

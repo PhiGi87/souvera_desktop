@@ -101,6 +101,27 @@ void TalkOcsApi::fetchMessages(const QString &token, qint64 lastKnownId)
     messagesRequest(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), token, lastKnownId);
 }
 
+void TalkOcsApi::fetchSelfUser()
+{
+    // The Talk actorId is the plain Nextcloud user id (e.g. "users/jdoe" style
+    // prefixes stripped server-side), which can differ from the DAV login
+    // name. /cloud/user returns the authoritative id used in chat payloads.
+    const auto base = baseUrlOf(_accountState);
+    if (base.isEmpty()) return;
+
+    OcsDavClient::ocsRequest(_accountState, "GET",
+        base + QStringLiteral("/ocs/v2.php/cloud/user"), {},
+        [this](const QJsonValue &payload, int) {
+            const auto id = payload.toObject().value(QStringLiteral("id")).toString();
+            if (!id.isEmpty()) {
+                emit selfUserReceived(id);
+            }
+        },
+        [this](int status, const QString &message) {
+            qCWarning(lcTalkOcsApi) << "fetchSelfUser failed:" << status << message;
+        });
+}
+
 void TalkOcsApi::messagesRequest(const QString &apiBase, const QString &token, qint64 lastKnownId)
 {
     QUrl url(apiBase + QStringLiteral("/chat/%1").arg(token));

@@ -21,6 +21,7 @@
 namespace OCC {
 
 class TalkConversationModel;
+class EmojiPicker;
 class TalkOcsApi;
 class AccountState;
 
@@ -59,6 +60,7 @@ private:
     QTimer *_pollTimer = nullptr;
 
     TalkConversationModel *_conversationModel = nullptr;
+    EmojiPicker *_emojiPicker = nullptr;
     TalkOcsApi *_ocsApi = nullptr;
     QPointer<AccountState> _accountState;
 
