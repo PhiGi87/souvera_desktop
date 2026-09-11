@@ -215,9 +215,14 @@ void SouveraMainWindow::setupUi()
 
 void SouveraMainWindow::loadStyleSheet()
 {
-    // Apply palette FIRST (always works, even if the QSS has a parse error),
-    // then the stylesheet for panel-specific styling on top.
-    SouveraTheme::applyTheme();
+    // The QSS is applied immediately (safe during construction).
+    // The palette is deferred to after the window is shown — changing
+    // the global palette while the Systray QML engine and other widgets
+    // are mid-initialization can crash on Windows.
+    SouveraTheme::instance()->applyStyleSheet();
+    QTimer::singleShot(0, this, []() {
+        SouveraTheme::instance()->applyPalette();
+    });
 }
 
 void SouveraMainWindow::switchToTab(int index)

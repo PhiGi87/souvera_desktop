@@ -84,10 +84,7 @@ void runRequest(AccountState *accountState, const QByteArray &verb, const QUrl &
         reply = nam->sendCustomRequest(req, verb, body);
     }
 
-    const auto credUser = accountState->account()->credentials()
-        ? accountState->account()->credentials()->user() : QStringLiteral("?");
-    qCInfo(lcOcsDavClient) << ">>>" << verb << url.toString()
-                           << "user:" << credUser;
+    qCInfo(lcOcsDavClient) << ">>>" << verb << url.toString();
 
     QObject::connect(reply, &QNetworkReply::finished, reply, [guard, reply, onFinished, verb, url]() {
         reply->deleteLater();
@@ -100,12 +97,10 @@ void runRequest(AccountState *accountState, const QByteArray &verb, const QUrl &
         if (status == 0 || (status < 200 || status >= 300)) {
             qCWarning(lcOcsDavClient) << "<<<" << verb << url.toString()
                                        << "status:" << status
-                                       << "error:" << errorStr
-                                       << "bytes:" << reply->size();
+                                       << "error:" << errorStr;
         } else {
             qCInfo(lcOcsDavClient) << "<<<" << verb << url.toString()
-                                    << "status:" << status
-                                    << "bytes:" << reply->size();
+                                    << "status:" << status;
         }
 
         onFinished(reply, status);
