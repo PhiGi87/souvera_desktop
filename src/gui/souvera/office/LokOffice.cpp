@@ -81,7 +81,11 @@ LibreOfficeKit *LokOffice::instance()
     const auto profileDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
         + QStringLiteral("/office-profile");
     QDir().mkpath(profileDir);
-    const auto profileUrl = QUrl::fromLocalFile(profileDir).toString();
+    // LibreOffice splits its CONFIGURATION_LAYERS string on spaces, so the
+    // file URL MUST be fully encoded ("Souvera Workspace" -> "Souvera%20Workspace").
+    // A raw space makes the bootstrap fail with "missing ':'" and leaves a
+    // half-initialized office that segfaults on the first interaction.
+    const auto profileUrl = QUrl::fromLocalFile(profileDir).toString(QUrl::FullyEncoded);
 
     qCInfo(lcLokOffice) << "Initializing LibreOfficeKit from" << path;
     g_office = lok_init_2(path.toUtf8().constData(), profileUrl.toUtf8().constData());
