@@ -49,6 +49,7 @@
 #endif
 
 #include <QClipboard>
+#include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
 #include <QGuiApplication>
@@ -243,14 +244,17 @@ void ownCloudGui::slotOpenSettingsDialog()
 
 void ownCloudGui::slotOpenMainDialog()
 {
+    qDebug() << "[ownCloudGui] slotOpenMainDialog — creating main window";
     if (_mainWindow.isNull()) {
         _mainWindow = new SouveraMainWindow;
+        qDebug() << "[ownCloudGui] SouveraMainWindow created";
         connect(_mainWindow.data(), &SouveraMainWindow::settingsRequested,
             this, &ownCloudGui::slotShowSettings);
     }
     _mainWindow->showNormal();
     _mainWindow->raise();
     _mainWindow->activateWindow();
+    qDebug() << "[ownCloudGui] main window shown and activated";
 }
 
 void ownCloudGui::slotShowSouveraWorkspace()

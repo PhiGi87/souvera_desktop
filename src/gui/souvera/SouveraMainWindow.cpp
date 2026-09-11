@@ -37,6 +37,7 @@ namespace OCC {
 SouveraMainWindow::SouveraMainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
+    qDebug() << "[SouveraMainWindow] constructor started";
     setWindowTitle(QStringLiteral("Souvera Workspace"));
     setWindowFlags(Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint
                    | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint
@@ -44,7 +45,9 @@ SouveraMainWindow::SouveraMainWindow(QWidget *parent)
     setAttribute(Qt::WA_QuitOnClose, false);
 
     loadStyleSheet();
+    qDebug() << "[SouveraMainWindow] loadStyleSheet done";
     setupUi();
+    qDebug() << "[SouveraMainWindow] setupUi done";
 
     QSettings settings;
     settings.beginGroup(QStringLiteral("souveraMainWindow"));
@@ -75,6 +78,7 @@ SouveraMainWindow::SouveraMainWindow(QWidget *parent)
     switchToTab(0);
 
     setupAccountGate();
+    qDebug() << "[SouveraMainWindow] setupAccountGate done — constructor complete";
 }
 
 void SouveraMainWindow::setupAccountGate()
@@ -119,8 +123,11 @@ void SouveraMainWindow::setupAccountGate()
 void SouveraMainWindow::connectAccount(AccountState *accountState)
 {
     if (!accountState) return;
+    qDebug() << "[SouveraMainWindow] connectAccount started";
     _mailPanel->setAccountState(accountState);
+    qDebug() << "[SouveraMainWindow] mailPanel wired";
     _talkPanel->setAccountState(accountState);
+    qDebug() << "[SouveraMainWindow] talkPanel wired";
     _deckPanel->setAccountState(accountState);
     _calendarPanel->setAccountState(accountState);
     _notesPanel->setAccountState(accountState);

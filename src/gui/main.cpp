@@ -23,6 +23,12 @@
 #include "updater/updater.h"
 #endif
 
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QMutex>
+#include <QStandardPaths>
+#include <QTextStream>
 #include <QTimer>
 #include <QMessageBox>
 #include <QDebug>
@@ -34,6 +40,92 @@
 #include <QOperatingSystemVersion>
 
 using namespace OCC;
+
+// ---------------------------------------------------------------------------
+// Persistent startup debug log.
+//
+// Installs a Qt message handler that writes EVERY log line (qDebug, qInfo,
+// qWarning, qCritical) to a file with immediate flush. This captures the
+// exact point of a crash — the last line in the file is the last thing
+// the app did before dying.
+//
+// Log location:
+//   Windows: %LOCALAPPDATA%\Souvera Workspace\startup.log
+//   Linux:   ~/.local/share/Souvera Workspace/startup.log
+//   macOS:   ~/Library/Logs/Souvera Workspace/startup.log
+// ---------------------------------------------------------------------------
+
+namespace {
+
+QFile g_logFile;
+QTextStream g_logStream;
+QMutex g_logMutex;
+
+void startupMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+{
+    QMutexLocker locker(&g_logMutex);
+
+    const auto timestamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz"));
+    const auto category = context.category ? QString::fromLatin1(context.category) : QStringLiteral("default");
+    const auto file = context.file ? QString::fromLatin1(context.file) : QString();
+    const auto line = context.line > 0 ? QStringLiteral(":%1").arg(context.line) : QString();
+
+    QString level;
+    switch (type) {
+    case QtDebugMsg:    level = QStringLiteral("DEBUG"); break;
+    case QtInfoMsg:     level = QStringLiteral("INFO "); break;
+    case QtWarningMsg:  level = QStringLiteral("WARN "); break;
+    case QtCriticalMsg: level = QStringLiteral("CRIT "); break;
+    case QtFatalMsg:    level = QStringLiteral("FATAL"); break;
+    }
+
+    // Write to file (always, with flush)
+    if (g_logFile.isOpen()) {
+        g_logStream << timestamp << " [" << level << "] [" << category << "] "
+                    << msg
+                    << "  (" << file << line << ")"
+                    << Qt::endl;
+        g_logStream.flush();
+    }
+
+    // Also write to stderr for console debugging
+    fprintf(stderr, "%s [%s] [%s] %s\n",
+            qPrintable(timestamp), qPrintable(level), qPrintable(category), qPrintable(msg));
+    fflush(stderr);
+
+    if (type == QtFatalMsg) {
+        // Make sure the log is written before aborting
+        if (g_logFile.isOpen()) {
+            g_logStream.flush();
+            g_logFile.flush();
+        }
+        abort();
+    }
+}
+
+void installStartupLogger()
+{
+    // Determine the log directory
+    const auto logDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+        + QStringLiteral("/Souvera Workspace");
+    QDir().mkpath(logDir);
+    const auto logPath = logDir + QStringLiteral("/startup.log");
+
+    g_logFile.setFileName(logPath);
+    if (g_logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        g_logStream.setDevice(&g_logFile);
+        g_logStream << "\n=== Souvera Workspace started: "
+                    << QDateTime::currentDateTime().toString(Qt::ISODate)
+                    << " ===" << Qt::endl;
+        g_logStream.flush();
+        qInstallMessageHandler(startupMessageHandler);
+        qDebug() << "Startup logger installed. Log file:" << logPath;
+    } else {
+        fprintf(stderr, "WARNING: Could not open startup log file: %s\n", qPrintable(logPath));
+    }
+}
+
+} // namespace
 
 void warnSystray()
 {
@@ -51,17 +143,25 @@ void warnSystray()
 
 int main(int argc, char **argv)
 {
+    // Persistent debug log — must be installed before ANY other code runs
+    // so we capture the initialization sequence and any crash point.
+    installStartupLogger();
+    qDebug() << "=== main() entered ===";
+
 #ifdef Q_OS_WIN
     SetDllDirectory(L"");
     qputenv("QML_IMPORT_PATH", (QDir::currentPath() + QStringLiteral("/qml")).toLatin1());
 #endif
 
     Q_INIT_RESOURCE(resources);
+    qDebug() << "Q_INIT_RESOURCE(resources) done";
     Q_INIT_RESOURCE(theme);
+    qDebug() << "Q_INIT_RESOURCE(theme) done";
     // Souvera Workspace resources (stylesheet + sidebar icons) live in a
     // static library; without explicit initialisation the linker drops them
     // and the app would run with a completely unstyled UI.
     Q_INIT_RESOURCE(souvera);
+    qDebug() << "Q_INIT_RESOURCE(souvera) done";
 
     // OpenSSL 1.1.0: No explicit initialisation or de-initialisation is necessary.
 #ifdef Q_OS_MACOS
