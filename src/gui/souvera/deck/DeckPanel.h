@@ -63,11 +63,13 @@ private:
     void clearColumns();
     void loadBoard(int boardId);
     void onNewCard();
+    void setStatus(const QString &message, bool isError = false);
 
     QScrollArea *_scrollArea = nullptr;
     QWidget *_columnsContainer = nullptr;
     QHBoxLayout *_columnsLayout = nullptr;
     QComboBox *_boardComboBox = nullptr;
+    QLabel *_statusLabel = nullptr;
     int _currentBoardId = -1;
     QPushButton *_newCardButton = nullptr;
     DeckOcsApi *_ocsApi = nullptr;

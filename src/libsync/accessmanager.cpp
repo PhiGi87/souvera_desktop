@@ -86,8 +86,12 @@ QNetworkReply *AccessManager::createRequest(QNetworkAccessManager::Operation op,
         newRequest.setHeader(QNetworkRequest::UserAgentHeader, Utility::userAgentString());
     }
 
-    // Some firewalls reject requests that have a "User-Agent" but no "Accept" header
-    newRequest.setRawHeader(QByteArray("Accept"), "*/*");
+    // Some firewalls reject requests that have a "User-Agent" but no "Accept" header.
+    // Never overwrite a caller-provided Accept header: the OCS API returns XML
+    // for "Accept: */*" even when the endpoint has JSON data.
+    if (newRequest.rawHeader(QByteArray("Accept")).isEmpty()) {
+        newRequest.setRawHeader(QByteArray("Accept"), "*/*");
+    }
 
     QByteArray verb = newRequest.attribute(QNetworkRequest::CustomVerbAttribute).toByteArray();
     // For PROPFIND (assumed to be a WebDAV op), set xml/utf8 as content type/encoding

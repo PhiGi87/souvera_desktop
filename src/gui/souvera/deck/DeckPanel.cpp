@@ -119,6 +119,7 @@ DeckPanel::DeckPanel(QWidget *parent)
 
     connect(_ocsApi, &DeckOcsApi::boardsReceived, this, [this](const QJsonArray &boards) {
         qCInfo(lcDeckPanel) << "Boards received:" << boards.size();
+        setStatus(QString{});
         _boards = boards;
         _boardComboBox->clear();
         for (const auto &boardVal : boards) {
@@ -165,12 +166,28 @@ DeckPanel::DeckPanel(QWidget *parent)
 
     connect(_ocsApi, &DeckOcsApi::apiError, this, [this](const QString &message) {
         qCWarning(lcDeckPanel) << "API error:" << message;
+        setStatus(message, true);
     });
 }
 
 void DeckPanel::setAccountState(AccountState *state)
 {
     _ocsApi->setAccountState(state);
+    if (state && state->account()) {
+        setStatus(QStringLiteral("Lade Boards\u2026"));
+        loadBoards();
+    } else {
+        setStatus(QStringLiteral("Kein Konto verbunden."), true);
+    }
+}
+
+void DeckPanel::setStatus(const QString &message, bool isError)
+{
+    if (!_statusLabel) return;
+    _statusLabel->setText(message);
+    _statusLabel->setStyleSheet(QStringLiteral(
+        "color: %1; padding: 0 8px; font-size: 11px; background: transparent;")
+        .arg(isError ? QStringLiteral("#ef4444") : QStringLiteral("#64748b")));
 }
 
 void DeckPanel::loadBoards()
@@ -197,6 +214,10 @@ void DeckPanel::setupUi()
 
     _boardComboBox = new QComboBox(toolbar);
     _boardComboBox->setObjectName(QStringLiteral("MailSendAsCombo"));
+
+    _statusLabel = new QLabel(toolbar);
+    _statusLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
+    _statusLabel->setWordWrap(true);
     _boardComboBox->setMinimumWidth(200);
     _boardComboBox->setPlaceholderText(QStringLiteral("Board ausw\u00E4hlen\u2026"));
     connect(_boardComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -206,6 +227,7 @@ void DeckPanel::setupUi()
         }
     });
     toolbarLayout->addWidget(_boardComboBox);
+    toolbarLayout->addWidget(_statusLabel, 1);
 
     toolbarLayout->addStretch();
 
