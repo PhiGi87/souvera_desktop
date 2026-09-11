@@ -6,6 +6,7 @@
 #include "TalkConversationModel.h"
 
 #include <algorithm>
+#include <vector>
 
 #include <QLoggingCategory>
 
@@ -91,16 +92,26 @@ QHash<int, QByteArray> TalkConversationModel::roleNames() const
 void TalkConversationModel::setConversations(const QJsonArray &conversations)
 {
     // Newest conversation always on top (like WhatsApp/Telegram).
-    auto list = conversations;
-    std::sort(list.begin(), list.end(), [](const QJsonValue &a, const QJsonValue &b) {
-        const auto ta = a.toObject().value(QStringLiteral("lastMessage")).toObject()
+    // QJsonArray cannot be std::sort-ed directly (QJsonValueRef is a proxy
+    // type without std::swap), so sort through a plain vector of objects.
+    std::vector<QJsonObject> list;
+    list.reserve(conversations.size());
+    for (const auto &v : conversations) {
+        list.push_back(v.toObject());
+    }
+    std::sort(list.begin(), list.end(), [](const QJsonObject &a, const QJsonObject &b) {
+        const auto ta = a.value(QStringLiteral("lastMessage")).toObject()
                             .value(QStringLiteral("timestamp")).toDouble();
-        const auto tb = b.toObject().value(QStringLiteral("lastMessage")).toObject()
+        const auto tb = b.value(QStringLiteral("lastMessage")).toObject()
                             .value(QStringLiteral("timestamp")).toDouble();
         return ta > tb;
     });
+    QJsonArray sorted;
+    for (const auto &obj : list) {
+        sorted.append(obj);
+    }
     beginResetModel();
-    _conversations = list;
+    _conversations = sorted;
     endResetModel();
     qCInfo(lcTalkConvModel) << "Model updated with" << _conversations.size() << "conversations";
 }
