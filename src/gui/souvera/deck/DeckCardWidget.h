@@ -9,6 +9,7 @@
 #include <QFrame>
 #include <QJsonObject>
 
+class QHBoxLayout;
 class QLabel;
 class QVBoxLayout;
 
