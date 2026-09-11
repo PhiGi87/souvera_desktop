@@ -5,23 +5,20 @@
 
 #include "DeckOcsApi.h"
 
+#include "account.h"
+#include "accountstate.h"
 #include "net/OcsDavClient.h"
 
+#include <QFile>
 #include <QFileInfo>
 #include <QHttpMultiPart>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QLoggingCategory>
 #include <QMimeDatabase>
 #include <QNetworkRequest>
 #include <QPointer>
 #include <QStandardPaths>
-#include <QFile>
-#include "net/OcsDavClient.h"
-
-#include "accountstate.h"
-#include "account.h"
-
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QLoggingCategory>
 
 Q_LOGGING_CATEGORY(lcDeckOcsApi, "souvera.deck.ocsapi")
 
