@@ -37,12 +37,14 @@ public:
     int stackId() const { return _stackId; }
 
     void addCardWidget(DeckCardWidget *card);
+    void removeCardWidget(DeckCardWidget *card);
+    void insertCardWidget(DeckCardWidget *card, int index);
     void clearCards();
     void updateCardCount();
     void applyColumnTheme();
 
 signals:
-    void cardDropped(int cardId, int fromStackId, int targetStackId);
+    void cardDropped(int cardId, int fromStackId, int targetStackId, int insertIndex);
     void addCardRequested(int targetStackId);
 
 protected:
@@ -52,13 +54,16 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
-    void handleDrop(const QMimeData *mime);
+    void handleDrop(const QMimeData *mime, const QPointF &pos);
+    void showDropIndicator(const QPointF &pos);
+    void hideDropIndicator();
 
     int _stackId = -1;
     QLabel *_headerLabel = nullptr;
     QLabel *_countLabel = nullptr;
     QVBoxLayout *_cardsLayout = nullptr;
     QWidget *_scrollContainer = nullptr;
+    QWidget *_dropIndicator = nullptr;
 };
 
 class DeckPanel : public QWidget
@@ -79,7 +84,7 @@ private:
     void onEditCard(int cardId, int stackId);
     void onDeleteCard(int cardId, int stackId);
     void onAddStack();
-    void onCardDropped(int cardId, int fromStackId, int targetStackId);
+    void onCardDropped(int cardId, int fromStackId, int targetStackId, int insertIndex);
     void setStatus(const QString &message, bool isError = false);
     [[nodiscard]] DeckCardWidget *findCard(int cardId) const;
     void connectCard(DeckCardWidget *card);

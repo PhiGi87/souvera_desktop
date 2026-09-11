@@ -108,6 +108,21 @@ void DeckColumnWidget::addCardWidget(DeckCardWidget *card)
     updateCardCount();
 }
 
+void DeckColumnWidget::removeCardWidget(DeckCardWidget *card)
+{
+    _cardsLayout->removeWidget(card);
+    card->setParent(nullptr);
+    updateCardCount();
+}
+
+void DeckColumnWidget::insertCardWidget(DeckCardWidget *card, int index)
+{
+    // Layout ends with a stretch item: never insert after it.
+    card->setParent(_scrollContainer);
+    _cardsLayout->insertWidget(qBound(0, index, _cardsLayout->count() - 1), card);
+    updateCardCount();
+}
+
 void DeckColumnWidget::clearCards()
 {
     while (_cardsLayout->count() > 1) {
@@ -151,16 +166,18 @@ void DeckColumnWidget::dragEnterEvent(QDragEnterEvent *event)
 
 void DeckColumnWidget::dragMoveEvent(QDragMoveEvent *event)
 {
+    showDropIndicator(event->position());
     event->acceptProposedAction();
 }
 
 void DeckColumnWidget::dropEvent(QDropEvent *event)
 {
-    handleDrop(event->mimeData());
+    hideDropIndicator();
+    handleDrop(event->mimeData(), event->position());
     event->acceptProposedAction();
 }
 
-void DeckColumnWidget::handleDrop(const QMimeData *mime)
+void DeckColumnWidget::handleDrop(const QMimeData *mime, const QPointF &pos)
 {
     const auto data = mime->data(QLatin1String(DeckCardMimeType));
     const auto parts = QString::fromUtf8(data).split(QLatin1Char(':'));
@@ -168,7 +185,49 @@ void DeckColumnWidget::handleDrop(const QMimeData *mime)
     const auto cardId = parts.at(0).toInt();
     const auto fromStackId = parts.at(1).toInt();
     if (cardId <= 0) return;
-    emit cardDropped(cardId, fromStackId, _stackId);
+
+    // Compute the 0-based insertion index from the cursor position: the drop
+    // goes before the first card whose center lies below the cursor.
+    auto insertIndex = 0;
+    for (int i = 0; i < _cardsLayout->count() - 1; ++i) {
+        auto *w = _cardsLayout->itemAt(i)->widget();
+        if (!w || w == _dropIndicator) continue;
+        if (pos.y() < w->geometry().center().y()) break;
+        ++insertIndex;
+    }
+    emit cardDropped(cardId, fromStackId, _stackId, insertIndex);
+}
+
+void DeckColumnWidget::showDropIndicator(const QPointF &pos)
+{
+    if (!_dropIndicator) {
+        _dropIndicator = new QWidget(_scrollContainer);
+        _dropIndicator->setFixedHeight(3);
+        _dropIndicator->setStyleSheet(QStringLiteral(
+            "background-color: %1; border-radius: 1px;")
+            .arg(SouveraTheme::instance()->color(SouveraTheme::Color::Accent).name()));
+        // Insert after the trailing stretch placeholder position handling:
+        // addWidget appends before the stretch via insert below.
+    }
+    auto insertRow = 0;
+    for (int i = 0; i < _cardsLayout->count() - 1; ++i) {
+        auto *w = _cardsLayout->itemAt(i)->widget();
+        if (!w || w == _dropIndicator) continue;
+        if (pos.y() < w->geometry().center().y()) break;
+        ++insertRow;
+    }
+    _cardsLayout->insertWidget(insertRow, _dropIndicator);
+    _dropIndicator->setVisible(true);
+}
+
+void DeckColumnWidget::hideDropIndicator()
+{
+    if (_dropIndicator && _dropIndicator->parentWidget() == _scrollContainer) {
+        _cardsLayout->removeWidget(_dropIndicator);
+    }
+    if (_dropIndicator) {
+        _dropIndicator->hide();
+    }
 }
 
 bool DeckColumnWidget::eventFilter(QObject *watched, QEvent *event)
@@ -184,10 +243,16 @@ bool DeckColumnWidget::eventFilter(QObject *watched, QEvent *event)
             break;
         }
         case QEvent::DragMove:
+            showDropIndicator(static_cast<QDragMoveEvent *>(event)->position());
             static_cast<QDragMoveEvent *>(event)->acceptProposedAction();
             return true;
+        case QEvent::DragLeave:
+            hideDropIndicator();
+            return true;
         case QEvent::Drop:
-            handleDrop(static_cast<QDropEvent *>(event)->mimeData());
+            hideDropIndicator();
+            handleDrop(static_cast<QDropEvent *>(event)->mimeData(),
+                       static_cast<QDropEvent *>(event)->position());
             static_cast<QDropEvent *>(event)->acceptProposedAction();
             return true;
         default:
@@ -511,12 +576,38 @@ void DeckPanel::onAddStack()
     _ocsApi->createStack(_currentBoardId, title);
 }
 
-void DeckPanel::onCardDropped(int cardId, int fromStackId, int targetStackId)
+void DeckPanel::onCardDropped(int cardId, int fromStackId, int targetStackId, int insertIndex)
 {
-    if (_currentBoardId < 0 || fromStackId == targetStackId) return;
-    // Append at the end of the target stack. The URL needs the SOURCE stack,
-    // the body carries the TARGET stack (see DeckOcsApi::moveCard).
-    _ocsApi->moveCard(_currentBoardId, fromStackId, targetStackId, cardId, 999);
+    if (_currentBoardId < 0) return;
+
+    // Optimistic UI: move the card widget right away; the authoritative
+    // refetch (cardMoved signal) replaces the state afterwards, and an API
+    // failure also refetches so the view self-heals.
+    auto *card = findCard(cardId);
+    DeckColumnWidget *targetColumn = nullptr;
+    for (auto *column : _columns) {
+        if (column->stackId() == targetStackId) targetColumn = column;
+    }
+    if (card && targetColumn) {
+        DeckColumnWidget *sourceColumn = nullptr;
+        for (auto *column : _columns) {
+            if (column->findChildren<DeckCardWidget *>().contains(card)) {
+                sourceColumn = column;
+                break;
+            }
+        }
+        if (sourceColumn && sourceColumn != targetColumn) {
+            sourceColumn->removeCardWidget(card);
+        }
+        if (sourceColumn != targetColumn) {
+            targetColumn->insertCardWidget(card, insertIndex);
+        }
+    }
+
+    if (fromStackId == targetStackId) return;
+    // The URL needs the SOURCE stack, the body carries the TARGET stack (see
+    // DeckOcsApi::moveCard); order is the 0-based insertion position.
+    _ocsApi->moveCard(_currentBoardId, fromStackId, targetStackId, cardId, insertIndex);
 }
 
 } // namespace OCC
