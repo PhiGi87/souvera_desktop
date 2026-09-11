@@ -4,6 +4,7 @@
  */
 
 #include "LokOffice.h"
+#include <exception>
 
 #include <QCoreApplication>
 #include <QDir>
@@ -88,7 +89,23 @@ LibreOfficeKit *LokOffice::instance()
     const auto profileUrl = QUrl::fromLocalFile(profileDir).toString(QUrl::FullyEncoded);
 
     qCInfo(lcLokOffice) << "Initializing LibreOfficeKit from" << path;
-    g_office = lok_init_2(path.toUtf8().constData(), profileUrl.toUtf8().constData());
+    try {
+        g_office = lok_init_2(path.toUtf8().constData(), profileUrl.toUtf8().constData());
+    } catch (const std::exception &e) {
+        // LibreOffice can throw during its UNO bootstrap (e.g. std::bad_alloc
+        // from the XML config reader when the profile registry is corrupted).
+        // Let it escape and the process aborts — catch it and degrade to the
+        // browser-based office fallback instead.
+        qCWarning(lcLokOffice) << "LibreOfficeKit init threw:" << e.what();
+        g_office = nullptr;
+        // Self-heal: a corrupted profile is the most common cause. Remove it
+        // so the next attempt starts from a clean one.
+        QDir(profileDir).removeRecursively();
+    } catch (...) {
+        qCWarning(lcLokOffice) << "LibreOfficeKit init threw an unknown exception";
+        g_office = nullptr;
+        QDir(profileDir).removeRecursively();
+    }
     if (!g_office) {
         qCWarning(lcLokOffice) << "lok_init_2 failed for" << path;
     }
