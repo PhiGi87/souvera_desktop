@@ -132,7 +132,9 @@ export QML_SOURCES_PATHS=${DESKTOP_CLIENT_ROOT}/src/gui
 
 # Workaround issue #103 and #7231
 export APPIMAGETOOL=appimagetool-x86_64.AppImage
-wget -O ${APPIMAGETOOL} --ca-directory=/etc/ssl/certs -c https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+# Retries: the download from release-assets.githubusercontent.com is prone to
+# transient SSL failures ("GnuTLS: Error in the pull function").
+wget --tries=5 --waitretry=10 --timeout=60 -O ${APPIMAGETOOL} --ca-directory=/etc/ssl/certs -c https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
 chmod a+x ${APPIMAGETOOL}
 rm -rf ./squashfs-root
 ./${APPIMAGETOOL} --appimage-extract
