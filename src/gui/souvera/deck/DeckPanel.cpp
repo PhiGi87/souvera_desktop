@@ -151,13 +151,6 @@ bool DeckColumnWidget::eventFilter(QObject *watched, QEvent *event)
     return QFrame::eventFilter(watched, event);
 }
 
-void DeckColumnWidget::removeCard(DeckCardWidget *card)
-{
-    _cardsLayout->removeWidget(card);
-    card->deleteLater();
-    updateCardCount();
-}
-
 void DeckColumnWidget::clearCards()
 {
     while (_cardsLayout->count() > 1) {

@@ -54,7 +54,7 @@ private:
     QLabel *_titleLabel = nullptr;
     QLabel *_descriptionLabel = nullptr;
     QWidget *_labelsContainer = nullptr;
-    QVBoxLayout *_labelsLayout = nullptr;
+    QHBoxLayout *_labelsLayout = nullptr;
     QWidget *_metaContainer = nullptr;
     QHBoxLayout *_metaLayout = nullptr;
     QLabel *_dueLabel = nullptr;

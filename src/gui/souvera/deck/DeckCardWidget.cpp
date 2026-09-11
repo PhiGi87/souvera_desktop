@@ -7,6 +7,7 @@
 #include "theme/SouveraTheme.h"
 
 #include <QContextMenuEvent>
+#include <QJsonArray>
 #include <QDate>
 #include <QDateTime>
 #include <QDrag>
