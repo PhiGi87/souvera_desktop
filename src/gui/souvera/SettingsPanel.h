@@ -37,6 +37,8 @@ private:
     void rebuildSyncFolders();
     void addFolderRow(Folder *folder, QVBoxLayout *container);
     void onTogglePause(Folder *folder);
+    void onAddFolder();
+    void onRemoveFolder(Folder *folder);
     void onExportDiagnostics();
     void onTestMail();
 

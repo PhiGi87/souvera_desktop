@@ -4,6 +4,7 @@
  */
 
 #include "SettingsPanel.h"
+#include "folderwizard.h"
 
 #include "mail/JmapClient.h"
 #include "mail/MailLoginFlow.h"
@@ -12,6 +13,12 @@
 #include "creds/abstractcredentials.h"
 #include "folderman.h"
 #include "folder.h"
+#include "filesystem.h"
+#include "common/syncjournaldb.h"
+#include "common/vfs.h"
+#include "common/utility.h"
+#include <QMessageBox>
+#include <QUuid>
 #include "theme.h"
 #include "theme/SouveraTheme.h"
 
@@ -167,6 +174,16 @@ void SettingsPanel::setupUi()
     folderLayout->setContentsMargins(0, 0, 0, 0);
     folderLayout->setSpacing(8);
     syncLayout->addWidget(_syncFolderContainer);
+
+    auto *addFolderRow = new QWidget(syncCard);
+    auto *addFolderLayout = new QHBoxLayout(addFolderRow);
+    addFolderLayout->setContentsMargins(0, 0, 0, 0);
+    addFolderLayout->addStretch();
+    auto *addFolderBtn = new QPushButton(QStringLiteral("Ordner hinzufügen..."), addFolderRow);
+    addFolderBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+    connect(addFolderBtn, &QPushButton::clicked, this, &SettingsPanel::onAddFolder);
+    addFolderLayout->addWidget(addFolderBtn);
+    syncLayout->addWidget(addFolderRow);
     contentLayout->addWidget(syncCard);
 
     // ---- Erscheinungsbild ----
@@ -333,6 +350,13 @@ void SettingsPanel::addFolderRow(Folder *folder, QVBoxLayout *container)
     });
     rowLayout->addWidget(openBtn);
 
+    auto *removeBtn = new QPushButton(QStringLiteral("Entfernen"), row);
+    removeBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+    connect(removeBtn, &QPushButton::clicked, this, [this, folder]() {
+        onRemoveFolder(folder);
+    });
+    rowLayout->addWidget(removeBtn);
+
     container->addWidget(row);
 }
 
@@ -340,6 +364,78 @@ void SettingsPanel::onTogglePause(Folder *folder)
 {
     if (!folder) return;
     folder->setSyncPaused(!folder->syncPaused());
+    rebuildSyncFolders();
+}
+
+void SettingsPanel::onAddFolder()
+{
+    if (!_accountState || !_accountState->account()) return;
+    auto *folderMan = FolderMan::instance();
+    folderMan->setSyncEnabled(false); // do not start more syncs while the wizard runs.
+
+    auto *folderWizard = new FolderWizard(_accountState->account(), this);
+    folderWizard->setAttribute(Qt::WA_DeleteOnClose);
+
+    connect(folderWizard, &QDialog::accepted, this, [this, folderWizard]() {
+        auto *folderMan = FolderMan::instance();
+        FolderDefinition definition;
+        definition.localPath = FolderDefinition::prepareLocalPath(
+            folderWizard->field(QLatin1String("sourceFolder")).toString());
+        definition.targetPath = FolderDefinition::prepareTargetPath(
+            folderWizard->property("targetPath").toString());
+
+        if (folderWizard->property("useVirtualFiles").toBool()) {
+            definition.virtualFilesMode = bestAvailableVfsMode();
+        }
+
+        QDir dir(definition.localPath);
+        if (!dir.exists()) {
+            if (!dir.mkpath(QStringLiteral("."))) {
+                QMessageBox::warning(this, QStringLiteral("Ordner konnte nicht erstellt werden"),
+                    QStringLiteral("<p>Der lokale Ordner <i>%1</i> konnte nicht erstellt werden.</p>")
+                        .arg(QDir::toNativeSeparators(definition.localPath)));
+                folderMan->setSyncEnabled(true);
+                return;
+            }
+        }
+        FileSystem::setFolderMinimumPermissions(definition.localPath);
+        Utility::setupFavLink(definition.localPath);
+
+        definition.ignoreHiddenFiles = folderMan->ignoreHiddenFiles();
+
+        folderMan->setSyncEnabled(true);
+        const auto folder = folderMan->addFolder(_accountState, definition);
+        if (folder) {
+            if (definition.virtualFilesMode != Vfs::Off && folderWizard->property("useVirtualFiles").toBool()) {
+                folder->setRootPinState(PinState::OnlineOnly);
+            }
+            const auto selectiveSyncBlackList =
+                folderWizard->property("selectiveSyncBlackList").toStringList();
+            folder->journalDb()->setSelectiveSyncList(SyncJournalDb::SelectiveSyncBlackList,
+                selectiveSyncBlackList);
+            folder->journalDb()->setSelectiveSyncList(SyncJournalDb::SelectiveSyncWhiteList,
+                QStringList() << QLatin1String("/"));
+            folderMan->scheduleAllFolders();
+        }
+        rebuildSyncFolders();
+    });
+
+    connect(folderWizard, &QDialog::rejected, folderMan, [folderMan]() {
+        folderMan->setSyncEnabled(true);
+    });
+    folderWizard->open();
+}
+
+void SettingsPanel::onRemoveFolder(Folder *folder)
+{
+    if (!folder) return;
+    const auto ret = QMessageBox::question(
+        this, QStringLiteral("Ordner entfernen"),
+        QStringLiteral("Soll der Synchronisationsordner \u201E%1\u201C entfernt werden? "
+                       "Die lokalen Dateien bleiben erhalten.")
+            .arg(folder->shortGuiLocalPath()));
+    if (ret != QMessageBox::Yes) return;
+    FolderMan::instance()->removeFolder(folder);
     rebuildSyncFolders();
 }
 

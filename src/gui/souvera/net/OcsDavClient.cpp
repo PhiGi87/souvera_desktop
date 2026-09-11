@@ -130,7 +130,7 @@ void runRequest(AccountState *accountState, const QByteArray &verb, const QUrl &
 void OcsDavClient::ocsRequest(AccountState *accountState, const QByteArray &verb,
                               const QString &ocsPath, const QByteArray &body,
                               const JsonCallback &onJson, const ErrorCallback &onError,
-                              const HeaderList &extraHeaders)
+                              const HeaderList &extraHeaders, bool addFormatJson)
 {
     HeaderList headers = {{QByteArray("OCS-APIRequest"), QByteArray("true")},
                           {QByteArray("Accept"), QByteArray("application/json")}};
@@ -138,12 +138,14 @@ void OcsDavClient::ocsRequest(AccountState *accountState, const QByteArray &verb
         headers.append(extraHeaders);
     }
 
-    // Force JSON: some Nextcloud servers ignore the Accept header and
-    // return XML unless format=json is in the query string.
     QUrl url(ocsPath);
-    QUrlQuery query(url);
-    query.addQueryItem(QStringLiteral("format"), QStringLiteral("json"));
-    url.setQuery(query);
+    if (addFormatJson) {
+        // Force JSON: some Nextcloud servers ignore the Accept header and
+        // return XML unless format=json is in the query string.
+        QUrlQuery query(url);
+        query.addQueryItem(QStringLiteral("format"), QStringLiteral("json"));
+        url.setQuery(query);
+    }
 
     runRequest(accountState, verb, url,
                headers,

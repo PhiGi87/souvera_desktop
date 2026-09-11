@@ -44,7 +44,8 @@ public:
     static void ocsRequest(AccountState *accountState, const QByteArray &verb,
                            const QString &ocsPath, const QByteArray &body,
                            const JsonCallback &onJson, const ErrorCallback &onError,
-                           const HeaderList &extraHeaders = {});
+                           const HeaderList &extraHeaders = {},
+                           bool addFormatJson = true);
 
     /**
      * Plain JSON request (Deck REST API returns bare arrays). The callback

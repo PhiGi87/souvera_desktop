@@ -5,6 +5,7 @@
 
 #include "TalkPanel.h"
 #include "CallWindow.h"
+#include "theme/SouveraTheme.h"
 #include "TalkConversationModel.h"
 #include "TalkOcsApi.h"
 #include "TalkMessageWidget.h"
@@ -45,13 +46,16 @@ public:
 
         const auto &rect = option.rect;
 
+        const auto *theme = SouveraTheme::instance();
+        const auto isDark = theme->theme() == SouveraTheme::Theme::Dark;
+
         if (option.state & QStyle::State_Selected) {
-            auto accent = QColor(0x4b, 0xbf, 0xea);
-            accent.setAlpha(40);
+            auto accent = theme->color(SouveraTheme::Color::Accent);
+            accent.setAlpha(isDark ? 40 : 30);
             painter->fillRect(rect, accent);
         } else if (option.state & QStyle::State_MouseOver) {
-            auto overlay = QColor(255, 255, 255);
-            overlay.setAlpha(10);
+            auto overlay = isDark ? QColor(255, 255, 255) : QColor(0, 0, 0);
+            overlay.setAlpha(isDark ? 10 : 8);
             painter->fillRect(rect, overlay);
         }
 
@@ -94,14 +98,15 @@ public:
         const auto timeX = rect.right() - 10 - (timeStr.isEmpty() ? 0 : timeFm.horizontalAdvance(timeStr));
 
         painter->setFont(nameFont);
-        painter->setPen(QColor(0xe2, 0xe8, 0xf0));
+        painter->setPen(theme->color(SouveraTheme::Color::TextPrimary));
         painter->drawText(QPoint(textX, rect.top() + 12 + nameFm.ascent()),
                           nameFm.elidedText(name, Qt::ElideRight, timeX - textX - 8));
 
         // Time
         if (!timeStr.isEmpty()) {
             painter->setFont(timeFont);
-            painter->setPen(unread > 0 ? QColor(0x4b, 0xbf, 0xea) : QColor(0x64, 0x74, 0x8b));
+            painter->setPen(unread > 0 ? theme->color(SouveraTheme::Color::Accent)
+                                       : theme->color(SouveraTheme::Color::TextMuted));
             painter->drawText(QPoint(timeX, rect.top() + 12 + timeFm.ascent()), timeStr);
         }
 
@@ -110,7 +115,7 @@ public:
         msgFont.setPointSizeF(option.font.pointSizeF() * 0.9);
         const auto msgFm = QFontMetrics(msgFont);
         painter->setFont(msgFont);
-        painter->setPen(QColor(0x94, 0xa3, 0xb8));
+        painter->setPen(theme->color(SouveraTheme::Color::TextSecondary));
         const auto badgeSpace = unread > 0 ? 40 : 0;
         painter->drawText(QPoint(textX, rect.top() + 14 + nameFm.height() + msgFm.ascent()),
                           msgFm.elidedText(lastMessage, Qt::ElideRight,
@@ -119,7 +124,7 @@ public:
         // Unread badge
         if (unread > 0) {
             painter->setPen(Qt::NoPen);
-            painter->setBrush(QColor(0x4b, 0xbf, 0xea));
+            painter->setBrush(theme->color(SouveraTheme::Color::Accent));
             const auto badgeText = unread > 99 ? QStringLiteral("99+") : QString::number(unread);
             QFont badgeFont = option.font;
             badgeFont.setPixelSize(10);
@@ -136,7 +141,7 @@ public:
 
         // Group icon hint next to the name
         if (isGroup) {
-            painter->setPen(QColor(0x64, 0x74, 0x8b));
+            painter->setPen(theme->color(SouveraTheme::Color::TextMuted));
             painter->setFont(timeFont);
             painter->drawText(QPoint(rect.left() + 2, rect.top() + 8),
                               QStringLiteral(""));

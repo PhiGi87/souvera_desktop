@@ -105,10 +105,15 @@ void TalkOcsApi::messagesRequest(const QString &apiBase, const QString &token, q
 {
     QUrl url(apiBase + QStringLiteral("/chat/%1").arg(token));
     QUrlQuery query;
+    // lookIntoFuture is a REQUIRED parameter of the Talk chat endpoint —
+    // omitting it makes some Talk server versions answer with HTTP 500.
     if (lastKnownId > 0) {
         query.addQueryItem(QStringLiteral("lookIntoFuture"), QStringLiteral("1"));
         query.addQueryItem(QStringLiteral("lastKnownMessageId"), QString::number(lastKnownId));
         query.addQueryItem(QStringLiteral("limit"), QStringLiteral("100"));
+    } else {
+        query.addQueryItem(QStringLiteral("lookIntoFuture"), QStringLiteral("0"));
+        query.addQueryItem(QStringLiteral("limit"), QStringLiteral("50"));
     }
     url.setQuery(query);
 
@@ -124,7 +129,8 @@ void TalkOcsApi::messagesRequest(const QString &apiBase, const QString &token, q
             }
             qCWarning(lcTalkOcsApi) << "fetchMessages failed:" << status << message;
             emit apiError(message);
-        });
+        },
+        {}, false);
 }
 
 void TalkOcsApi::sendMessage(const QString &token, const QString &text)
