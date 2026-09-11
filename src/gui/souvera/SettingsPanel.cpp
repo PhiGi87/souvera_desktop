@@ -88,6 +88,7 @@ void SettingsPanel::setAccountState(AccountState *accountState)
         disconnect(_accountState, &AccountState::stateChanged, this, nullptr);
     }
     _accountState = accountState;
+    ensureNetworkSettings(accountState);
 
     if (!accountState) {
         _accountLabel->setText(QStringLiteral("Kein Konto verbunden"));
@@ -283,12 +284,11 @@ void SettingsPanel::setupUi()
     }
 
     // ---- Netzwerk ----
+    // The widget needs a valid Account; it is created in setAccountState().
     {
         QVBoxLayout *networkLayout = nullptr;
         auto *networkCard = makeCard(QStringLiteral("Netzwerk"), content, &networkLayout);
-        auto *networkSettings = new NetworkSettings({}, networkCard);
-        networkSettings->setContentsMargins(0, 0, 0, 0);
-        networkLayout->addWidget(networkSettings);
+        _networkCardLayout = networkLayout;
         contentLayout->addWidget(networkCard);
     }
 
@@ -345,6 +345,16 @@ void SettingsPanel::setupUi()
     layout->addWidget(scroll, 1);
 
     rebuildSyncFolders();
+}
+
+void SettingsPanel::ensureNetworkSettings(AccountState *accountState)
+{
+    if (_networkSettingsWidget || !_networkCardLayout) return;
+    if (!accountState || !accountState->account()) return;
+
+    _networkSettingsWidget = new NetworkSettings(accountState->account(), this);
+    _networkSettingsWidget->setContentsMargins(0, 0, 0, 0);
+    _networkCardLayout->addWidget(_networkSettingsWidget);
 }
 
 void SettingsPanel::rebuildSyncFolders()

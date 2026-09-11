@@ -20,6 +20,7 @@ namespace OCC {
 class AccountState;
 class Folder;
 class JmapClient;
+class NetworkSettings;
 
 class SettingsPanel : public QWidget
 {
@@ -39,6 +40,10 @@ private:
     void onTogglePause(Folder *folder);
     void onAddFolder();
     void onRemoveFolder(Folder *folder);
+    void ensureNetworkSettings(AccountState *accountState);
+
+    NetworkSettings *_networkSettingsWidget = nullptr;
+    QVBoxLayout *_networkCardLayout = nullptr;
     void onExportDiagnostics();
     void onTestMail();
 
