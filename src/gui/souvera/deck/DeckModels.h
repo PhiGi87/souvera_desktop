@@ -195,6 +195,32 @@ private:
     }
 };
 
+/** A card comment. */
+class DeckComment
+{
+public:
+    int id = -1;
+    int cardId = -1;
+    QString actorId;
+    QString actorDisplayName;
+    QString message;
+    QDateTime creationDateTime;
+    QVector<DeckComment> replies;
+
+    [[nodiscard]] static DeckComment fromJson(const QJsonObject &json)
+    {
+        DeckComment c;
+        c.id = json.value(QStringLiteral("id")).toInt(-1);
+        c.cardId = json.value(QStringLiteral("objectId")).toInt(-1);
+        c.actorId = json.value(QStringLiteral("actorId")).toString();
+        c.actorDisplayName = json.value(QStringLiteral("actorDisplayName")).toString();
+        c.message = json.value(QStringLiteral("message")).toString();
+        c.creationDateTime = QDateTime::fromString(
+            json.value(QStringLiteral("creationDateTime")).toString(), Qt::ISODate);
+        return c;
+    }
+};
+
 /** A column ("stack") holding cards. */
 class DeckStack
 {

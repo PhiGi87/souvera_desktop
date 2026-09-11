@@ -25,6 +25,8 @@ class QVBoxLayout;
 
 namespace OCC {
 
+class DeckLabel;
+class DeckUser;
 class DeckOcsApi;
 class DeckCardWidget;
 class AccountState;
@@ -97,6 +99,7 @@ private:
     [[nodiscard]] QMenu *buildBoardsMenu();
     [[nodiscard]] QMenu *buildFilterMenu();
     [[nodiscard]] QVector<DeckLabel> boardLabelsOfCurrent() const;
+    [[nodiscard]] QVector<DeckUser> boardMembersOfCurrent() const;
     [[nodiscard]] bool cardMatchesFilter(const QJsonObject &card) const;
     void refreshFromServer();
 

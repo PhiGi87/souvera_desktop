@@ -171,7 +171,11 @@ void DeckOcsApi::fetchComments(int cardId)
         [this, cardId](const QJsonDocument &doc, int) {
             // The comments endpoint answers in the OCS envelope — unwrap it.
             const auto ocs = doc.object().value(QStringLiteral("ocs")).toObject();
-            emit commentsReceived(cardId, ocs.value(QStringLiteral("data")).toArray());
+            QVector<DeckComment> comments;
+            for (const auto &v : ocs.value(QStringLiteral("data")).toArray()) {
+                comments.append(DeckComment::fromJson(v.toObject()));
+            }
+            emit commentsReceived(cardId, comments);
         },
         [this](int, const QString &message) {
             qCWarning(lcDeckOcsApi) << "fetchComments failed:" << message;
@@ -241,7 +245,11 @@ void DeckOcsApi::fetchAttachments(int boardId, int stackId, int cardId)
 
     OcsDavClient::jsonRequest(_accountState, "GET", QUrl(url), {},
         [this, cardId](const QJsonDocument &doc, int) {
-            emit attachmentsReceived(cardId, doc.array());
+            QVector<DeckAttachment> attachments;
+            for (const auto &v : doc.array()) {
+                attachments.append(DeckAttachment::fromJson(v.toObject()));
+            }
+            emit attachmentsReceived(cardId, attachments);
         },
         [this](int, const QString &message) {
             qCWarning(lcDeckOcsApi) << "fetchAttachments failed:" << message;

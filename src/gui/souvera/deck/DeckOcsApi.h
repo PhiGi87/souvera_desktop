@@ -7,6 +7,8 @@
 #define DECKOCSAPI_H
 
 #include <QObject>
+
+#include "DeckModels.h"
 #include <QJsonArray>
 #include <QJsonObject>
 
@@ -60,11 +62,11 @@ signals:
     void stackUpdated(int boardId, int stackId);
     void stackDeleted(int boardId, int stackId);
     void cardDeleted(int boardId, int stackId, int cardId);
-    void commentsReceived(int cardId, const QJsonArray &comments);
+    void commentsReceived(int cardId, const QVector<DeckComment> &comments);
     void commentCreated(int cardId);
     void commentUpdated(int cardId);
     void commentDeleted(int cardId);
-    void attachmentsReceived(int cardId, const QJsonArray &attachments);
+    void attachmentsReceived(int cardId, const QVector<DeckAttachment> &attachments);
     void attachmentUploaded(int cardId);
     void attachmentDeleted(int cardId);
     void attachmentDownloaded(const QString &fileName, const QString &localPath);

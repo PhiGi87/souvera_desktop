@@ -4,6 +4,7 @@
  */
 
 #include "DeckPanel.h"
+#include "DeckCardDetailDialog.h"
 #include "DeckCardWidget.h"
 #include "DeckManager.h"
 #include "DeckModels.h"
@@ -581,6 +582,22 @@ QMenu *DeckPanel::buildFilterMenu()
     return menu;
 }
 
+QVector<DeckUser> DeckPanel::boardMembersOfCurrent() const
+{
+    for (const auto &boardVal : _boards) {
+        const auto boardObj = boardVal.toObject();
+        if (boardObj.value(QStringLiteral("id")).toInt() == _currentBoardId) {
+            QVector<DeckUser> members;
+            for (const auto &v : boardObj.value(QStringLiteral("users")).toArray()) {
+                members.append(DeckUser::fromJson(v.toObject()
+                    .value(QStringLiteral("participant")).toObject()));
+            }
+            return members;
+        }
+    }
+    return {};
+}
+
 QVector<DeckLabel> DeckPanel::boardLabelsOfCurrent() const
 {
     for (const auto &boardVal : _boards) {
@@ -672,31 +689,18 @@ void DeckPanel::onEditCard(int cardId, int stackId)
     auto *card = findCard(cardId);
     if (!card || _currentBoardId < 0) return;
 
-    QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("Karte bearbeiten"));
-    auto *layout = new QVBoxLayout(&dialog);
-    auto *titleEdit = new QLineEdit(card->cardData().value(QStringLiteral("title")).toString(), &dialog);
-    auto *descEdit = new QPlainTextEdit(
-        card->cardData().value(QStringLiteral("description")).toString(), &dialog);
-    descEdit->setPlaceholderText(QStringLiteral("Beschreibung (Markdown)"));
-    descEdit->setFixedHeight(120);
-    auto *buttons = new QDialogButtonBox(
-        QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addWidget(new QLabel(QStringLiteral("Titel"), &dialog));
-    layout->addWidget(titleEdit);
-    layout->addWidget(new QLabel(QStringLiteral("Beschreibung"), &dialog));
-    layout->addWidget(descEdit);
-    layout->addWidget(buttons);
-
-    if (dialog.exec() != QDialog::Accepted) return;
-    const auto newTitle = titleEdit->text().trimmed();
-    if (newTitle.isEmpty()) return;
-    // The Deck API rejects partial card PUTs with HTTP 400 — send back the
-    // complete object (only title/description changed).
-    _ocsApi->updateCardFields(_currentBoardId, stackId, card->cardData(),
-                              newTitle, descEdit->toPlainText());
+    // Premium detail dialog: markdown description, comments, attachments,
+    // labels, dates and color. Saving performs the complete-card PUT.
+    const auto manager = DeckManager::instance();
+    DeckCardDetailDialog dialog(_ocsApi, _currentBoardId, card->cardData(),
+                                boardLabelsOfCurrent(), boardMembersOfCurrent(),
+                                manager->supportsStartDate(), manager->supportsCardColor(),
+                                this);
+    connect(&dialog, &DeckCardDetailDialog::cardSaved, this,
+            [this](int boardId, int stackId, int cardId, const QJsonObject &updatedJson) {
+        _ocsApi->updateCard(boardId, stackId, cardId, updatedJson);
+    });
+    dialog.exec();
 }
 
 void DeckPanel::onDeleteCard(int cardId, int stackId)
