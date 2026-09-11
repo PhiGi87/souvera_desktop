@@ -7,6 +7,8 @@
 #include "DeckOcsApi.h"
 #include "DeckCardWidget.h"
 #include "theme/SouveraTheme.h"
+#include "account.h"
+#include "accountstate.h"
 
 #include <QLabel>
 #include <QComboBox>
