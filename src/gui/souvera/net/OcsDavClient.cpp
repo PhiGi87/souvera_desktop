@@ -271,6 +271,7 @@ void OcsDavClient::multipartRequest(AccountState *accountState, const QUrl &url,
                                     const ErrorCallback &onError)
 {
     if (!accountState || !accountState->account()) {
+        delete multiPart;
         onError(-1, QStringLiteral("Kein Konto verbunden."));
         return;
     }
@@ -279,12 +280,21 @@ void OcsDavClient::multipartRequest(AccountState *accountState, const QUrl &url,
     req.setRawHeader("Authorization", "Basic " + auth);
     req.setTransferTimeout(120000);
 
+    const QPointer<AccountState> guard(accountState);
     auto *nam = accountState->account()->networkAccessManager();
     QNetworkReply *reply = nam->post(req, multiPart);
+    if (!reply) {
+        delete multiPart;
+        onError(-1, QStringLiteral("Fehler beim Starten der \u00DCbertragung."));
+        return;
+    }
     multiPart->setParent(reply);
 
-    QObject::connect(reply, &QNetworkReply::finished, reply, [reply, onJson, onError]() {
+    QObject::connect(reply, &QNetworkReply::finished, reply, [guard, reply, onJson, onError]() {
         reply->deleteLater();
+        if (!guard) {
+            return; // account context destroyed mid-upload
+        }
         const auto status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (status < 200 || status >= 300) {
             onError(status, statusMessage(status, reply->errorString()));

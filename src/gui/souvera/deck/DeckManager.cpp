@@ -9,6 +9,7 @@
 #include "net/OcsDavClient.h"
 
 #include <QDir>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLoggingCategory>
@@ -25,11 +26,13 @@ int versionComponent(const QString &version, int index)
     return index < parts.size() ? parts.at(index).toInt() : 0;
 }
 
-QString cacheFilePath()
+// Cache files are per-account: two accounts can share board ids and must
+// never see each other's cached stacks.
+QString cacheFilePath(const QString &accountId, int boardId)
 {
     const auto base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(base + QStringLiteral("/deck-cache"));
-    return base + QStringLiteral("/deck-cache/board-%1.json");
+    return base + QStringLiteral("/deck-cache/acc-%1-board-%2.json").arg(accountId).arg(boardId);
 }
 }
 
@@ -57,10 +60,13 @@ void DeckManager::fetchCapabilities()
 {
     if (!_accountState || _capabilitiesFetched) return;
     _capabilitiesFetched = true;
+    const auto reqAccount = _accountState.data();
 
     OcsDavClient::ocsRequest(_accountState, "GET",
         QStringLiteral("/ocs/v2.php/cloud/capabilities"), {},
-        [this](const QJsonValue &payload, int) {
+        [this, reqAccount](const QJsonValue &payload, int) {
+            // Ignore stale answers after a fast account switch.
+            if (_accountState.data() != reqAccount) return;
             const auto capabilities = payload.toObject()
                 .value(QStringLiteral("capabilities")).toObject();
             const auto deck = capabilities.value(QStringLiteral("deck")).toObject();
@@ -74,7 +80,8 @@ void DeckManager::fetchCapabilities()
                                   << "ownerAsString:" << _ownerAsString;
             emit capabilitiesReady();
         },
-        [this](int status, const QString &message) {
+        [this, reqAccount](int status, const QString &message) {
+            if (_accountState.data() != reqAccount) return;
             qCWarning(lcDeckManager) << "Capabilities fetch failed:" << status << message;
             emit capabilitiesReady();
         });
@@ -82,14 +89,16 @@ void DeckManager::fetchCapabilities()
 
 QJsonArray DeckManager::cachedStacks(int boardId) const
 {
-    QFile file(cacheFilePath().arg(boardId));
+    if (!_accountState || !_accountState->account()) return {};
+    QFile file(cacheFilePath(_accountState->account()->id(), boardId));
     if (!file.open(QIODevice::ReadOnly)) return {};
     return QJsonDocument::fromJson(file.readAll()).array();
 }
 
 void DeckManager::storeStacksCache(int boardId, const QJsonArray &stacks)
 {
-    QFile file(cacheFilePath().arg(boardId));
+    if (!_accountState || !_accountState->account()) return;
+    QFile file(cacheFilePath(_accountState->account()->id(), boardId));
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) return;
     file.write(QJsonDocument(stacks).toJson(QJsonDocument::Compact));
 }

@@ -25,6 +25,7 @@
 #include <QLabel>
 #include <QLoggingCategory>
 #include <QMimeData>
+#include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScrollArea>
@@ -431,12 +432,6 @@ void DeckPanel::clearColumns()
         auto *item = _columnsLayout->takeAt(0);
         delete item;
     }
-
-    // The add-stack button lived in the layout and was removed with it.
-    if (_addStackButton) {
-        _columnsLayout->addWidget(_addStackButton);
-        _addStackButton->setVisible(true);
-    }
 }
 
 void DeckPanel::renderStacks(const QJsonArray &stacks)
@@ -468,6 +463,11 @@ void DeckPanel::renderStacks(const QJsonArray &stacks)
 
         _columnsLayout->addWidget(column);
         _columns.append(column);
+    }
+    // Button right of the last column, stretch closes the row.
+    if (_addStackButton) {
+        _columnsLayout->addWidget(_addStackButton);
+        _addStackButton->setVisible(true);
     }
     _columnsLayout->addStretch();
 }

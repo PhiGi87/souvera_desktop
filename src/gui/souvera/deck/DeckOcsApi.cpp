@@ -9,6 +9,7 @@
 
 #include <QFileInfo>
 #include <QHttpMultiPart>
+#include <QMimeDatabase>
 #include <QNetworkRequest>
 #include <QPointer>
 #include <QStandardPaths>
@@ -171,7 +172,9 @@ void DeckOcsApi::fetchComments(int cardId)
 
     OcsDavClient::jsonRequest(_accountState, "GET", QUrl(url), {},
         [this, cardId](const QJsonDocument &doc, int) {
-            emit commentsReceived(cardId, doc.array());
+            // The comments endpoint answers in the OCS envelope — unwrap it.
+            const auto ocs = doc.object().value(QStringLiteral("ocs")).toObject();
+            emit commentsReceived(cardId, ocs.value(QStringLiteral("data")).toArray());
         },
         [this](int, const QString &message) {
             qCWarning(lcDeckOcsApi) << "fetchComments failed:" << message;
@@ -266,6 +269,9 @@ void DeckOcsApi::uploadAttachment(int boardId, int stackId, int cardId,
     }
 
     auto *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+    // The multiPart does NOT take ownership of the device implicitly — parent
+    // it explicitly or the QFile (and its file descriptor) leaks per upload.
+    fileDevice->setParent(multiPart);
 
     QHttpPart typePart;
     typePart.setHeader(QNetworkRequest::ContentDispositionHeader,
@@ -283,6 +289,9 @@ void DeckOcsApi::uploadAttachment(int boardId, int stackId, int cardId,
     filePart.setHeader(QNetworkRequest::ContentDispositionHeader,
                        QVariant(QStringLiteral("form-data; name=\"file\"; filename=\"%1\"")
                                     .arg(info.fileName())));
+    const QMimeDatabase mimeDb;
+    filePart.setHeader(QNetworkRequest::ContentTypeHeader,
+                       QVariant(mimeDb.mimeTypeForFile(filePath).name()));
     filePart.setBodyDevice(fileDevice);
     multiPart->append(filePart);
 
