@@ -31,6 +31,7 @@ public:
     ~SouveraMainWindow() override = default;
 
     [[nodiscard]] MailPanel *mailPanel() const { return _mailPanel; }
+    class NotificationService *_notificationService = nullptr;
     [[nodiscard]] TalkPanel *talkPanel() const { return _talkPanel; }
     [[nodiscard]] DeckPanel *deckPanel() const { return _deckPanel; }
     [[nodiscard]] CalendarPanel *calendarPanel() const { return _calendarPanel; }

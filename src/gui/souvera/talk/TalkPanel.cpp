@@ -351,7 +351,9 @@ void TalkPanel::setApiStatus(const QString &message, bool isError)
         _apiStatusLabel->clear();
         return;
     }
-    _apiStatusLabel->setFixedHeight(22);
+    _apiStatusLabel->setWordWrap(true);
+    // Errors can contain a response preview — give them room to be read.
+    _apiStatusLabel->setFixedHeight(isError ? 58 : 22);
     _apiStatusLabel->setText(message);
     _apiStatusLabel->setStyleSheet(QStringLiteral(
         "color: %1; padding: 2px 14px; font-size: 11px; background: transparent;")

@@ -64,24 +64,10 @@ void DeckOcsApi::fetchStacks(int boardId)
         });
 }
 
-void DeckOcsApi::fetchCards(int stackId)
+void DeckOcsApi::createCard(int boardId, int stackId, const QString &title, const QString &description)
 {
-    const auto url = apiUrl(QStringLiteral("/stacks/%1/cards").arg(stackId));
-    if (url.isEmpty()) return;
-
-    OcsDavClient::jsonRequest(_accountState, "GET", QUrl(url), {},
-        [this, stackId](const QJsonDocument &doc, int) {
-            emit cardsReceived(doc.array(), stackId);
-        },
-        [this](int, const QString &message) {
-            qCWarning(lcDeckOcsApi) << "fetchCards failed:" << message;
-            emit apiError(message);
-        });
-}
-
-void DeckOcsApi::createCard(int stackId, const QString &title, const QString &description)
-{
-    const auto url = apiUrl(QStringLiteral("/stacks/%1/cards").arg(stackId));
+    // POST /boards/{boardId}/stacks/{stackId}/cards (Android DeckAPI.createCard)
+    const auto url = apiUrl(QStringLiteral("/boards/%1/stacks/%2/cards").arg(boardId).arg(stackId));
     if (url.isEmpty()) return;
 
     QJsonObject body;
@@ -91,8 +77,8 @@ void DeckOcsApi::createCard(int stackId, const QString &title, const QString &de
 
     const auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
     OcsDavClient::jsonRequest(_accountState, "POST", QUrl(url), payload,
-        [this, stackId](const QJsonDocument &doc, int) {
-            emit cardCreated(doc.object(), stackId);
+        [this, boardId, stackId](const QJsonDocument &doc, int) {
+            emit cardCreated(doc.object(), boardId, stackId);
         },
         [this](int, const QString &message) {
             qCWarning(lcDeckOcsApi) << "createCard failed:" << message;
@@ -100,13 +86,15 @@ void DeckOcsApi::createCard(int stackId, const QString &title, const QString &de
         });
 }
 
-void DeckOcsApi::moveCard(int cardId, int stackId)
+void DeckOcsApi::moveCard(int boardId, int stackId, int cardId, int order)
 {
-    const auto url = apiUrl(QStringLiteral("/cards/%1/stack/%2").arg(cardId).arg(stackId));
+    // PUT /boards/{boardId}/stacks/{stackId}/cards/{cardId}/reorder (Android DeckAPI.moveCard)
+    const auto url = apiUrl(QStringLiteral("/boards/%1/stacks/%2/cards/%3/reorder")
+                                .arg(boardId).arg(stackId).arg(cardId));
     if (url.isEmpty()) return;
 
     QJsonObject body;
-    body[QStringLiteral("order")] = 999;
+    body[QStringLiteral("order")] = order;
 
     const auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
     OcsDavClient::jsonRequest(_accountState, "PUT", QUrl(url), payload,
@@ -115,6 +103,23 @@ void DeckOcsApi::moveCard(int cardId, int stackId)
         },
         [this](int, const QString &message) {
             qCWarning(lcDeckOcsApi) << "moveCard failed:" << message;
+            emit apiError(message);
+        });
+}
+
+void DeckOcsApi::deleteCard(int boardId, int stackId, int cardId)
+{
+    // DELETE /boards/{boardId}/stacks/{stackId}/cards/{cardId} (Android DeckAPI.deleteCard)
+    const auto url = apiUrl(QStringLiteral("/boards/%1/stacks/%2/cards/%3")
+                                .arg(boardId).arg(stackId).arg(cardId));
+    if (url.isEmpty()) return;
+
+    OcsDavClient::jsonRequest(_accountState, "DELETE", QUrl(url), {},
+        [this, boardId, stackId, cardId](const QJsonDocument &, int) {
+            emit cardDeleted(boardId, stackId, cardId);
+        },
+        [this](int, const QString &message) {
+            qCWarning(lcDeckOcsApi) << "deleteCard failed:" << message;
             emit apiError(message);
         });
 }

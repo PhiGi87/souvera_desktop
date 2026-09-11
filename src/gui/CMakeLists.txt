@@ -322,6 +322,8 @@ set(client_SRCS
      souvera/mail/EmailListDelegate.cpp
      souvera/mail/MailLoginFlow.h
      souvera/mail/MailLoginFlow.cpp
+     souvera/notifications/NotificationService.h
+     souvera/notifications/NotificationService.cpp
      souvera/LeftSidebar.h
      souvera/LeftSidebar.cpp
      souvera/notes/NotesPanel.h

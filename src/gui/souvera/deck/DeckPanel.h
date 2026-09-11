@@ -68,6 +68,7 @@ private:
     QWidget *_columnsContainer = nullptr;
     QHBoxLayout *_columnsLayout = nullptr;
     QComboBox *_boardComboBox = nullptr;
+    int _currentBoardId = -1;
     QPushButton *_newCardButton = nullptr;
     DeckOcsApi *_ocsApi = nullptr;
     QJsonArray _boards;

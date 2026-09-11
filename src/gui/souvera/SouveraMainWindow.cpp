@@ -11,6 +11,7 @@
 #include "mail/MailPanel.h"
 #include "talk/TalkPanel.h"
 #include "deck/DeckPanel.h"
+#include "notifications/NotificationService.h"
 #include "calendar/CalendarPanel.h"
 #include "notes/NotesPanel.h"
 #include "SettingsPanel.h"
@@ -133,6 +134,10 @@ void SouveraMainWindow::connectAccount(AccountState *accountState)
     _notesPanel->setAccountState(accountState);
     _filesPanel->setAccountState(accountState);
     _settingsPanel->setAccountState(accountState);
+    if (!_notificationService) {
+        _notificationService = new NotificationService(this);
+    }
+    _notificationService->setAccountState(accountState);
 }
 
 void SouveraMainWindow::enforceWorkspaceSetup()

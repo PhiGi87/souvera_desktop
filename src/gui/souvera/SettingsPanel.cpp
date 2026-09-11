@@ -5,6 +5,9 @@
 
 #include "SettingsPanel.h"
 #include "folderwizard.h"
+#include "notifications/NotificationService.h"
+#include "generalsettings.h"
+#include "networksettings.h"
 
 #include "mail/JmapClient.h"
 #include "mail/MailLoginFlow.h"
@@ -237,6 +240,57 @@ void SettingsPanel::setupUi()
         emit viewSettingsChanged();
     });
     contentLayout->addWidget(mailViewCard);
+
+    // ---- Benachrichtigungen ----
+    {
+        QVBoxLayout *notifLayout = nullptr;
+        auto *notifCard = makeCard(QStringLiteral("Benachrichtigungen"), content, &notifLayout);
+
+        auto *masterCheck = new QCheckBox(
+            QStringLiteral("Desktop-Benachrichtigungen aktivieren"), notifCard);
+        masterCheck->setChecked(NotificationService::notificationsEnabled());
+        notifLayout->addWidget(masterCheck);
+
+        auto *mailCheck = new QCheckBox(
+            QStringLiteral("Bei neuen E-Mails benachrichtigen"), notifCard);
+        mailCheck->setChecked(NotificationService::mailNotificationsEnabled());
+        notifLayout->addWidget(mailCheck);
+
+        auto *notifHint = new QLabel(
+            QStringLiteral("Benachrichtigungen werden regelm\u00E4\u00DFig vom Server abgerufen "
+                           "(Nextcloud-Benachrichtigungen und Posteingang)."), notifCard);
+        notifHint->setObjectName(QStringLiteral("FolderStatusLabel"));
+        notifHint->setWordWrap(true);
+        notifLayout->addWidget(notifHint);
+
+        connect(masterCheck, &QCheckBox::toggled, this, [](bool checked) {
+            NotificationService::setNotificationsEnabled(checked);
+        });
+        connect(mailCheck, &QCheckBox::toggled, this, [](bool checked) {
+            NotificationService::setMailNotificationsEnabled(checked);
+        });
+        contentLayout->addWidget(notifCard);
+    }
+
+    // ---- Allgemein (Erweitert) ----
+    {
+        QVBoxLayout *generalLayout = nullptr;
+        auto *generalCard = makeCard(QStringLiteral("Allgemein (Erweitert)"), content, &generalLayout);
+        auto *generalSettings = new GeneralSettings(generalCard);
+        generalSettings->setContentsMargins(0, 0, 0, 0);
+        generalLayout->addWidget(generalSettings);
+        contentLayout->addWidget(generalCard);
+    }
+
+    // ---- Netzwerk ----
+    {
+        QVBoxLayout *networkLayout = nullptr;
+        auto *networkCard = makeCard(QStringLiteral("Netzwerk"), content, &networkLayout);
+        auto *networkSettings = new NetworkSettings({}, networkCard);
+        networkSettings->setContentsMargins(0, 0, 0, 0);
+        networkLayout->addWidget(networkSettings);
+        contentLayout->addWidget(networkCard);
+    }
 
     // ---- Diagnose ----
     QVBoxLayout *diagLayout = nullptr;

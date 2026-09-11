@@ -129,8 +129,7 @@ void TalkOcsApi::messagesRequest(const QString &apiBase, const QString &token, q
             }
             qCWarning(lcTalkOcsApi) << "fetchMessages failed:" << status << message;
             emit apiError(message);
-        },
-        {}, false);
+        });
 }
 
 void TalkOcsApi::sendMessage(const QString &token, const QString &text)

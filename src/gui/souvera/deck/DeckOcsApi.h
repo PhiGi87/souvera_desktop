@@ -25,16 +25,16 @@ public:
 
     void fetchBoards();
     void fetchStacks(int boardId);
-    void fetchCards(int stackId);
-    void createCard(int stackId, const QString &title, const QString &description);
-    void moveCard(int cardId, int stackId);
+    void createCard(int boardId, int stackId, const QString &title, const QString &description);
+    void moveCard(int boardId, int stackId, int cardId, int order);
+    void deleteCard(int boardId, int stackId, int cardId);
 
 signals:
     void boardsReceived(const QJsonArray &boards);
     void stacksReceived(const QJsonArray &stacks);
-    void cardsReceived(const QJsonArray &cards, int stackId);
-    void cardCreated(const QJsonObject &card, int stackId);
+    void cardCreated(const QJsonObject &card, int boardId, int stackId);
     void cardMoved();
+    void cardDeleted(int boardId, int stackId, int cardId);
     void apiError(const QString &message);
 
 private:

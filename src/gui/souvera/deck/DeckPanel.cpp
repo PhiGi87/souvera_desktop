@@ -158,23 +158,9 @@ DeckPanel::DeckPanel(QWidget *parent)
         _columnsLayout->addStretch();
     });
 
-    connect(_ocsApi, &DeckOcsApi::cardsReceived, this, [this](const QJsonArray &cards, int stackId) {
-        qCInfo(lcDeckPanel) << "Cards received for stack" << stackId << ":" << cards.size();
-        for (auto *column : _columns) {
-            if (column->stackId() == stackId) {
-                column->clearCards();
-                for (const auto &cardVal : cards) {
-                    column->addCard(cardVal.toObject());
-                }
-                column->updateCardCount();
-                break;
-            }
-        }
-    });
-
-    connect(_ocsApi, &DeckOcsApi::cardCreated, this, [this](const QJsonObject &card, int stackId) {
-        qCInfo(lcDeckPanel) << "Card created in stack" << stackId;
-        _ocsApi->fetchCards(stackId);
+    connect(_ocsApi, &DeckOcsApi::cardCreated, this, [this](const QJsonObject &, int boardId, int) {
+        qCInfo(lcDeckPanel) << "Card created in board" << boardId;
+        _ocsApi->fetchStacks(boardId);
     });
 
     connect(_ocsApi, &DeckOcsApi::apiError, this, [this](const QString &message) {
@@ -264,6 +250,7 @@ void DeckPanel::clearColumns()
 void DeckPanel::loadBoard(int boardId)
 {
     qCInfo(lcDeckPanel) << "Loading board:" << boardId;
+    _currentBoardId = boardId;
     clearColumns();
     _ocsApi->fetchStacks(boardId);
 }
@@ -278,10 +265,10 @@ void DeckPanel::onNewCard()
         QStringLiteral("Titel der neuen Karte:"),
         QLineEdit::Normal, {}, &ok);
 
-    if (!ok || title.isEmpty()) return;
+    if (!ok || title.isEmpty() || _currentBoardId < 0) return;
 
     const auto targetStackId = _columns.first()->stackId();
-    _ocsApi->createCard(targetStackId, title, QString{});
+    _ocsApi->createCard(_currentBoardId, targetStackId, title, QString{});
 }
 
 } // namespace OCC
