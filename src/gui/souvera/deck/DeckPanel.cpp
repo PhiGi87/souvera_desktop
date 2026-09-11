@@ -14,6 +14,13 @@
 #include <QComboBox>
 #include <QPushButton>
 #include <QMessageBox>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QPlainTextEdit>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QScrollArea>
+#include <QMimeData>
 #include <QInputDialog>
 #include <QLoggingCategory>
 #include <QJsonObject>
@@ -51,33 +58,97 @@ DeckColumnWidget::DeckColumnWidget(const QString &title, QWidget *parent)
     headerLayout->addWidget(_countLabel);
     headerLayout->addStretch();
 
+    auto *addBtn = new QPushButton(QStringLiteral("+"), headerWidget);
+    addBtn->setObjectName(QStringLiteral("DeckColumnAddBtn"));
+    addBtn->setFixedSize(22, 22);
+    addBtn->setToolTip(QStringLiteral("Karte in dieser Liste anlegen"));
+    connect(addBtn, &QPushButton::clicked, this, [this]() {
+        emit addCardRequested(_stackId);
+    });
+    headerLayout->addWidget(addBtn);
+
     layout->addWidget(headerWidget);
 
-    _cardsLayout = new QVBoxLayout;
+    // Vertical scroll area so long card lists never clip; drag&drop events
+    // arrive on the scroll container and are forwarded via the event filter.
+    auto *scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    _scrollContainer = new QWidget(scroll);
+    _scrollContainer->setStyleSheet(QStringLiteral("background: transparent;"));
+    _cardsLayout = new QVBoxLayout(_scrollContainer);
     _cardsLayout->setContentsMargins(0, 0, 0, 0);
     _cardsLayout->setSpacing(6);
     _cardsLayout->addStretch();
-    layout->addLayout(_cardsLayout);
+
+    scroll->setWidget(_scrollContainer);
+    _scrollContainer->setAcceptDrops(true);
+    _scrollContainer->installEventFilter(this);
+    layout->addWidget(scroll, 1);
 }
 
-DeckCardWidget *DeckColumnWidget::addCard(const QJsonObject &cardData)
+void DeckColumnWidget::addCardWidget(DeckCardWidget *card)
 {
-    const auto title = cardData[QStringLiteral("title")].toString();
-    const auto description = cardData[QStringLiteral("description")].toString();
-
-    auto *card = new DeckCardWidget(title, description, this);
-
-    const auto labels = cardData[QStringLiteral("labels")].toArray();
-    for (const auto &labelVal : labels) {
-        const auto labelObj = labelVal.toObject();
-        const auto labelColor = labelObj[QStringLiteral("color")].toString();
-        const auto labelTitle = labelObj[QStringLiteral("title")].toString();
-        card->addLabel(labelColor, labelTitle);
-    }
-
     _cardsLayout->insertWidget(_cardsLayout->count() - 1, card);
     updateCardCount();
-    return card;
+}
+
+void DeckColumnWidget::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (event->mimeData()->hasFormat(QStringLiteral("application/x-souvera-deck-card"))) {
+        event->acceptProposedAction();
+    }
+}
+
+void DeckColumnWidget::dragMoveEvent(QDragMoveEvent *event)
+{
+    event->acceptProposedAction();
+}
+
+void DeckColumnWidget::dropEvent(QDropEvent *event)
+{
+    handleDrop(event->mimeData());
+    event->acceptProposedAction();
+}
+
+void DeckColumnWidget::handleDrop(const QMimeData *mime)
+{
+    const auto data = mime->data(QStringLiteral("application/x-souvera-deck-card"));
+    const auto parts = QString::fromUtf8(data).split(':');
+    if (parts.size() != 2) return;
+    const auto cardId = parts.at(0).toInt();
+    const auto fromStackId = parts.at(1).toInt();
+    if (cardId <= 0) return;
+    emit cardDropped(cardId, fromStackId, _stackId);
+}
+
+bool DeckColumnWidget::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == _scrollContainer) {
+        switch (event->type()) {
+        case QEvent::DragEnter: {
+            auto *e = static_cast<QDragEnterEvent *>(event);
+            if (e->mimeData()->hasFormat(QStringLiteral("application/x-souvera-deck-card"))) {
+                e->acceptProposedAction();
+                return true;
+            }
+            break;
+        }
+        case QEvent::DragMove:
+            static_cast<QDragMoveEvent *>(event)->acceptProposedAction();
+            return true;
+        case QEvent::Drop:
+            handleDrop(static_cast<QDropEvent *>(event)->mimeData());
+            static_cast<QDropEvent *>(event)->acceptProposedAction();
+            return true;
+        default:
+            break;
+        }
+    }
+    return QFrame::eventFilter(watched, event);
 }
 
 void DeckColumnWidget::removeCard(DeckCardWidget *card)
@@ -109,8 +180,16 @@ void DeckColumnWidget::applyColumnTheme()
 {
     const auto *theme = SouveraTheme::instance();
     setStyleSheet(QStringLiteral(
-        "DeckColumnWidget { background-color: %1; border-radius: 10px; }")
-        .arg(theme->color(SouveraTheme::Color::Background).name()));
+        "DeckColumnWidget { background-color: %1; border-radius: 10px; border: 1px solid %2; }"
+        "DeckColumnWidget QPushButton#DeckColumnAddBtn { background: transparent;"
+        "  border: 1px solid %2; border-radius: 6px; color: %3; font-size: 13px; }"
+        "DeckColumnWidget QPushButton#DeckColumnAddBtn:hover { background: %4; border-color: %5; }")
+        .arg(theme->color(SouveraTheme::Color::Background).name(),
+             theme->color(SouveraTheme::Color::Border).name(),
+             theme->color(SouveraTheme::Color::TextMuted).name(),
+             theme->color(SouveraTheme::Color::SurfaceHover).name(),
+             theme->color(SouveraTheme::Color::Accent).name()));
+    setAcceptDrops(true);
 }
 
 DeckPanel::DeckPanel(QWidget *parent)
@@ -154,9 +233,19 @@ DeckPanel::DeckPanel(QWidget *parent)
 
             const auto cards = stackObj[QStringLiteral("cards")].toArray();
             for (const auto &cardVal : cards) {
-                column->addCard(cardVal.toObject());
+                auto *card = new DeckCardWidget(cardVal.toObject(), stackId, column);
+                connectCard(card);
+                column->addCardWidget(card);
             }
             column->updateCardCount();
+
+            connect(column, &DeckColumnWidget::cardDropped,
+                    this, &DeckPanel::onCardDropped);
+            connect(column, &DeckColumnWidget::addCardRequested, this, [this](int stackId) {
+                if (_currentBoardId < 0) return;
+                _newCardTargetStackId = stackId;
+                onNewCard();
+            });
 
             _columnsLayout->addWidget(column);
             _columns.append(column);
@@ -166,6 +255,18 @@ DeckPanel::DeckPanel(QWidget *parent)
 
     connect(_ocsApi, &DeckOcsApi::cardCreated, this, [this](const QJsonObject &, int boardId, int) {
         qCInfo(lcDeckPanel) << "Card created in board" << boardId;
+        _ocsApi->fetchStacks(boardId);
+    });
+    connect(_ocsApi, &DeckOcsApi::cardUpdated, this, [this](const QJsonObject &, int boardId, int) {
+        _ocsApi->fetchStacks(boardId);
+    });
+    connect(_ocsApi, &DeckOcsApi::cardMoved, this, [this]() {
+        if (_currentBoardId >= 0) _ocsApi->fetchStacks(_currentBoardId);
+    });
+    connect(_ocsApi, &DeckOcsApi::stackCreated, this, [this](const QJsonObject &, int boardId) {
+        _ocsApi->fetchStacks(boardId);
+    });
+    connect(_ocsApi, &DeckOcsApi::cardDeleted, this, [this](int boardId, int, int) {
         _ocsApi->fetchStacks(boardId);
     });
 
@@ -256,6 +357,13 @@ void DeckPanel::setupUi()
     _columnsLayout->setContentsMargins(16, 12, 16, 12);
     _columnsLayout->setSpacing(12);
 
+    auto *addStackBtn = new QPushButton(QStringLiteral("+ Liste hinzuf\u00FCgen"), _columnsContainer);
+    addStackBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+    addStackBtn->setFixedWidth(160);
+    connect(addStackBtn, &QPushButton::clicked, this, &DeckPanel::onAddStack);
+    _addStackButton = addStackBtn;
+    _columnsLayout->addWidget(addStackBtn);
+
     _scrollArea->setWidget(_columnsContainer);
     layout->addWidget(_scrollArea, 1);
 }
@@ -272,6 +380,12 @@ void DeckPanel::clearColumns()
         auto *item = _columnsLayout->takeAt(0);
         delete item;
     }
+
+    // The add-stack button lived in the layout and was removed with it.
+    if (_addStackButton) {
+        _columnsLayout->addWidget(_addStackButton);
+        _addStackButton->setVisible(true);
+    }
 }
 
 void DeckPanel::loadBoard(int boardId)
@@ -284,7 +398,7 @@ void DeckPanel::loadBoard(int boardId)
 
 void DeckPanel::onNewCard()
 {
-    if (_columns.isEmpty()) return;
+    if (_columns.isEmpty() || _currentBoardId < 0) return;
 
     auto ok = false;
     const auto title = QInputDialog::getText(this,
@@ -292,10 +406,88 @@ void DeckPanel::onNewCard()
         QStringLiteral("Titel der neuen Karte:"),
         QLineEdit::Normal, {}, &ok);
 
-    if (!ok || title.isEmpty() || _currentBoardId < 0) return;
+    if (!ok || title.isEmpty()) return;
 
-    const auto targetStackId = _columns.first()->stackId();
+    const auto targetStackId = _newCardTargetStackId > 0
+        ? _newCardTargetStackId
+        : _columns.first()->stackId();
+    _newCardTargetStackId = -1;
     _ocsApi->createCard(_currentBoardId, targetStackId, title, QString{});
+}
+
+DeckCardWidget *DeckPanel::findCard(int cardId) const
+{
+    for (auto *column : _columns) {
+        for (auto *child : column->findChildren<DeckCardWidget *>()) {
+            if (child->cardId() == cardId) return child;
+        }
+    }
+    return nullptr;
+}
+
+void DeckPanel::connectCard(DeckCardWidget *card)
+{
+    connect(card, &DeckCardWidget::editRequested, this, &DeckPanel::onEditCard);
+    connect(card, &DeckCardWidget::deleteRequested, this, &DeckPanel::onDeleteCard);
+}
+
+void DeckPanel::onEditCard(int cardId, int stackId)
+{
+    auto *card = findCard(cardId);
+    if (!card || _currentBoardId < 0) return;
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("Karte bearbeiten"));
+    auto *layout = new QVBoxLayout(&dialog);
+    auto *titleEdit = new QLineEdit(card->cardData().value(QStringLiteral("title")).toString(), &dialog);
+    auto *descEdit = new QPlainTextEdit(
+        card->cardData().value(QStringLiteral("description")).toString(), &dialog);
+    descEdit->setPlaceholderText(QStringLiteral("Beschreibung (Markdown)"));
+    descEdit->setFixedHeight(120);
+    auto *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(new QLabel(QStringLiteral("Titel"), &dialog));
+    layout->addWidget(titleEdit);
+    layout->addWidget(new QLabel(QStringLiteral("Beschreibung"), &dialog));
+    layout->addWidget(descEdit);
+    layout->addWidget(buttons);
+
+    if (dialog.exec() != QDialog::Accepted) return;
+    const auto newTitle = titleEdit->text().trimmed();
+    if (newTitle.isEmpty()) return;
+    _ocsApi->updateCard(_currentBoardId, stackId, cardId, newTitle, descEdit->toPlainText());
+}
+
+void DeckPanel::onDeleteCard(int cardId, int stackId)
+{
+    if (_currentBoardId < 0) return;
+    const auto ret = QMessageBox::question(this,
+        QStringLiteral("Karte l\u00F6schen"),
+        QStringLiteral("Soll diese Karte wirklich gel\u00F6scht werden?"));
+    if (ret != QMessageBox::Yes) return;
+    _ocsApi->deleteCard(_currentBoardId, stackId, cardId);
+}
+
+void DeckPanel::onAddStack()
+{
+    if (_currentBoardId < 0) return;
+    auto ok = false;
+    const auto title = QInputDialog::getText(this,
+        QStringLiteral("Neue Liste"),
+        QStringLiteral("Name der neuen Liste:"),
+        QLineEdit::Normal, {}, &ok);
+    if (!ok || title.isEmpty()) return;
+    _ocsApi->createStack(_currentBoardId, title);
+}
+
+void DeckPanel::onCardDropped(int cardId, int fromStackId, int targetStackId)
+{
+    if (_currentBoardId < 0 || fromStackId == targetStackId) return;
+    // Append at the end of the target stack. The URL needs the SOURCE stack,
+    // the body carries the TARGET stack (see DeckOcsApi::moveCard).
+    _ocsApi->moveCard(_currentBoardId, fromStackId, targetStackId, cardId, 999);
 }
 
 } // namespace OCC

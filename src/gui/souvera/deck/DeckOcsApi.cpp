@@ -68,6 +68,50 @@ void DeckOcsApi::fetchStacks(int boardId)
         });
 }
 
+void DeckOcsApi::createStack(int boardId, const QString &title)
+{
+    // POST /boards/{boardId}/stacks (Android DeckAPI.createStack)
+    const auto url = apiUrl(QStringLiteral("/boards/%1/stacks").arg(boardId));
+    if (url.isEmpty()) return;
+
+    QJsonObject body;
+    body[QStringLiteral("title")] = title;
+
+    const auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
+    OcsDavClient::jsonRequest(_accountState, "POST", QUrl(url), payload,
+        [this, boardId](const QJsonDocument &doc, int) {
+            emit stackCreated(doc.object(), boardId);
+        },
+        [this](int, const QString &message) {
+            qCWarning(lcDeckOcsApi) << "createStack failed:" << message;
+            emit apiError(message);
+        });
+}
+
+void DeckOcsApi::updateCard(int boardId, int stackId, int cardId, const QString &title,
+                            const QString &description)
+{
+    // PUT /boards/{boardId}/stacks/{stackId}/cards/{cardId} (Android DeckAPI.updateCard)
+    const auto url = apiUrl(QStringLiteral("/boards/%1/stacks/%2/cards/%3")
+                                .arg(boardId).arg(stackId).arg(cardId));
+    if (url.isEmpty()) return;
+
+    QJsonObject body;
+    body[QStringLiteral("title")] = title;
+    body[QStringLiteral("description")] = description;
+    body[QStringLiteral("type")] = QStringLiteral("plain");
+
+    const auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
+    OcsDavClient::jsonRequest(_accountState, "PUT", QUrl(url), payload,
+        [this, boardId, stackId](const QJsonDocument &doc, int) {
+            emit cardUpdated(doc.object(), boardId, stackId);
+        },
+        [this](int, const QString &message) {
+            qCWarning(lcDeckOcsApi) << "updateCard failed:" << message;
+            emit apiError(message);
+        });
+}
+
 void DeckOcsApi::createCard(int boardId, int stackId, const QString &title, const QString &description)
 {
     // POST /boards/{boardId}/stacks/{stackId}/cards (Android DeckAPI.createCard)
@@ -90,14 +134,17 @@ void DeckOcsApi::createCard(int boardId, int stackId, const QString &title, cons
         });
 }
 
-void DeckOcsApi::moveCard(int boardId, int stackId, int cardId, int order)
+void DeckOcsApi::moveCard(int boardId, int sourceStackId, int targetStackId, int cardId, int order)
 {
-    // PUT /boards/{boardId}/stacks/{stackId}/cards/{cardId}/reorder (Android DeckAPI.moveCard)
+    // PUT /boards/{boardId}/stacks/{sourceStackId}/cards/{cardId}/reorder
+    // (Android DeckAPI.moveCard + Reorder.java: the URL carries the SOURCE
+    // column, the JSON body carries the TARGET column in "stackId".)
     const auto url = apiUrl(QStringLiteral("/boards/%1/stacks/%2/cards/%3/reorder")
-                                .arg(boardId).arg(stackId).arg(cardId));
+                                .arg(boardId).arg(sourceStackId).arg(cardId));
     if (url.isEmpty()) return;
 
     QJsonObject body;
+    body[QStringLiteral("stackId")] = targetStackId;
     body[QStringLiteral("order")] = order;
 
     const auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact);

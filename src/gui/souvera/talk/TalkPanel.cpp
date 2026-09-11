@@ -173,6 +173,8 @@ TalkPanel::TalkPanel(QWidget *parent)
 
     connect(_ocsApi, &TalkOcsApi::conversationsReceived,
             this, &TalkPanel::onConversationsReceived);
+    connect(SouveraTheme::instance(), &SouveraTheme::themeChanged,
+            _conversationList, [this]() { _conversationList->viewport()->update(); });
     connect(_ocsApi, &TalkOcsApi::selfUserReceived, this, [this](const QString &userId) {
         if (!userId.isEmpty() && userId != _currentUserId) {
             qCInfo(lcTalkPanel) << "Own Talk actor id:" << userId;
@@ -189,6 +191,12 @@ TalkPanel::TalkPanel(QWidget *parent)
         }
     });
     connect(_ocsApi, &TalkOcsApi::apiError, this, [this](const QString &message) {
+        // Timeouts of background polls are transient noise — log only.
+        if (message.contains(QStringLiteral("timed out"))
+            || message.contains(QStringLiteral("Operation canceled"))) {
+            qCWarning(lcTalkPanel) << "Transient Talk API failure:" << message;
+            return;
+        }
         setApiStatus(message, true);
     });
 }
@@ -317,7 +325,8 @@ void TalkPanel::setupUi()
                 _messageInput->setFocus();
             });
         }
-        _emojiPicker->move(emojiBtn->mapToGlobal(QPoint(0, -_emojiPicker->sizeHint().height() - 6)));
+        _emojiPicker->adjustSize();
+        _emojiPicker->move(emojiBtn->mapToGlobal(QPoint(0, -_emojiPicker->height() - 6)));
         _emojiPicker->show();
     });
 
@@ -435,8 +444,11 @@ void TalkPanel::sendMessage()
 void TalkPanel::pollMessages()
 {
     if (_currentToken.isEmpty()) return;
-    qCInfo(lcTalkPanel) << "Polling for messages in" << _currentToken;
-    _ocsApi->fetchMessages(_currentToken, _lastKnownId);
+    // Plain refetch (lookIntoFuture=0): the long-poll variant holds the
+    // connection for up to 30s server-side and regularly runs into our
+    // transfer timeout ("Operation timed out"). Refetching the last page is
+    // cheap, always returns and keeps the UI current.
+    _ocsApi->fetchMessages(_currentToken);
 }
 
 void TalkPanel::onConversationsReceived(const QJsonArray &conversations)
@@ -461,20 +473,28 @@ void TalkPanel::onMessagesReceived(const QJsonArray &messages, const QString &to
         return;
     }
 
-    rebuildChatArea(messages);
-
+    // Rebuild only when something actually arrived — the 5s poll returns the
+    // same page constantly, and rebuilding would yank the view to the bottom
+    // and destroy text selection / scroll position.
+    qint64 maxIdInBatch = 0;
     for (const auto &msgVal : messages) {
-        const auto msgObj = msgVal.toObject();
-        const auto id = static_cast<qint64>(msgObj.value(QStringLiteral("id")).toDouble());
-        if (id > _lastKnownId) {
-            _lastKnownId = id;
+        const auto id = static_cast<qint64>(msgVal.toObject().value(QStringLiteral("id")).toDouble());
+        if (id > maxIdInBatch) maxIdInBatch = id;
+    }
+    if (maxIdInBatch > _lastKnownId) {
+        auto *scrollBar = _chatScroll->verticalScrollBar();
+        const auto wasAtBottom = scrollBar->value() >= scrollBar->maximum() - 50;
+
+        rebuildChatArea(messages);
+        _lastKnownId = maxIdInBatch;
+
+        // Autoscroll only when the user was already at the bottom.
+        if (wasAtBottom) {
+            scrollBar->setValue(scrollBar->maximum());
         }
     }
 
     setApiStatus(QString());
-
-    auto *scrollBar = _chatScroll->verticalScrollBar();
-    scrollBar->setValue(scrollBar->maximum());
 }
 
 void TalkPanel::rebuildChatArea(const QJsonArray &messages)

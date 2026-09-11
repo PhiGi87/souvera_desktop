@@ -145,7 +145,7 @@ void TalkOcsApi::messagesRequest(const QString &apiBase, const QString &token, q
         },
         [this, apiBase, token, lastKnownId](int status, const QString &message) {
             if (status == 404 && apiBase.contains(QStringLiteral("v1"))) {
-                messagesRequest(QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), token, lastKnownId);
+                messagesRequest(baseUrlOf(_accountState) + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), token, lastKnownId);
                 return;
             }
             qCWarning(lcTalkOcsApi) << "fetchMessages failed:" << status << message;
@@ -174,7 +174,7 @@ void TalkOcsApi::sendRequest(const QString &apiBase, const QString &token, const
         },
         [this, apiBase, token, text](int status, const QString &message) {
             if (status == 404 && apiBase.contains(QStringLiteral("v1"))) {
-                sendRequest(QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), token, text);
+                sendRequest(baseUrlOf(_accountState) + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), token, text);
                 return;
             }
             qCWarning(lcTalkOcsApi) << "sendMessage failed:" << status << message;

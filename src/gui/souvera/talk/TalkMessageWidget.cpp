@@ -84,12 +84,26 @@ void TalkMessageWidget::setMessage(const QJsonObject &msg)
     const auto dt = QDateTime::fromSecsSinceEpoch(timestamp);
     _timestampLabel->setText(dt.toString(QStringLiteral("HH:mm")));
 
-    // File shares: render as an attachment card instead of plain text.
+    // System messages carry "{actor}"-style templates; the real names live in
+    // messageParameters. Substitute them so users never see raw server code.
     const auto messageParameters = msg.value(QStringLiteral("messageParameters")).toObject();
-    const auto fileParam = messageParameters.value(QStringLiteral("file")).toObject();
+    auto renderText = messageText;
     const auto messageType = msg.value(QStringLiteral("messageType")).toString();
-    if (!fileParam.isEmpty() || messageType == QLatin1String("file_message")
-        || messageType == QLatin1String("voice-message")) {
+    if (messageType == QLatin1String("system")) {
+        const auto keys = messageParameters.keys();
+        for (const auto &key : keys) {
+            const auto displayName = messageParameters.value(key).toObject()
+                                         .value(QStringLiteral("name")).toString();
+            if (!displayName.isEmpty()) {
+                renderText.replace(QLatin1Char('{') + key + QLatin1Char('}'), displayName);
+            }
+        }
+    }
+
+    const auto fileParam = messageParameters.value(QStringLiteral("file")).toObject();
+    if (!fileParam.isEmpty()) {
+        // Show any accompanying text (e.g. "X shared a file") WITH the card.
+        setMessageText(renderText);
         renderAttachment(fileParam);
         return;
     }
@@ -97,7 +111,7 @@ void TalkMessageWidget::setMessage(const QJsonObject &msg)
         _attachmentCard->deleteLater();
         _attachmentCard = nullptr;
     }
-    setMessageText(messageText);
+    setMessageText(renderText);
 
     QPixmap avatar(24, 24);
     avatar.fill(Qt::transparent);
@@ -122,6 +136,9 @@ void TalkMessageWidget::setMessage(const QJsonObject &msg)
 void TalkMessageWidget::setMessageText(const QString &text)
 {
     _textLabel->setVisible(true);
+    // QLabel renders HTML when the text looks like markup — enforce plain text
+    // so malicious or accidental tags can never distort the chat layout.
+    _textLabel->setTextFormat(Qt::PlainText);
     _textLabel->setText(text);
 }
 

@@ -44,9 +44,7 @@ QVariant TalkConversationModel::data(const QModelIndex &index, int role) const
         if (lastMsg.isEmpty()) return QStringLiteral("Noch keine Nachrichten");
         const auto author = lastMsg.value(QStringLiteral("actorDisplayName")).toString();
         const auto text = lastMsg.value(QStringLiteral("message")).toString();
-        const auto messageText = lastMsg.value(QStringLiteral("messageParameters")).toObject().isEmpty()
-            ? text : text;
-        return author.isEmpty() ? messageText : QStringLiteral("%1: %2").arg(author, messageText);
+        return author.isEmpty() ? text : QStringLiteral("%1: %2").arg(author, text);
     }
     case LastTimestampRole: {
         const auto lastMsg = conv.value(QStringLiteral("lastMessage")).toObject();
