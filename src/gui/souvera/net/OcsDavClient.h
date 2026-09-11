@@ -56,6 +56,24 @@ public:
                             const std::function<void(const QJsonDocument &, int)> &onJson,
                             const ErrorCallback &onError);
 
+    /**
+     * Raw binary GET/POST returning the untouched response body (file
+     * downloads etc.).
+     */
+    static void binaryRequest(AccountState *accountState, const QByteArray &verb,
+                              const QUrl &url, const QByteArray &body,
+                              const std::function<void(const QByteArray &, int)> &onBody,
+                              const ErrorCallback &onError);
+
+    /**
+     * Multipart form upload (Deck attachment upload). The callback receives
+     * the parsed JSON response root.
+     */
+    static void multipartRequest(AccountState *accountState, const QUrl &url,
+                                 class QHttpMultiPart *multiPart,
+                                 const std::function<void(const QJsonDocument &, int)> &onJson,
+                                 const ErrorCallback &onError);
+
     /** DAV request (PROPFIND/REPORT/...) returning the raw XML body. */
     static void davRequest(AccountState *accountState, const QByteArray &verb,
                            const QUrl &url, const QByteArray &xmlBody,

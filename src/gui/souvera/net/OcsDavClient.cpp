@@ -5,6 +5,8 @@
 
 #include "OcsDavClient.h"
 
+#include <QHttpMultiPart>
+
 #include "account.h"
 #include "accountstate.h"
 #include "creds/abstractcredentials.h"
@@ -234,6 +236,56 @@ void OcsDavClient::jsonRequest(AccountState *accountState, const QByteArray &ver
             onError(-1, QStringLiteral("Kein Konto verbunden."));
             return;
         }
+        if (status < 200 || status >= 300) {
+            onError(status, statusMessage(status, reply->errorString()));
+            return;
+        }
+        onJson(QJsonDocument::fromJson(reply->readAll()), status);
+    });
+}
+
+void OcsDavClient::binaryRequest(AccountState *accountState, const QByteArray &verb,
+                                 const QUrl &url, const QByteArray &body,
+                                 const std::function<void(const QByteArray &, int)> &onBody,
+                                 const ErrorCallback &onError)
+{
+    runRequest(accountState, verb, url,
+               {{QByteArray("Accept"), QByteArray("*/*")}},
+               body,
+               [onBody, onError](QNetworkReply *reply, int status) {
+        if (!reply) {
+            onError(-1, QStringLiteral("Kein Konto verbunden."));
+            return;
+        }
+        if (status < 200 || status >= 300) {
+            onError(status, statusMessage(status, reply->errorString()));
+            return;
+        }
+        onBody(reply->readAll(), status);
+    });
+}
+
+void OcsDavClient::multipartRequest(AccountState *accountState, const QUrl &url,
+                                    QHttpMultiPart *multiPart,
+                                    const std::function<void(const QJsonDocument &, int)> &onJson,
+                                    const ErrorCallback &onError)
+{
+    if (!accountState || !accountState->account()) {
+        onError(-1, QStringLiteral("Kein Konto verbunden."));
+        return;
+    }
+    const auto auth = authBytes(accountState);
+    QNetworkRequest req(url);
+    req.setRawHeader("Authorization", "Basic " + auth);
+    req.setTransferTimeout(120000);
+
+    auto *nam = accountState->account()->networkAccessManager();
+    QNetworkReply *reply = nam->post(req, multiPart);
+    multiPart->setParent(reply);
+
+    QObject::connect(reply, &QNetworkReply::finished, reply, [reply, onJson, onError]() {
+        reply->deleteLater();
+        const auto status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (status < 200 || status >= 300) {
             onError(status, statusMessage(status, reply->errorString()));
             return;

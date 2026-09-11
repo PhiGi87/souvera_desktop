@@ -4,31 +4,43 @@
  */
 
 #include "DeckPanel.h"
-#include "DeckOcsApi.h"
 #include "DeckCardWidget.h"
+#include "DeckManager.h"
+#include "DeckModels.h"
+#include "DeckOcsApi.h"
 #include "theme/SouveraTheme.h"
 #include "account.h"
 #include "accountstate.h"
 
-#include <QLabel>
 #include <QComboBox>
-#include <QPushButton>
-#include <QMessageBox>
 #include <QDialog>
 #include <QDialogButtonBox>
-#include <QPlainTextEdit>
 #include <QDragEnterEvent>
 #include <QDropEvent>
-#include <QScrollArea>
-#include <QMimeData>
+#include <QHBoxLayout>
 #include <QInputDialog>
-#include <QLoggingCategory>
+#include <QJsonArray>
+#include <QLineEdit>
 #include <QJsonObject>
-#include <QJsonValue>
+#include <QLabel>
+#include <QLoggingCategory>
+#include <QMimeData>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QScrollArea>
+#include <QVBoxLayout>
+
+namespace OCC {
 
 Q_LOGGING_CATEGORY(lcDeckPanel, "souvera.deck.panel")
 
-namespace OCC {
+namespace {
+constexpr auto DeckCardMimeType = "application/x-souvera-deck-card";
+}
+
+// ---------------------------------------------------------------------------
+// DeckColumnWidget
+// ---------------------------------------------------------------------------
 
 DeckColumnWidget::DeckColumnWidget(const QString &title, QWidget *parent)
     : QFrame(parent)
@@ -96,61 +108,6 @@ void DeckColumnWidget::addCardWidget(DeckCardWidget *card)
     updateCardCount();
 }
 
-void DeckColumnWidget::dragEnterEvent(QDragEnterEvent *event)
-{
-    if (event->mimeData()->hasFormat(QStringLiteral("application/x-souvera-deck-card"))) {
-        event->acceptProposedAction();
-    }
-}
-
-void DeckColumnWidget::dragMoveEvent(QDragMoveEvent *event)
-{
-    event->acceptProposedAction();
-}
-
-void DeckColumnWidget::dropEvent(QDropEvent *event)
-{
-    handleDrop(event->mimeData());
-    event->acceptProposedAction();
-}
-
-void DeckColumnWidget::handleDrop(const QMimeData *mime)
-{
-    const auto data = mime->data(QStringLiteral("application/x-souvera-deck-card"));
-    const auto parts = QString::fromUtf8(data).split(':');
-    if (parts.size() != 2) return;
-    const auto cardId = parts.at(0).toInt();
-    const auto fromStackId = parts.at(1).toInt();
-    if (cardId <= 0) return;
-    emit cardDropped(cardId, fromStackId, _stackId);
-}
-
-bool DeckColumnWidget::eventFilter(QObject *watched, QEvent *event)
-{
-    if (watched == _scrollContainer) {
-        switch (event->type()) {
-        case QEvent::DragEnter: {
-            auto *e = static_cast<QDragEnterEvent *>(event);
-            if (e->mimeData()->hasFormat(QStringLiteral("application/x-souvera-deck-card"))) {
-                e->acceptProposedAction();
-                return true;
-            }
-            break;
-        }
-        case QEvent::DragMove:
-            static_cast<QDragMoveEvent *>(event)->acceptProposedAction();
-            return true;
-        case QEvent::Drop:
-            handleDrop(static_cast<QDropEvent *>(event)->mimeData());
-            static_cast<QDropEvent *>(event)->acceptProposedAction();
-            return true;
-        default:
-            break;
-        }
-    }
-    return QFrame::eventFilter(watched, event);
-}
-
 void DeckColumnWidget::clearCards()
 {
     while (_cardsLayout->count() > 1) {
@@ -185,6 +142,65 @@ void DeckColumnWidget::applyColumnTheme()
     setAcceptDrops(true);
 }
 
+void DeckColumnWidget::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (event->mimeData()->hasFormat(QLatin1String(DeckCardMimeType))) {
+        event->acceptProposedAction();
+    }
+}
+
+void DeckColumnWidget::dragMoveEvent(QDragMoveEvent *event)
+{
+    event->acceptProposedAction();
+}
+
+void DeckColumnWidget::dropEvent(QDropEvent *event)
+{
+    handleDrop(event->mimeData());
+    event->acceptProposedAction();
+}
+
+void DeckColumnWidget::handleDrop(const QMimeData *mime)
+{
+    const auto data = mime->data(QLatin1String(DeckCardMimeType));
+    const auto parts = QString::fromUtf8(data).split(QLatin1Char(':'));
+    if (parts.size() != 2) return;
+    const auto cardId = parts.at(0).toInt();
+    const auto fromStackId = parts.at(1).toInt();
+    if (cardId <= 0) return;
+    emit cardDropped(cardId, fromStackId, _stackId);
+}
+
+bool DeckColumnWidget::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == _scrollContainer) {
+        switch (event->type()) {
+        case QEvent::DragEnter: {
+            auto *e = static_cast<QDragEnterEvent *>(event);
+            if (e->mimeData()->hasFormat(QLatin1String(DeckCardMimeType))) {
+                e->acceptProposedAction();
+                return true;
+            }
+            break;
+        }
+        case QEvent::DragMove:
+            static_cast<QDragMoveEvent *>(event)->acceptProposedAction();
+            return true;
+        case QEvent::Drop:
+            handleDrop(static_cast<QDropEvent *>(event)->mimeData());
+            static_cast<QDropEvent *>(event)->acceptProposedAction();
+            return true;
+        default:
+            break;
+        }
+    }
+    return QFrame::eventFilter(watched, event);
+}
+
+// ---------------------------------------------------------------------------
+// DeckPanel
+// ---------------------------------------------------------------------------
+
 DeckPanel::DeckPanel(QWidget *parent)
     : QWidget(parent)
 {
@@ -215,35 +231,8 @@ DeckPanel::DeckPanel(QWidget *parent)
 
     connect(_ocsApi, &DeckOcsApi::stacksReceived, this, [this](const QJsonArray &stacks) {
         qCInfo(lcDeckPanel) << "Stacks received:" << stacks.size();
-        clearColumns();
-        for (const auto &stackVal : stacks) {
-            const auto stackObj = stackVal.toObject();
-            const auto stackId = stackObj[QStringLiteral("id")].toInt();
-            const auto title = stackObj[QStringLiteral("title")].toString();
-
-            auto *column = new DeckColumnWidget(title, _columnsContainer);
-            column->setStackId(stackId);
-
-            const auto cards = stackObj[QStringLiteral("cards")].toArray();
-            for (const auto &cardVal : cards) {
-                auto *card = new DeckCardWidget(cardVal.toObject(), stackId, column);
-                connectCard(card);
-                column->addCardWidget(card);
-            }
-            column->updateCardCount();
-
-            connect(column, &DeckColumnWidget::cardDropped,
-                    this, &DeckPanel::onCardDropped);
-            connect(column, &DeckColumnWidget::addCardRequested, this, [this](int stackId) {
-                if (_currentBoardId < 0) return;
-                _newCardTargetStackId = stackId;
-                onNewCard();
-            });
-
-            _columnsLayout->addWidget(column);
-            _columns.append(column);
-        }
-        _columnsLayout->addStretch();
+        DeckManager::instance()->storeStacksCache(_currentBoardId, stacks);
+        renderStacks(stacks);
     });
 
     connect(_ocsApi, &DeckOcsApi::cardCreated, this, [this](const QJsonObject &, int boardId, int) {
@@ -259,6 +248,12 @@ DeckPanel::DeckPanel(QWidget *parent)
     connect(_ocsApi, &DeckOcsApi::stackCreated, this, [this](const QJsonObject &, int boardId) {
         _ocsApi->fetchStacks(boardId);
     });
+    connect(_ocsApi, &DeckOcsApi::stackUpdated, this, [this](int boardId, int) {
+        _ocsApi->fetchStacks(boardId);
+    });
+    connect(_ocsApi, &DeckOcsApi::stackDeleted, this, [this](int boardId, int) {
+        _ocsApi->fetchStacks(boardId);
+    });
     connect(_ocsApi, &DeckOcsApi::cardDeleted, this, [this](int boardId, int, int) {
         _ocsApi->fetchStacks(boardId);
     });
@@ -272,6 +267,7 @@ DeckPanel::DeckPanel(QWidget *parent)
 void DeckPanel::setAccountState(AccountState *state)
 {
     _ocsApi->setAccountState(state);
+    DeckManager::instance()->setAccountState(state);
     if (state && state->account()) {
         setStatus(QStringLiteral("Lade Boards\u2026"));
         loadBoards();
@@ -313,10 +309,6 @@ void DeckPanel::setupUi()
 
     _boardComboBox = new QComboBox(toolbar);
     _boardComboBox->setObjectName(QStringLiteral("MailSendAsCombo"));
-
-    _statusLabel = new QLabel(toolbar);
-    _statusLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
-    _statusLabel->setWordWrap(true);
     _boardComboBox->setMinimumWidth(200);
     _boardComboBox->setPlaceholderText(QStringLiteral("Board ausw\u00E4hlen\u2026"));
     connect(_boardComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -326,6 +318,10 @@ void DeckPanel::setupUi()
         }
     });
     toolbarLayout->addWidget(_boardComboBox);
+
+    _statusLabel = new QLabel(toolbar);
+    _statusLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
+    _statusLabel->setWordWrap(true);
     toolbarLayout->addWidget(_statusLabel, 1);
 
     toolbarLayout->addStretch();
@@ -336,8 +332,6 @@ void DeckPanel::setupUi()
     toolbarLayout->addWidget(_newCardButton);
 
     layout->addWidget(toolbar);
-
-
 
     _scrollArea = new QScrollArea(this);
     _scrollArea->setWidgetResizable(true);
@@ -350,12 +344,11 @@ void DeckPanel::setupUi()
     _columnsLayout->setContentsMargins(16, 12, 16, 12);
     _columnsLayout->setSpacing(12);
 
-    auto *addStackBtn = new QPushButton(QStringLiteral("+ Liste hinzuf\u00FCgen"), _columnsContainer);
-    addStackBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
-    addStackBtn->setFixedWidth(160);
-    connect(addStackBtn, &QPushButton::clicked, this, &DeckPanel::onAddStack);
-    _addStackButton = addStackBtn;
-    _columnsLayout->addWidget(addStackBtn);
+    _addStackButton = new QPushButton(QStringLiteral("+ Liste hinzuf\u00FCgen"), _columnsContainer);
+    _addStackButton->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+    _addStackButton->setFixedWidth(160);
+    connect(_addStackButton, &QPushButton::clicked, this, &DeckPanel::onAddStack);
+    _columnsLayout->addWidget(_addStackButton);
 
     _scrollArea->setWidget(_columnsContainer);
     layout->addWidget(_scrollArea, 1);
@@ -381,11 +374,51 @@ void DeckPanel::clearColumns()
     }
 }
 
+void DeckPanel::renderStacks(const QJsonArray &stacks)
+{
+    clearColumns();
+    for (const auto &stackVal : stacks) {
+        const auto stackObj = stackVal.toObject();
+        const auto stackId = stackObj[QStringLiteral("id")].toInt();
+        const auto title = stackObj[QStringLiteral("title")].toString();
+
+        auto *column = new DeckColumnWidget(title, _columnsContainer);
+        column->setStackId(stackId);
+
+        const auto cards = stackObj[QStringLiteral("cards")].toArray();
+        for (const auto &cardVal : cards) {
+            auto *card = new DeckCardWidget(cardVal.toObject(), stackId, column);
+            connectCard(card);
+            column->addCardWidget(card);
+        }
+        column->updateCardCount();
+
+        connect(column, &DeckColumnWidget::cardDropped,
+                this, &DeckPanel::onCardDropped);
+        connect(column, &DeckColumnWidget::addCardRequested, this, [this](int stackId) {
+            if (_currentBoardId < 0) return;
+            _newCardTargetStackId = stackId;
+            onNewCard();
+        });
+
+        _columnsLayout->addWidget(column);
+        _columns.append(column);
+    }
+    _columnsLayout->addStretch();
+}
+
 void DeckPanel::loadBoard(int boardId)
 {
     qCInfo(lcDeckPanel) << "Loading board:" << boardId;
     _currentBoardId = boardId;
-    clearColumns();
+    // Instant display from cache, then refresh from the server.
+    const auto cached = DeckManager::instance()->cachedStacks(boardId);
+    if (!cached.isEmpty()) {
+        renderStacks(cached);
+    } else {
+        clearColumns();
+        setStatus(QStringLiteral("Lade Board\u2026"));
+    }
     _ocsApi->fetchStacks(boardId);
 }
 
@@ -450,7 +483,10 @@ void DeckPanel::onEditCard(int cardId, int stackId)
     if (dialog.exec() != QDialog::Accepted) return;
     const auto newTitle = titleEdit->text().trimmed();
     if (newTitle.isEmpty()) return;
-    _ocsApi->updateCard(_currentBoardId, stackId, cardId, newTitle, descEdit->toPlainText());
+    // The Deck API rejects partial card PUTs with HTTP 400 — send back the
+    // complete object (only title/description changed).
+    _ocsApi->updateCardFields(_currentBoardId, stackId, card->cardData(),
+                              newTitle, descEdit->toPlainText());
 }
 
 void DeckPanel::onDeleteCard(int cardId, int stackId)
