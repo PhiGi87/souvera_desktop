@@ -56,7 +56,7 @@ void TalkOcsApi::fetchConversations()
     // Try the clean URL first (no /index.php). If it fails with 404 or
     // returns non-JSON (some reverse-proxy setups need /index.php),
     // conversationsRequest falls back internally.
-    conversationsRequest(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), false);
+    conversationsRequest(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), false);
 }
 
 void TalkOcsApi::conversationsRequest(const QString &apiBase, bool isV1Retry)
@@ -70,6 +70,12 @@ void TalkOcsApi::conversationsRequest(const QString &apiBase, bool isV1Retry)
             emit conversationsReceived(data);
         },
         [this, apiBase, isV1Retry, url](int status, const QString &message) {
+            if (status == 404 && !isV1Retry) {
+                // v4 not available (older Talk server) — fall back to v1
+                qCInfo(lcTalkOcsApi) << "v4 returned 404, retrying with v1";
+                conversationsRequest(QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), true);
+                return;
+            }
             qCWarning(lcTalkOcsApi) << "conversationsRequest FAILED:"
                                      << "status:" << status
                                      << "url:" << url
