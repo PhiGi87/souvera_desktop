@@ -377,6 +377,18 @@ void SettingsPanel::onTestMail()
 
 void SettingsPanel::onExportDiagnostics()
 {
+    QString davUser;
+    QString credUser;
+    QString credLen;
+    if (_accountState && _accountState->account()) {
+        const auto acc = _accountState->account();
+        davUser = acc->davUser();
+        if (acc->credentials()) {
+            credUser = acc->credentials()->user();
+            credLen = QString::number(acc->credentials()->password().size());
+        }
+    }
+
     const auto reports = QStringList{
         QStringLiteral("Souvera Workspace Diagnose-Bericht"),
         QStringLiteral("=============================="),
@@ -388,6 +400,9 @@ void SettingsPanel::onExportDiagnostics()
         QStringLiteral("Konto: %1").arg(_accountLabel->text()),
         QStringLiteral("Server: %1").arg(_serverLabel->text()),
         QStringLiteral("Verbindung: %1").arg(_connectionLabel->text()),
+        QStringLiteral("DAV-User: %1").arg(davUser),
+        QStringLiteral("Credential-User: %1").arg(credUser),
+        QStringLiteral("Passwort-L\u00E4nge: %1").arg(credLen),
         QString(),
         QStringLiteral("Mail-Test: %1").arg(_mailTestResult->text()),
         QString(),

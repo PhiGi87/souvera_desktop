@@ -56,6 +56,9 @@ void runRequest(AccountState *accountState, const QByteArray &verb, const QUrl &
     const auto acc = accountState ? accountState->account() : nullptr;
     const auto auth = authBytes(accountState);
     if (!acc || auth.isEmpty()) {
+        qCWarning(lcOcsDavClient) << "Request aborted: no account or empty credentials."
+                                  << "Account:" << (acc ? "present" : "null")
+                                  << "Auth length:" << auth.size();
         onFinished(nullptr, -1);
         return;
     }
@@ -81,12 +84,30 @@ void runRequest(AccountState *accountState, const QByteArray &verb, const QUrl &
         reply = nam->sendCustomRequest(req, verb, body);
     }
 
-    QObject::connect(reply, &QNetworkReply::finished, reply, [guard, reply, onFinished]() {
+    qCInfo(lcOcsDavClient) << ">>>" << verb << url.toString()
+                           << "(user:" << (accountState->account()->credentials()
+                                               ? accountState->account()->credentials()->user()
+                                               : QStringLiteral("?") << ")";
+
+    QObject::connect(reply, &QNetworkReply::finished, reply, [guard, reply, onFinished, verb, url]() {
         reply->deleteLater();
         if (!guard) {
             return;
         }
         const auto status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const auto errorStr = reply->errorString();
+
+        if (status == 0 || (status < 200 || status >= 300)) {
+            qCWarning(lcOcsDavClient) << "<<<" << verb << url.toString()
+                                       << "status:" << status
+                                       << "error:" << errorStr
+                                       << "bytes:" << reply->size();
+        } else {
+            qCInfo(lcOcsDavClient) << "<<<" << verb << url.toString()
+                                    << "status:" << status
+                                    << "bytes:" << reply->size();
+        }
+
         onFinished(reply, status);
     });
 }

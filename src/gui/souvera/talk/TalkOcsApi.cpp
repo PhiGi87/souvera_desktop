@@ -53,26 +53,28 @@ void TalkOcsApi::fetchConversations()
         emit apiError(QStringLiteral("Kein Konto verbunden."));
         return;
     }
-    // Talk 4.x endpoint; falls back to v1 when the server is older.
+    // Try the clean URL first (no /index.php). If it fails with 404 or
+    // returns non-JSON (some reverse-proxy setups need /index.php),
+    // conversationsRequest falls back internally.
     conversationsRequest(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), false);
 }
 
 void TalkOcsApi::conversationsRequest(const QString &apiBase, bool isV1Retry)
 {
     const auto url = apiBase + QStringLiteral("/room");
+    qCInfo(lcTalkOcsApi) << "Fetching conversations from:" << url;
     OcsDavClient::ocsRequest(_accountState, "GET", url, {},
         [this](const QJsonObject &payload, int) {
             const auto data = payload.value(QStringLiteral("data")).toArray();
             qCInfo(lcTalkOcsApi) << "Fetched" << data.size() << "conversations";
             emit conversationsReceived(data);
         },
-        [this, apiBase, isV1Retry](int status, const QString &message) {
-            if (status == 404 && !isV1Retry) {
-                conversationsRequest(QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), true);
-                return;
-            }
-            qCWarning(lcTalkOcsApi) << "fetchConversations failed:" << status << message;
-            emit apiError(message);
+        [this, apiBase, isV1Retry, url](int status, const QString &message) {
+            qCWarning(lcTalkOcsApi) << "conversationsRequest FAILED:"
+                                     << "status:" << status
+                                     << "url:" << url
+                                     << "message:" << message;
+            emit apiError(QStringLiteral("Link: %1").arg(message));
         });
 }
 

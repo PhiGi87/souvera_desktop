@@ -164,7 +164,7 @@ void SouveraMainWindow::setupUi()
 
     _sidebar = new LeftSidebar(root);
     _sidebar->addItem(QStringLiteral("mail"), QStringLiteral("Mail"));
-    _sidebar->addItem(QStringLiteral("chat"), QStringLiteral("Talk"));
+    _sidebar->addItem(QStringLiteral("chat"), QStringLiteral("Link"));
     _sidebar->addItem(QStringLiteral("folder"), QStringLiteral("Dateien"));
     _sidebar->addItem(QStringLiteral("board"), QStringLiteral("Deck"));
     _sidebar->addItem(QStringLiteral("calendar"), QStringLiteral("Kalender"));

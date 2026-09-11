@@ -187,10 +187,10 @@ void TalkPanel::setAccountState(AccountState *state)
     _ocsApi->setAccountState(state);
     if (state && state->account()) {
         _currentUserId = state->account()->davUser();
+        setApiStatus(QStringLiteral("Lade Chats\u2026"));
         _ocsApi->fetchConversations();
-        setApiStatus(QString());
     } else {
-        _apiStatusLabel->setText(QStringLiteral("Kein Konto verbunden."));
+        setApiStatus(QStringLiteral("Kein Konto verbunden."), true);
     }
 }
 
@@ -205,7 +205,7 @@ void TalkPanel::setupUi()
     auto *toolbarLayout = new QHBoxLayout(toolbar);
     toolbarLayout->setContentsMargins(16, 8, 16, 8);
 
-    auto *title = new QLabel(QStringLiteral("Talk"), toolbar);
+    auto *title = new QLabel(QStringLiteral("Link"), toolbar);
     title->setObjectName(QStringLiteral("PanelTitle"));
     toolbarLayout->addWidget(title);
     toolbarLayout->addStretch();
@@ -253,7 +253,7 @@ void TalkPanel::setupUi()
     chatHeader->setObjectName(QStringLiteral("MailToolbar"));
     auto *chatHeaderLayout = new QHBoxLayout(chatHeader);
     chatHeaderLayout->setContentsMargins(16, 8, 16, 8);
-    _chatHeaderLabel = new QLabel(QStringLiteral("W\u00E4hle eine Konversation"), chatHeader);
+    _chatHeaderLabel = new QLabel(QStringLiteral("W\u00E4hle einen Chat"), chatHeader);
     _chatHeaderLabel->setObjectName(QStringLiteral("PanelTitle"));
     chatHeaderLayout->addWidget(_chatHeaderLabel);
     chatHeaderLayout->addStretch();
@@ -270,7 +270,7 @@ void TalkPanel::setupUi()
     containerLayout->setSpacing(4);
     containerLayout->addStretch();
 
-    auto *placeholder = new QLabel(QStringLiteral("W\u00E4hle links eine Konversation aus"), _chatContainer);
+    auto *placeholder = new QLabel(QStringLiteral("W\u00E4hle links einen Chat aus"), _chatContainer);
     placeholder->setObjectName(QStringLiteral("PanelPlaceholder"));
     placeholder->setAlignment(Qt::AlignCenter);
     containerLayout->addWidget(placeholder);
@@ -410,7 +410,7 @@ void TalkPanel::onConversationsReceived(const QJsonArray &conversations)
 {
     _conversationModel->setConversations(conversations);
     if (conversations.isEmpty()) {
-        setApiStatus(QStringLiteral("Keine Konversationen gefunden. Ist Nextcloud Talk auf dem Server aktiv?"));
+        setApiStatus(QStringLiteral("Keine Chats gefunden. Ist Nextcloud Talk (Souvera Link) auf dem Server aktiv?"));
     } else {
         setApiStatus(QString());
     }
