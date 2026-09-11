@@ -84,10 +84,10 @@ void runRequest(AccountState *accountState, const QByteArray &verb, const QUrl &
         reply = nam->sendCustomRequest(req, verb, body);
     }
 
+    const auto credUser = accountState->account()->credentials()
+        ? accountState->account()->credentials()->user() : QStringLiteral("?");
     qCInfo(lcOcsDavClient) << ">>>" << verb << url.toString()
-                           << "(user:" << (accountState->account()->credentials()
-                                               ? accountState->account()->credentials()->user()
-                                               : QStringLiteral("?") << ")";
+                           << "user:" << credUser;
 
     QObject::connect(reply, &QNetworkReply::finished, reply, [guard, reply, onFinished, verb, url]() {
         reply->deleteLater();
