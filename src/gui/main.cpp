@@ -159,6 +159,19 @@ int main(int argc, char **argv)
     installStartupLogger();
     qDebug() << "=== main() entered ===";
 
+#ifdef Q_OS_LINUX
+    // The AppImage bundles only the xcb platform plugin. When the desktop
+    // session asks Qt for "wayland" (explicit env or auto selection), Qt can
+    // end up loading the SYSTEM wayland plugin of a foreign Qt version,
+    // which segfaults before the UI appears. Default to xcb; a user-provided
+    // QT_QPA_PLATFORM still wins. Also drop an inherited QT_PLUGIN_PATH so
+    // system-side plugins never leak into the bundled Qt.
+    if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
+        qputenv("QT_QPA_PLATFORM", "xcb");
+    }
+    qunsetenv("QT_PLUGIN_PATH");
+#endif
+
 #ifdef Q_OS_WIN
     SetDllDirectory(L"");
     qputenv("QML_IMPORT_PATH", (QDir::currentPath() + QStringLiteral("/qml")).toLatin1());
