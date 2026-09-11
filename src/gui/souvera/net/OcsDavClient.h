@@ -14,6 +14,7 @@
 class QByteArray;
 class QJsonDocument;
 class QJsonObject;
+class QJsonValue;
 class QString;
 class QUrl;
 
@@ -31,7 +32,7 @@ class AccountState;
 class OcsDavClient
 {
 public:
-    using JsonCallback = std::function<void(const QJsonObject &payload, int httpStatus)>;
+    using JsonCallback = std::function<void(const QJsonValue &payload, int httpStatus)>;
     using ErrorCallback = std::function<void(int httpStatus, const QString &message)>;
     using RawCallback = std::function<void(const QByteArray &body, int httpStatus)>;
     using HeaderList = QList<QPair<QByteArray, QByteArray>>;

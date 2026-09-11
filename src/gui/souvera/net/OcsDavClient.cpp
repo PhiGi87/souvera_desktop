@@ -155,9 +155,13 @@ void OcsDavClient::ocsRequest(AccountState *accountState, const QByteArray &verb
             return;
         }
         const auto root = doc.object();
-        const auto meta = root.value(QStringLiteral("meta")).toObject();
+        // OCS v2 response format: {"ocs": {"meta": {...}, "data": ...}}
+        // The meta and data fields are INSIDE the "ocs" envelope — reading
+        // them from the top level silently returns empty values.
+        const auto ocs = root.value(QStringLiteral("ocs")).toObject();
+        const auto meta = ocs.value(QStringLiteral("meta")).toObject();
         const auto metaStatus = meta.value(QStringLiteral("status")).toInt(0);
-        const auto payload = root.value(QStringLiteral("data"));
+        const auto payload = ocs.value(QStringLiteral("data"));
 
         // OCS wraps errors in meta.statuscode even on HTTP 200.
         if (metaStatus != 0 && (metaStatus < 200 || metaStatus >= 300)) {
@@ -165,7 +169,7 @@ void OcsDavClient::ocsRequest(AccountState *accountState, const QByteArray &verb
                    QStringLiteral("OCS-Fehler %1").arg(metaStatus)));
             return;
         }
-        onJson(payload.toObject(), status);
+        onJson(payload, status);
     });
 }
 
