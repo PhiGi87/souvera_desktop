@@ -611,6 +611,56 @@ QLabel#DeckColumnCount {
     font-weight: 600;
 }
 
+QWidget#DeckColumnHeader {
+    background: transparent;
+    border-bottom: 2px solid @borderStrong@;
+}
+
+QToolButton#DeckBoardsButton,
+QToolButton#DeckFilterButton {
+    background: @surface@;
+    border: 1px solid @border@;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-weight: 600;
+    font-size: 13px;
+    color: @textPrimary@;
+}
+
+QToolButton#DeckBoardsButton:hover,
+QToolButton#DeckFilterButton:hover {
+    border-color: @accent@;
+    background: @surfaceHover@;
+}
+
+QPushButton#DeckColumnAddBtn,
+QToolButton#DeckColumnMenuBtn {
+    color: @textMuted@;
+    background: transparent;
+    border: 1px solid @border@;
+    border-radius: 6px;
+}
+
+QPushButton#DeckColumnAddBtn:hover,
+QToolButton#DeckColumnMenuBtn:hover {
+    color: @textPrimary@;
+    border-color: @accent@;
+    background: @surfaceHover@;
+}
+
+QLabel#DeckCardTitle {
+    font-size: 13px;
+    font-weight: 600;
+    color: @textPrimary@;
+    background: transparent;
+}
+
+QLabel#DeckCardDescription {
+    font-size: 11px;
+    color: @textSecondary@;
+    background: transparent;
+}
+
 /* ==========================================================================
    General Widgets
    ========================================================================== */

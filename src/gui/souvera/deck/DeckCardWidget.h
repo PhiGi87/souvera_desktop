@@ -33,7 +33,7 @@ public:
 signals:
     void editRequested(int cardId, int stackId);
     void deleteRequested(int cardId, int stackId);
-    void dragStarted(int cardId, int fromStackId);
+    void doneToggleRequested(int cardId, int stackId, bool done);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -41,6 +41,8 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
+    void enterEvent(QEnterEvent *event) override;
+    void leaveEvent(QEvent *event) override;
 
 private:
     void applyTheme();
@@ -58,6 +60,8 @@ private:
     QWidget *_metaContainer = nullptr;
     QHBoxLayout *_metaLayout = nullptr;
     QLabel *_dueLabel = nullptr;
+    QWidget *_doneCircle = nullptr;
+    QWidget *_hoverActions = nullptr;
 
     QPoint _pressPos;
     bool _dragArmed = false;

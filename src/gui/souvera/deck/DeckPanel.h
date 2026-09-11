@@ -7,6 +7,7 @@
 #define DECKPANEL_H
 
 #include <QFrame>
+#include <QSet>
 #include <QWidget>
 #include <QScrollArea>
 #include <QHBoxLayout>
@@ -16,6 +17,8 @@
 
 class QLabel;
 class QMimeData;
+class QMenu;
+class QToolButton;
 class QComboBox;
 class QPushButton;
 class QVBoxLayout;
@@ -46,6 +49,8 @@ public:
 signals:
     void cardDropped(int cardId, int fromStackId, int targetStackId, int insertIndex);
     void addCardRequested(int targetStackId);
+    void renameRequested(int stackId, const QString &newTitle);
+    void deleteRequested(int stackId);
 
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
@@ -85,19 +90,30 @@ private:
     void onDeleteCard(int cardId, int stackId);
     void onAddStack();
     void onCardDropped(int cardId, int fromStackId, int targetStackId, int insertIndex);
+    void onDoneToggleRequested(int cardId, int stackId, bool done);
     void setStatus(const QString &message, bool isError = false);
     [[nodiscard]] DeckCardWidget *findCard(int cardId) const;
     void connectCard(DeckCardWidget *card);
+    [[nodiscard]] QMenu *buildBoardsMenu();
+    [[nodiscard]] QMenu *buildFilterMenu();
+    [[nodiscard]] QVector<DeckLabel> boardLabelsOfCurrent() const;
+    [[nodiscard]] bool cardMatchesFilter(const QJsonObject &card) const;
+    void refreshFromServer();
 
     QScrollArea *_scrollArea = nullptr;
     QWidget *_columnsContainer = nullptr;
     QHBoxLayout *_columnsLayout = nullptr;
-    QComboBox *_boardComboBox = nullptr;
+    QToolButton *_boardsButton = nullptr;
     QLabel *_statusLabel = nullptr;
     int _currentBoardId = -1;
     int _newCardTargetStackId = -1;
     QPushButton *_addStackButton = nullptr;
     QPushButton *_newCardButton = nullptr;
+    QToolButton *_filterButton = nullptr;
+    QSet<int> _filterLabelIds;
+    QSet<QString> _filterAssignees;
+    int _dueFilter = 0; // 0=none 1=overdue 2=today 3=this week
+    bool boardFilterActive() const;
     DeckOcsApi *_ocsApi = nullptr;
     QJsonArray _boards;
     QVector<DeckColumnWidget *> _columns;

@@ -12,7 +12,9 @@
 #include "account.h"
 #include "accountstate.h"
 
+#include <QAction>
 #include <QComboBox>
+#include <QCursor>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDragEnterEvent>
@@ -29,6 +31,9 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QDateTime>
+#include <QGridLayout>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 namespace OCC {
@@ -277,22 +282,17 @@ DeckPanel::DeckPanel(QWidget *parent)
         qCInfo(lcDeckPanel) << "Boards received:" << boards.size();
         setStatus(QString{});
         _boards = boards;
-        _boardComboBox->clear();
-        for (const auto &boardVal : boards) {
-            const auto boardObj = boardVal.toObject();
-            const auto title = boardObj[QStringLiteral("title")].toString();
-            const auto boardId = boardObj[QStringLiteral("id")].toInt();
-            _boardComboBox->addItem(title, boardId);
-        }
-        if (_boardComboBox->count() > 0) {
-            _boardComboBox->setCurrentIndex(0);
-            loadBoard(_boardComboBox->currentData().toInt());
-        } else {
-            _boardComboBox->setPlaceholderText(QStringLiteral("Keine Boards \u2014 ist Nextcloud Deck aktiv?"));
+        if (_boards.isEmpty()) {
+            _boardsButton->setText(QStringLiteral("Keine Boards \u2014 ist Deck aktiv?"));
             setStatus(QStringLiteral(
                 "Keine Boards empfangen. Entweder hat dein Konto keine Deck-Boards, "
                 "oder der Server blockiert die API. Diagnose: startup.log \u2192 'deck'"), true);
+            return;
         }
+        // Auto-open the first board; its title goes on the picker button.
+        const auto first = _boards.first().toObject();
+        _boardsButton->setText(first.value(QStringLiteral("title")).toString());
+        loadBoard(first.value(QStringLiteral("id")).toInt());
     });
 
     connect(_ocsApi, &DeckOcsApi::stacksReceived, this, [this](const QJsonArray &stacks) {
@@ -373,17 +373,33 @@ void DeckPanel::setupUi()
 
     toolbarLayout->addSpacing(12);
 
-    _boardComboBox = new QComboBox(toolbar);
-    _boardComboBox->setObjectName(QStringLiteral("MailSendAsCombo"));
-    _boardComboBox->setMinimumWidth(200);
-    _boardComboBox->setPlaceholderText(QStringLiteral("Board ausw\u00E4hlen\u2026"));
-    connect(_boardComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this](int index) {
-        if (index >= 0) {
-            loadBoard(_boardComboBox->itemData(index).toInt());
-        }
+    _boardsButton = new QToolButton(toolbar);
+    _boardsButton->setObjectName(QStringLiteral("DeckBoardsButton"));
+    _boardsButton->setText(QStringLiteral("Board ausw\u00E4hlen\u2026"));
+    _boardsButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    _boardsButton->setMinimumWidth(180);
+    _boardsButton->setPopupMode(QToolButton::InstantPopup);
+    _boardsButton->setStyleSheet(QStringLiteral(
+        "QToolButton#DeckBoardsButton { background: %1; border: 1px solid %2;"
+        "  border-radius: 8px; padding: 6px 14px; font-weight: 600; font-size: 13px; }"
+        "QToolButton#DeckBoardsButton:hover { border-color: %3; }")
+        .arg(SouveraTheme::instance()->color(SouveraTheme::Color::Surface).name(),
+             SouveraTheme::instance()->color(SouveraTheme::Color::Border).name(),
+             SouveraTheme::instance()->color(SouveraTheme::Color::Accent).name()));
+    _boardsButton->setMenu(buildBoardsMenu());
+    toolbarLayout->addWidget(_boardsButton);
+
+    _filterButton = new QToolButton(toolbar);
+    _filterButton->setObjectName(QStringLiteral("DeckFilterButton"));
+    _filterButton->setText(QStringLiteral("\U0001F50D Filter"));
+    _filterButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    _filterButton->setPopupMode(QToolButton::InstantPopup);
+    connect(_filterButton, &QToolButton::clicked, this, [this]() {
+        auto *menu = buildFilterMenu();
+        menu->setAttribute(Qt::WA_DeleteOnClose);
+        menu->popup(_filterButton->mapToGlobal(QPoint(0, _filterButton->height())));
     });
-    toolbarLayout->addWidget(_boardComboBox);
+    toolbarLayout->addWidget(_filterButton);
 
     _statusLabel = new QLabel(toolbar);
     _statusLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
@@ -447,7 +463,9 @@ void DeckPanel::renderStacks(const QJsonArray &stacks)
 
         const auto cards = stackObj[QStringLiteral("cards")].toArray();
         for (const auto &cardVal : cards) {
-            auto *card = new DeckCardWidget(cardVal.toObject(), stackId, column);
+            const auto cardObj = cardVal.toObject();
+            if (boardFilterActive() && !cardMatchesFilter(cardObj)) continue;
+            auto *card = new DeckCardWidget(cardObj, stackId, column);
             connectCard(card);
             column->addCardWidget(card);
         }
@@ -485,6 +503,133 @@ void DeckPanel::loadBoard(int boardId)
         setStatus(QStringLiteral("Lade Board\u2026"));
     }
     _ocsApi->fetchStacks(boardId);
+}
+
+QMenu *DeckPanel::buildBoardsMenu()
+{
+    auto *menu = new QMenu(this);
+    for (const auto &boardVal : _boards) {
+        const auto boardObj = boardVal.toObject();
+        const auto boardId = boardObj.value(QStringLiteral("id")).toInt();
+        const auto boardTitle = boardObj.value(QStringLiteral("title")).toString();
+        const auto boardColor = QColor(boardObj.value(QStringLiteral("color")).toString());
+
+        auto *action = menu->addAction(boardTitle);
+        QPixmap pix(12, 12);
+        pix.fill(boardColor.isValid() ? boardColor : QColor(0x4b, 0xbf, 0xea));
+        action->setIcon(pix);
+        connect(action, &QAction::triggered, this, [this, boardId, boardTitle]() {
+            _boardsButton->setText(boardTitle);
+            loadBoard(boardId);
+        });
+    }
+    return menu;
+}
+
+QMenu *DeckPanel::buildFilterMenu()
+{
+    auto *menu = new QMenu(this);
+
+    auto *labelsMenu = menu->addMenu(QStringLiteral("Nach Label"));
+    const auto boardLabels = boardLabelsOfCurrent();
+    for (const auto &label : boardLabels) {
+        auto *action = labelsMenu->addAction(label.title.isEmpty()
+            ? QStringLiteral("(ohne Titel)") : label.title);
+        action->setCheckable(true);
+        action->setChecked(_filterLabelIds.contains(label.id));
+        if (label.color.isValid()) {
+            QPixmap pix(10, 10);
+            pix.fill(label.color);
+            action->setIcon(pix);
+        }
+        connect(action, &QAction::toggled, this, [this, label](bool checked) {
+            if (checked) {
+                _filterLabelIds.insert(label.id);
+            } else {
+                _filterLabelIds.remove(label.id);
+            }
+            refreshFromServer();
+        });
+    }
+    labelsMenu->setEnabled(!boardLabels.isEmpty());
+
+    auto *dueMenu = menu->addMenu(QStringLiteral("Nach F\u00E4lligkeit"));
+    const QStringList dueNames = {
+        QStringLiteral("Alle"),
+        QStringLiteral("\u00DCberf\u00E4llig"),
+        QStringLiteral("Heute f\u00E4llig"),
+        QStringLiteral("Diese Woche f\u00E4llig")
+    };
+    for (int i = 0; i <= 3; ++i) {
+        auto *action = dueMenu->addAction(dueNames.at(i));
+        action->setCheckable(true);
+        action->setChecked(_dueFilter == i);
+        connect(action, &QAction::triggered, this, [this, i]() {
+            _dueFilter = i;
+            refreshFromServer();
+        });
+    }
+
+    menu->addSeparator();
+    auto *reset = menu->addAction(QStringLiteral("Filter zur\u00FCcksetzen"));
+    connect(reset, &QAction::triggered, this, [this]() {
+        _filterLabelIds.clear();
+        _filterAssignees.clear();
+        _dueFilter = 0;
+        refreshFromServer();
+    });
+    return menu;
+}
+
+QVector<DeckLabel> DeckPanel::boardLabelsOfCurrent() const
+{
+    for (const auto &boardVal : _boards) {
+        const auto boardObj = boardVal.toObject();
+        if (boardObj.value(QStringLiteral("id")).toInt() == _currentBoardId) {
+            QVector<DeckLabel> labels;
+            for (const auto &v : boardObj.value(QStringLiteral("labels")).toArray()) {
+                labels.append(DeckLabel::fromJson(v.toObject()));
+            }
+            return labels;
+        }
+    }
+    return {};
+}
+
+void DeckPanel::refreshFromServer()
+{
+    if (_currentBoardId >= 0) {
+        _ocsApi->fetchStacks(_currentBoardId);
+    }
+}
+
+bool DeckPanel::boardFilterActive() const
+{
+    return !_filterLabelIds.isEmpty() || !_filterAssignees.isEmpty() || _dueFilter != 0;
+}
+
+bool DeckPanel::cardMatchesFilter(const QJsonObject &card) const
+{
+    const auto cardObj = DeckCard::fromJson(card);
+
+    if (!_filterLabelIds.isEmpty()) {
+        auto match = false;
+        for (const auto &label : cardObj.labels) {
+            if (_filterLabelIds.contains(label.id)) { match = true; break; }
+        }
+        if (!match) return false;
+    }
+    if (_dueFilter != 0) {
+        if (!cardObj.dueDate.isValid()) return false;
+        const auto now = QDateTime::currentDateTime();
+        switch (_dueFilter) {
+        case 1: if (cardObj.dueDate >= now) return false; break;
+        case 2: if (cardObj.dueDate.date() != now.date()) return false; break;
+        case 3: if (cardObj.dueDate > now.addDays(7)) return false; break;
+        default: break;
+        }
+    }
+    return true;
 }
 
 void DeckPanel::onNewCard()
