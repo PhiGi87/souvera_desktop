@@ -131,9 +131,17 @@ jobs:
           CMEOF
           APP_PATH="$APP" SEARCH_PATHS="$LIBDIRS" cmake -P /tmp/fixup_bundle.cmake
 
-          # fixup invalidates existing signatures; re-sign ad hoc so the
-          # bundle at least launches locally.
+          # fixup_bundle invalidates embedded signatures of the binaries it
+          # patches via install_name_tool (e.g. libsouverasync, souveracmd —
+          # loose files in Contents/MacOS that --deep skips). Re-sign every
+          # Mach-O explicitly, loose files first, then deep-sign the bundle.
+          find "$APP" -type f -exec file {} + 2>/dev/null | grep "Mach-O" | cut -d: -f1 | while IFS= read -r f; do
+            codesign --force --timestamp=none --sign - "$f" || true
+          done
           codesign --force --deep --sign - "$APP"
+
+          # Fail the run visibly if anything is still unsigned/modified.
+          codesign --verify --deep --strict "$APP"
 
           OUT="${{ github.workspace }}/souvera-artifacts"
           mkdir -p "$OUT"
