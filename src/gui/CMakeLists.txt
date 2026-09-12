@@ -290,6 +290,8 @@ set(client_SRCS
     souvera/mail/MailReaderWindow.cpp
     souvera/calendar/CalendarMonthView.h
     souvera/calendar/CalendarMonthView.cpp
+    souvera/net/SouveraAccountGate.h
+    souvera/net/SouveraAccountGate.cpp
     souvera/net/OcsDavClient.h
     souvera/net/OcsDavClient.cpp
     souvera/office/LokOffice.h

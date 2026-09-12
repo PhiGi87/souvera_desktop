@@ -6,6 +6,7 @@
 #include "FilesPanel.h"
 
 #include "files/RemoteFilesModel.h"
+#include "net/SouveraAccountGate.h"
 #include "office/OfficeManager.h"
 #include "office/LokOffice.h"
 #include "account.h"
@@ -101,7 +102,12 @@ void FilesPanel::setAccountState(AccountState *accountState)
     if (_remoteModel) {
         _remoteModel->setAccountState(accountState);
         if (accountState && _remoteModel->currentPath().isEmpty()) {
-            _remoteModel->load(QString());
+            // Wait for the keychain fetch: requests fired with empty
+            // credentials never complete.
+            Sou::whenCredentialsReady(accountState, this, [this, accountState]() {
+                if (accountState != _accountState) return;
+                _remoteModel->load(QString());
+            });
         }
     }
 }

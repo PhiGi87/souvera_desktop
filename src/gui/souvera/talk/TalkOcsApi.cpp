@@ -80,13 +80,14 @@ void TalkOcsApi::conversationsRequest(const QString &apiBase, bool isV1Retry)
             if (status == 404 && !isV1Retry) {
                 // v4 not available (older Talk server) — fall back to v1
                 qCInfo(lcTalkOcsApi) << "v4 returned 404, retrying with v1";
-                conversationsRequest(QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), true);
+                conversationsRequest(baseUrlOf(_accountState) + QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), true);
                 return;
             }
             qCWarning(lcTalkOcsApi) << "conversationsRequest FAILED:"
                                      << "status:" << status
-                                     << "url:" << url
-                                     << "message:" << message;
+                                     << "url_len:" << url.size()
+                                     << "msg_len:" << message.size()
+                                     << "msg_head:" << message.left(80);
             emit apiError(QStringLiteral("Link: %1").arg(message));
         });
 }

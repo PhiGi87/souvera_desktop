@@ -91,10 +91,13 @@ void NotificationService::setMailNotificationsEnabled(bool enabled)
 
 void NotificationService::pollNextcloud()
 {
-    if (!_accountState) return;
+    if (!_accountState || !_accountState->account()) return;
+
+    auto url = _accountState->account()->url().toString();
+    while (url.endsWith(QLatin1Char('/'))) url.chop(1);
 
     OcsDavClient::ocsRequest(_accountState, "GET",
-        QStringLiteral("/ocs/v2.php/apps/notifications/api/v2/notifications"), {},
+        url + QStringLiteral("/ocs/v2.php/apps/notifications/api/v2/notifications"), {},
         [this](const QJsonValue &payload, int) {
             _ncUnavailable = false;
             const auto data = payload.toArray();

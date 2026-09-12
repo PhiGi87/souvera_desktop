@@ -7,6 +7,7 @@
 #include "accountstate.h"
 #include "account.h"
 #include "creds/abstractcredentials.h"
+#include "net/SouveraAccountGate.h"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -94,7 +95,14 @@ void NotesPanel::setAccountState(AccountState *accountState)
 {
     if (_accountState == accountState) return;
     _accountState = accountState;
-    loadNotes();
+    if (accountState && accountState->account()) {
+        // Wait for the keychain fetch: requests fired with empty credentials
+        // never complete.
+        Sou::whenCredentialsReady(accountState, this, [this, accountState]() {
+            if (accountState != _accountState) return;
+            loadNotes();
+        });
+    }
 }
 
 void NotesPanel::fetchNotes()

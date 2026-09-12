@@ -8,6 +8,7 @@
 #include "MailComposer.h"
 #include "EmailListDelegate.h"
 #include "MailReaderWindow.h"
+#include "net/SouveraAccountGate.h"
 #include "account.h"
 #include "accountstate.h"
 #include "creds/abstractcredentials.h"
@@ -74,15 +75,20 @@ void MailPanel::wireAccount(AccountState *accountState)
     _mailRemintTried = false;
     setStatus(QStringLiteral("Mail-Anmeldung wird eingerichtet\u2026"));
     const auto accountGuard = QPointer<AccountState>(accountState);
-    MailLoginFlow::ensureCombinedPassword(accountState,
-        [this, accountGuard, accountState](const CombinedAppPassword &result) {
-            if (!accountGuard || accountState != _accountState) return;
-            startJmap(_mailUser, result.appPassword);
-        },
-        [this, accountGuard](const QString &error) {
-            if (!accountGuard) return;
-            setStatus(error, true);
-        });
+    // Wait for the keychain fetch: requests fired with empty credentials
+    // never complete.
+    Sou::whenCredentialsReady(accountState, this, [this, accountGuard, accountState]() {
+        if (!accountGuard || accountState != _accountState) return;
+        MailLoginFlow::ensureCombinedPassword(accountState,
+            [this, accountGuard, accountState](const CombinedAppPassword &result) {
+                if (!accountGuard || accountState != _accountState) return;
+                startJmap(_mailUser, result.appPassword);
+            },
+            [this, accountGuard](const QString &error) {
+                if (!accountGuard) return;
+                setStatus(error, true);
+            });
+    });
 }
 
 void MailPanel::startJmap(const QString &user, const QString &mailPassword)

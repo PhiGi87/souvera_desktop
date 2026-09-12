@@ -58,12 +58,15 @@ void DeckManager::setAccountState(AccountState *accountState)
 
 void DeckManager::fetchCapabilities()
 {
-    if (!_accountState || _capabilitiesFetched) return;
+    if (!_accountState || !_accountState->account() || _capabilitiesFetched) return;
     _capabilitiesFetched = true;
     const auto reqAccount = _accountState.data();
 
+    auto url = _accountState->account()->url().toString();
+    while (url.endsWith(QLatin1Char('/'))) url.chop(1);
+
     OcsDavClient::ocsRequest(_accountState, "GET",
-        QStringLiteral("/ocs/v2.php/cloud/capabilities"), {},
+        url + QStringLiteral("/ocs/v2.php/cloud/capabilities"), {},
         [this, reqAccount](const QJsonValue &payload, int) {
             // Ignore stale answers after a fast account switch.
             if (_accountState.data() != reqAccount) return;

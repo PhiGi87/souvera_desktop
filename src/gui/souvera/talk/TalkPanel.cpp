@@ -10,6 +10,7 @@
 #include "TalkConversationModel.h"
 #include "TalkOcsApi.h"
 #include "TalkMessageWidget.h"
+#include "net/SouveraAccountGate.h"
 
 #include "account.h"
 #include "accountstate.h"
@@ -208,9 +209,14 @@ void TalkPanel::setAccountState(AccountState *state)
     _ocsApi->setAccountState(state);
     if (state && state->account()) {
         _currentUserId = state->account()->davUser();
-        _ocsApi->fetchSelfUser();
         setApiStatus(QStringLiteral("Lade Chats\u2026"));
-        _ocsApi->fetchConversations();
+        // Wait for the keychain fetch: requests fired with empty credentials
+        // never complete.
+        Sou::whenCredentialsReady(state, this, [this, state]() {
+            if (state != _accountState) return;
+            _ocsApi->fetchSelfUser();
+            _ocsApi->fetchConversations();
+        });
     } else {
         setApiStatus(QStringLiteral("Kein Konto verbunden."), true);
     }
