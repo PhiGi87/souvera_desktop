@@ -27,6 +27,7 @@ public:
 
     void fetchBoards();
     void fetchStacks(int boardId);
+    void reorderFailed();
     void createStack(int boardId, const QString &title);
     void updateStack(int boardId, int stackId, const QString &title);
     void deleteStack(int boardId, int stackId);

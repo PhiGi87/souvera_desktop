@@ -175,7 +175,7 @@ void DeckColumnWidget::dragEnterEvent(QDragEnterEvent *event)
 
 void DeckColumnWidget::dragMoveEvent(QDragMoveEvent *event)
 {
-    showDropIndicator(event->position());
+    showDropIndicator(event->position(), event->mimeData());
     event->acceptProposedAction();
 }
 
@@ -201,13 +201,16 @@ void DeckColumnWidget::handleDrop(const QMimeData *mime, const QPointF &pos)
     for (int i = 0; i < _cardsLayout->count() - 1; ++i) {
         auto *w = _cardsLayout->itemAt(i)->widget();
         if (!w || w == _dropIndicator) continue;
+        if (auto *cardWidget = qobject_cast<DeckCardWidget *>(w)) {
+            if (cardWidget->cardId() == cardId) continue;
+        }
         if (pos.y() < w->geometry().center().y()) break;
         ++insertIndex;
     }
     emit cardDropped(cardId, fromStackId, _stackId, insertIndex);
 }
 
-void DeckColumnWidget::showDropIndicator(const QPointF &pos)
+void DeckColumnWidget::showDropIndicator(const QPointF &pos, const QMimeData *mime)
 {
     if (!_dropIndicator) {
         _dropIndicator = new QWidget(_scrollContainer);
@@ -215,13 +218,22 @@ void DeckColumnWidget::showDropIndicator(const QPointF &pos)
         _dropIndicator->setStyleSheet(QStringLiteral(
             "background-color: %1; border-radius: 1px;")
             .arg(SouveraTheme::instance()->color(SouveraTheme::Color::Accent).name()));
-        // Insert after the trailing stretch placeholder position handling:
-        // addWidget appends before the stretch via insert below.
+    }
+    // Exclude the dragged card so the indicator matches the final position.
+    auto draggedCardId = -1;
+    if (mime) {
+        const auto parts = QString::fromUtf8(
+            mime->data(QStringLiteral("application/x-souvera-deck-card")))
+            .split(QLatin1Char(':'));
+        if (parts.size() == 2) draggedCardId = parts.at(0).toInt();
     }
     auto insertRow = 0;
     for (int i = 0; i < _cardsLayout->count() - 1; ++i) {
         auto *w = _cardsLayout->itemAt(i)->widget();
         if (!w || w == _dropIndicator) continue;
+        if (auto *cardWidget = qobject_cast<DeckCardWidget *>(w)) {
+            if (cardWidget->cardId() == draggedCardId) continue;
+        }
         if (pos.y() < w->geometry().center().y()) break;
         ++insertRow;
     }
@@ -252,7 +264,8 @@ bool DeckColumnWidget::eventFilter(QObject *watched, QEvent *event)
             break;
         }
         case QEvent::DragMove:
-            showDropIndicator(static_cast<QDragMoveEvent *>(event)->position());
+            showDropIndicator(static_cast<QDragMoveEvent *>(event)->position(),
+                              static_cast<QDragMoveEvent *>(event)->mimeData());
             static_cast<QDragMoveEvent *>(event)->acceptProposedAction();
             return true;
         case QEvent::DragLeave:
@@ -314,6 +327,11 @@ DeckPanel::DeckPanel(QWidget *parent)
         _ocsApi->fetchStacks(boardId);
     });
     connect(_ocsApi, &DeckOcsApi::cardMoved, this, [this]() {
+        if (_currentBoardId >= 0) _ocsApi->fetchStacks(_currentBoardId);
+    });
+    connect(_ocsApi, &DeckOcsApi::reorderFailed, this, [this]() {
+        // Self-heal: restore the authoritative state after a failed reorder
+        // instead of leaving the optimistic view behind.
         if (_currentBoardId >= 0) _ocsApi->fetchStacks(_currentBoardId);
     });
     connect(_ocsApi, &DeckOcsApi::stackCreated, this, [this](const QJsonObject &, int boardId) {

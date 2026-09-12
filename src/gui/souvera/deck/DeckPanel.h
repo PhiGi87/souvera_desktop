@@ -62,7 +62,7 @@ protected:
 
 private:
     void handleDrop(const QMimeData *mime, const QPointF &pos);
-    void showDropIndicator(const QPointF &pos);
+    void showDropIndicator(const QPointF &pos, const QMimeData *mime);
     void hideDropIndicator();
 
     int _stackId = -1;

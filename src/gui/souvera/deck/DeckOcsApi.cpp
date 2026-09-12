@@ -65,12 +65,26 @@ void DeckOcsApi::fetchStacks(int boardId)
     const auto url = apiUrl(QStringLiteral("/boards/%1/stacks").arg(boardId));
     if (url.isEmpty()) return;
 
+    // Monotonic generation: a slow, stale response from an earlier fetch must
+    // never overwrite the state of a newer one (cards "flip back" otherwise).
+    const auto generation = ++_stacksFetchGeneration;
+
     OcsDavClient::jsonRequest(_accountState, "GET", QUrl(url), {},
-        [this](const QJsonDocument &doc, int) {
+        [this, boardId, generation](const QJsonDocument &doc, int) {
+            if (generation != _stacksFetchGeneration) {
+                qCInfo(lcDeckOcsApi) << "Dropping stale stacks response (gen"
+                                     << generation << "!=" << _stacksFetchGeneration << ")";
+                return;
+            }
+            if (!doc.isArray() || doc.array().isEmpty()) {
+                qCWarning(lcDeckOcsApi) << "Boards response is not a non-empty array; head:"
+                                        << QString::fromUtf8(doc.toJson(QJsonDocument::Compact).left(200));
+            }
             emit stacksReceived(doc.array());
         },
-        [this](int, const QString &message) {
-            qCWarning(lcDeckOcsApi) << "fetchStacks failed:" << message;
+        [this, generation](int status, const QString &message) {
+            if (generation != _stacksFetchGeneration) return;
+            qCWarning(lcDeckOcsApi) << "fetchStacks failed:" << status << message;
             emit apiError(message);
         });
 }
@@ -161,18 +175,33 @@ void DeckOcsApi::deleteStack(int boardId, int stackId)
         });
 }
 
+namespace {
+// Comments are served by the NextcloudServerAPI (Android ApiProvider:
+// NC_API_ENDPOINT = /ocs/v2.php/) — NOT by the plain Deck REST base. Requests
+// against /index.php/apps/deck/api/v1.0/cards/{id}/comments answer 405.
+QString commentsApiUrl(const QString &deckApiBase, int cardId, const QString &suffix = {})
+{
+    // deckApiBase = "<server>/index.php/apps/deck/api/v1.0" → derive the
+    // server root and prepend the OCS v2 base.
+    const auto root = deckApiBase.section(QStringLiteral("/index.php/"), 0, 0);
+    return root + QStringLiteral("/ocs/v2.php/apps/deck/api/v1.0/cards/%1%2")
+        .arg(cardId).arg(suffix);
+}
+}
+
 void DeckOcsApi::fetchComments(int cardId)
 {
-    // GET /cards/{cardId}/comments (NextcloudServerAPI.getComments)
-    const auto url = apiUrl(QStringLiteral("/cards/%1/comments").arg(cardId));
+    // GET /ocs/v2.php/apps/deck/api/v1.0/cards/{cardId}/comments
+    if (!_accountState || !_accountState->account()) return;
+    const auto url = commentsApiUrl(
+        apiUrl(QStringLiteral("/cards/%1").arg(cardId)).section(
+            QStringLiteral("/cards/"), 0, 0), cardId);
     if (url.isEmpty()) return;
 
-    OcsDavClient::jsonRequest(_accountState, "GET", QUrl(url), {},
-        [this, cardId](const QJsonDocument &doc, int) {
-            // The comments endpoint answers in the OCS envelope — unwrap it.
-            const auto ocs = doc.object().value(QStringLiteral("ocs")).toObject();
+    OcsDavClient::ocsRequest(_accountState, "GET", url, {},
+        [this, cardId](const QJsonValue &payload, int) {
             QVector<DeckComment> comments;
-            for (const auto &v : ocs.value(QStringLiteral("data")).toArray()) {
+            for (const auto &v : payload.toArray()) {
                 comments.append(DeckComment::fromJson(v.toObject()));
             }
             emit commentsReceived(cardId, comments);
@@ -185,15 +214,18 @@ void DeckOcsApi::fetchComments(int cardId)
 
 void DeckOcsApi::createComment(int cardId, const QString &message)
 {
-    const auto url = apiUrl(QStringLiteral("/cards/%1/comments").arg(cardId));
+    if (!_accountState || !_accountState->account()) return;
+    const auto url = commentsApiUrl(
+        apiUrl(QStringLiteral("/cards/%1").arg(cardId)).section(
+            QStringLiteral("/cards/"), 0, 0), cardId);
     if (url.isEmpty()) return;
 
     QJsonObject body;
     body[QStringLiteral("message")] = message;
 
     const auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
-    OcsDavClient::jsonRequest(_accountState, "POST", QUrl(url), payload,
-        [this, cardId](const QJsonDocument &, int) {
+    OcsDavClient::ocsRequest(_accountState, "POST", url, payload,
+        [this, cardId](const QJsonValue &, int) {
             emit commentCreated(cardId);
         },
         [this](int, const QString &message) {
@@ -204,15 +236,19 @@ void DeckOcsApi::createComment(int cardId, const QString &message)
 
 void DeckOcsApi::updateComment(int cardId, int commentId, const QString &message)
 {
-    const auto url = apiUrl(QStringLiteral("/cards/%1/comments/%2").arg(cardId).arg(commentId));
+    if (!_accountState || !_accountState->account()) return;
+    const auto url = commentsApiUrl(
+        apiUrl(QStringLiteral("/cards/%1").arg(cardId)).section(
+            QStringLiteral("/cards/"), 0, 0), cardId,
+        QStringLiteral("/%1").arg(commentId));
     if (url.isEmpty()) return;
 
     QJsonObject body;
     body[QStringLiteral("message")] = message;
 
     const auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
-    OcsDavClient::jsonRequest(_accountState, "PUT", QUrl(url), payload,
-        [this, cardId](const QJsonDocument &, int) {
+    OcsDavClient::ocsRequest(_accountState, "PUT", url, payload,
+        [this, cardId](const QJsonValue &, int) {
             emit commentUpdated(cardId);
         },
         [this](int, const QString &message) {
@@ -223,11 +259,15 @@ void DeckOcsApi::updateComment(int cardId, int commentId, const QString &message
 
 void DeckOcsApi::deleteComment(int cardId, int commentId)
 {
-    const auto url = apiUrl(QStringLiteral("/cards/%1/comments/%2").arg(cardId).arg(commentId));
+    if (!_accountState || !_accountState->account()) return;
+    const auto url = commentsApiUrl(
+        apiUrl(QStringLiteral("/cards/%1").arg(cardId)).section(
+            QStringLiteral("/cards/"), 0, 0), cardId,
+        QStringLiteral("/%1").arg(commentId));
     if (url.isEmpty()) return;
 
-    OcsDavClient::jsonRequest(_accountState, "DELETE", QUrl(url), {},
-        [this, cardId](const QJsonDocument &, int) {
+    OcsDavClient::ocsRequest(_accountState, "DELETE", url, {},
+        [this, cardId](const QJsonValue &, int) {
             emit commentDeleted(cardId);
         },
         [this](int, const QString &message) {
@@ -399,12 +439,17 @@ void DeckOcsApi::moveCard(int boardId, int sourceStackId, int targetStackId, int
     body[QStringLiteral("order")] = order;
 
     const auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
+    qCInfo(lcDeckOcsApi) << "Reordering card" << cardId << "from stack" << sourceStackId
+                         << "to stack" << targetStackId << "at order" << order;
     OcsDavClient::jsonRequest(_accountState, "PUT", QUrl(url), payload,
-        [this](const QJsonDocument &, int) {
+        [this](const QJsonDocument &doc, int) {
+            qCInfo(lcDeckOcsApi) << "Reorder response:"
+                                 << QString::fromUtf8(doc.toJson(QJsonDocument::Compact).left(200));
             emit cardMoved();
         },
-        [this](int, const QString &message) {
-            qCWarning(lcDeckOcsApi) << "moveCard failed:" << message;
+        [this](int status, const QString &message) {
+            qCWarning(lcDeckOcsApi) << "moveCard failed:" << status << message;
+            emit reorderFailed();
             emit apiError(message);
         });
 }
