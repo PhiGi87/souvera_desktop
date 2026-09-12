@@ -126,7 +126,14 @@ public:
         c.dueDate = parseDate(json.value(QStringLiteral("duedate")));
         c.startDate = parseDate(json.value(QStringLiteral("startdate")));
         c.color = QColor(json.value(QStringLiteral("color")).toString());
-        c.owner = DeckUser::fromJson(json.value(QStringLiteral("owner")).toObject());
+        // Deck < 1.17.0 ships the owner as a nested object, newer versions
+        // as a plain uid string — handle both or the uid is lost on save.
+        const auto ownerVal = json.value(QStringLiteral("owner"));
+        if (ownerVal.isString()) {
+            c.owner.uid = ownerVal.toString();
+        } else {
+            c.owner = DeckUser::fromJson(ownerVal.toObject());
+        }
         for (const auto &v : json.value(QStringLiteral("assignedUsers")).toArray()) {
             c.assignees.append(DeckUser::fromJson(v.toObject()
                 .value(QStringLiteral("participant")).toObject()));

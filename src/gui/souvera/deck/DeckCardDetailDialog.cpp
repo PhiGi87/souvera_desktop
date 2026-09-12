@@ -21,7 +21,10 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSet>
 #include <QTextBrowser>
+#include <QToolButton>
+#include <QUrl>
 #include <QVBoxLayout>
 
 namespace OCC {
@@ -162,9 +165,18 @@ void DeckCardDetailDialog::buildUi()
     _dueEdit->setCalendarPopup(true);
     _dueEdit->setDisplayFormat(QStringLiteral("dd.MM.yyyy"));
     _dueEdit->setSpecialValueText(QStringLiteral("—"));
-    if (_card.dueDate.isValid()) _dueEdit->setDate(_card.dueDate.date());
+    _dueEdit->setDate(_card.dueDate.isValid() ? _card.dueDate.date() : _dueEdit->minimumDate());
     connect(_dueEdit, &QDateEdit::dateChanged, this, [this]() { markDirty(); });
     rightLayout->addWidget(_dueEdit);
+    {
+        auto *clearBtn = new QToolButton(rightWidget);
+        clearBtn->setText(QStringLiteral("\u2715"));
+        clearBtn->setToolTip(QStringLiteral("F\u00E4lligkeit entfernen"));
+        connect(clearBtn, &QToolButton::clicked, this, [this]() {
+            _dueEdit->setDate(_dueEdit->minimumDate());
+        });
+        rightLayout->addWidget(clearBtn);
+    }
 
     if (_supportsStartDate) {
         rightLayout->addWidget(new QLabel(QStringLiteral("Start am"), this));
@@ -172,9 +184,18 @@ void DeckCardDetailDialog::buildUi()
         _startEdit->setCalendarPopup(true);
         _startEdit->setDisplayFormat(QStringLiteral("dd.MM.yyyy"));
         _startEdit->setSpecialValueText(QStringLiteral("—"));
-        if (_card.startDate.isValid()) _startEdit->setDate(_card.startDate.date());
+        _startEdit->setDate(_card.startDate.isValid() ? _card.startDate.date() : _startEdit->minimumDate());
         connect(_startEdit, &QDateEdit::dateChanged, this, [this]() { markDirty(); });
         rightLayout->addWidget(_startEdit);
+        {
+            auto *clearBtn = new QToolButton(rightWidget);
+            clearBtn->setText(QStringLiteral("\u2715"));
+            clearBtn->setToolTip(QStringLiteral("Startdatum entfernen"));
+            connect(clearBtn, &QToolButton::clicked, this, [this]() {
+                _startEdit->setDate(_startEdit->minimumDate());
+            });
+            rightLayout->addWidget(clearBtn);
+        }
     }
 
     // Labels

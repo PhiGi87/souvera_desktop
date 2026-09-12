@@ -344,7 +344,10 @@ void DeckOcsApi::downloadAttachment(int boardId, int stackId, int cardId, int at
     OcsDavClient::binaryRequest(_accountState, "GET", QUrl(url), {},
         [this, fileName](const QByteArray &data, int) {
             const auto dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
-            const auto localPath = dir + QStringLiteral("/deck-attachment-%1").arg(fileName);
+            // Sanitize: the server-supplied name must never contain path
+            // components (attachments named "../x" would escape the temp dir).
+            const auto safeName = QFileInfo(fileName).fileName();
+            const auto localPath = dir + QStringLiteral("/deck-attachment-%1").arg(safeName);
             QFile out(localPath);
             if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
                 emit apiError(QStringLiteral("Anhang konnte nicht gespeichert werden."));

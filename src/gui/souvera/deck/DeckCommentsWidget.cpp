@@ -11,8 +11,10 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPoint>
 #include <QLoggingCategory>
 #include <QPushButton>
+#include <QTimer>
 #include <QScrollArea>
 #include <QVBoxLayout>
 
@@ -163,6 +165,11 @@ void DeckCommentsWidget::rebuildList(const QVector<DeckComment> &comments)
         _listLayout->addWidget(row);
     }
     _listLayout->addStretch();
+
+    // Keep the newest comment visible after (re)loads.
+    QTimer::singleShot(50, this, [this]() {
+        _scrollArea->verticalScrollBar()->setValue(_scrollArea->verticalScrollBar()->maximum());
+    });
 }
 
 void DeckCommentsWidget::sendComment()
