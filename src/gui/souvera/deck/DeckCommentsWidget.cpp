@@ -16,6 +16,7 @@
 #include <QPushButton>
 #include <QTimer>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QVBoxLayout>
 
 namespace OCC {
