@@ -15,7 +15,6 @@
 #include <QLabel>
 #include <QMenu>
 #include <QEnterEvent>
-#include <QGraphicsOpacityEffect>
 #include <QToolButton>
 #include <QMetaType>
 #include <QMouseEvent>
@@ -108,17 +107,13 @@ DeckCardWidget::DeckCardWidget(const QJsonObject &cardData, int stackId, QWidget
 
 void DeckCardWidget::setTitle(const QString &title)
 {
+    // "Done" is expressed via strikethrough + dimmed colors — a
+    // QGraphicsOpacityEffect would force offscreen rendering and blur text.
     const auto isDone = _cardData.value(QStringLiteral("done")).toBool();
     _titleLabel->setText(title);
     QFont f = _titleLabel->font();
     f.setStrikeOut(isDone);
     _titleLabel->setFont(f);
-    setGraphicsEffect(nullptr);
-    if (isDone) {
-        auto *opacity = new QGraphicsOpacityEffect(this);
-        opacity->setOpacity(0.7);
-        setGraphicsEffect(opacity);
-    }
 }
 
 void DeckCardWidget::setDescription(const QString &description)

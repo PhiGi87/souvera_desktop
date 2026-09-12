@@ -20,6 +20,7 @@
 #include <QDialogButtonBox>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QDragMoveEvent>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QJsonArray>
@@ -290,6 +291,8 @@ DeckPanel::DeckPanel(QWidget *parent)
                 "oder der Server blockiert die API. Diagnose: startup.log \u2192 'deck'"), true);
             return;
         }
+        // Rebuild the picker menu now that the board list is known.
+        _boardsButton->setMenu(buildBoardsMenu());
         // Auto-open the first board; its title goes on the picker button.
         const auto first = _boards.first().toObject();
         _boardsButton->setText(first.value(QStringLiteral("title")).toString());
@@ -395,10 +398,57 @@ void DeckPanel::setupUi()
     _filterButton->setText(QStringLiteral("\U0001F50D Filter"));
     _filterButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     _filterButton->setPopupMode(QToolButton::InstantPopup);
-    connect(_filterButton, &QToolButton::clicked, this, [this]() {
-        auto *menu = buildFilterMenu();
-        menu->setAttribute(Qt::WA_DeleteOnClose);
-        menu->popup(_filterButton->mapToGlobal(QPoint(0, _filterButton->height())));
+    // InstantPopup suppresses clicked(); a permanent menu must be assigned
+    // and rebuilt on aboutToShow.
+    auto *filterMenu = new QMenu(_filterButton);
+    _filterButton->setMenu(filterMenu);
+    connect(filterMenu, &QMenu::aboutToShow, this, [this, filterMenu]() {
+        filterMenu->clear();
+        filterMenu->addSection(QStringLiteral("Nach Label"));
+        const auto boardLabels = boardLabelsOfCurrent();
+        for (const auto &label : boardLabels) {
+            auto *action = filterMenu->addAction(label.title.isEmpty()
+                ? QStringLiteral("(ohne Titel)") : label.title);
+            action->setCheckable(true);
+            action->setChecked(_filterLabelIds.contains(label.id));
+            if (label.color.isValid()) {
+                QPixmap pix(10, 10);
+                pix.fill(label.color);
+                action->setIcon(pix);
+            }
+            connect(action, &QAction::triggered, this, [this, label](bool checked) {
+                if (checked) {
+                    _filterLabelIds.insert(label.id);
+                } else {
+                    _filterLabelIds.remove(label.id);
+                }
+                refreshFromServer();
+            });
+        }
+        filterMenu->addSection(QStringLiteral("Nach F\u00E4lligkeit"));
+        const QStringList dueNames = {
+            QStringLiteral("Alle"),
+            QStringLiteral("\u00DCberf\u00E4llig"),
+            QStringLiteral("Heute f\u00E4llig"),
+            QStringLiteral("Diese Woche f\u00E4llig")
+        };
+        for (int i = 0; i <= 3; ++i) {
+            auto *action = filterMenu->addAction(dueNames.at(i));
+            action->setCheckable(true);
+            action->setChecked(_dueFilter == i);
+            connect(action, &QAction::triggered, this, [this, i]() {
+                _dueFilter = i;
+                refreshFromServer();
+            });
+        }
+        filterMenu->addSeparator();
+        connect(filterMenu->addAction(QStringLiteral("Filter zur\u00FCcksetzen")),
+                &QAction::triggered, this, [this]() {
+            _filterLabelIds.clear();
+            _filterAssignees.clear();
+            _dueFilter = 0;
+            refreshFromServer();
+        });
     });
     toolbarLayout->addWidget(_filterButton);
 
@@ -494,6 +544,10 @@ void DeckPanel::renderStacks(const QJsonArray &stacks)
 void DeckPanel::loadBoard(int boardId)
 {
     qCInfo(lcDeckPanel) << "Loading board:" << boardId;
+    // Label ids are board-specific — stale filters would hide cards randomly.
+    _filterLabelIds.clear();
+    _filterAssignees.clear();
+    _dueFilter = 0;
     _currentBoardId = boardId;
     // Instant display from cache, then refresh from the server.
     const auto cached = DeckManager::instance()->cachedStacks(boardId);
@@ -682,6 +736,20 @@ void DeckPanel::connectCard(DeckCardWidget *card)
 {
     connect(card, &DeckCardWidget::editRequested, this, &DeckPanel::onEditCard);
     connect(card, &DeckCardWidget::deleteRequested, this, &DeckPanel::onDeleteCard);
+    connect(card, &DeckCardWidget::doneToggleRequested, this,
+            &DeckPanel::onDoneToggleRequested);
+}
+
+void DeckPanel::onDoneToggleRequested(int cardId, int stackId, bool done)
+{
+    auto *card = findCard(cardId);
+    if (!card || _currentBoardId < 0) return;
+
+    // Optimistic UI: update the widget locally, then push the complete card.
+    auto body = card->cardData();
+    body[QStringLiteral("done")] = done;
+    card->updateFrom(body);
+    _ocsApi->updateCard(_currentBoardId, stackId, cardId, body);
 }
 
 void DeckPanel::onEditCard(int cardId, int stackId)
@@ -753,9 +821,9 @@ void DeckPanel::onCardDropped(int cardId, int fromStackId, int targetStackId, in
         }
     }
 
-    if (fromStackId == targetStackId) return;
-    // The URL needs the SOURCE stack, the body carries the TARGET stack (see
-    // DeckOcsApi::moveCard); order is the 0-based insertion position.
+    // Same-column sorting also has to be persisted — the reorder call is
+    // required in BOTH cases. The URL needs the SOURCE stack, the body the
+    // TARGET stack (see DeckOcsApi::moveCard); order = insertion position.
     _ocsApi->moveCard(_currentBoardId, fromStackId, targetStackId, cardId, insertIndex);
 }
 
