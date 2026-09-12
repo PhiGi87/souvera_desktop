@@ -6,6 +6,7 @@
 #ifndef MAILBODYVIEW_H
 #define MAILBODYVIEW_H
 
+#include <QHash>
 #include <QTextBrowser>
 
 class QNetworkAccessManager;

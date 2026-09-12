@@ -17,6 +17,8 @@ class QPushButton;
 
 namespace OCC {
 
+class MailBodyView;
+
 class AccountState;
 class MailComposer;
 
