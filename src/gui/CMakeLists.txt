@@ -320,6 +320,8 @@ set(client_SRCS
      souvera/mail/JmapEmailListModel.cpp
      souvera/mail/EmailListDelegate.h
      souvera/mail/EmailListDelegate.cpp
+     souvera/mail/MailBodyView.h
+     souvera/mail/MailBodyView.cpp
      souvera/mail/MailLoginFlow.h
      souvera/mail/MailLoginFlow.cpp
      souvera/notifications/NotificationService.h
