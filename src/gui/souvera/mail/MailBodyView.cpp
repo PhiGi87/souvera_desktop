@@ -74,6 +74,16 @@ constexpr QLatin1String kLightBannerBorder("#d7e4f3");
     return QString(url).replace(QLatin1String("&amp;"), QLatin1String("&"));
 }
 
+// Index of the capture group holding the attribute value; exactly one of
+// groups 2-4 matched. Null marks unmatched groups, a matched empty value
+// is non-null.
+[[nodiscard]] int attrValueGroup(const QRegularExpressionMatch &match)
+{
+    if (!match.captured(2).isNull()) return 2;
+    if (!match.captured(3).isNull()) return 3;
+    return 4;
+}
+
 } // namespace
 
 MailBodyView::MailBodyView(QWidget *parent)
@@ -148,11 +158,9 @@ QSet<QString> MailBodyView::remoteUrls(const QString &html)
     auto attrMatches = kAttrRe.globalMatch(html);
     while (attrMatches.hasNext()) {
         const auto match = attrMatches.next();
-        const auto value = match.captured(2).isEmpty() ? match.captured(3) : match.captured(2);
-        const auto unquoted = match.captured(4);
-        const auto candidate = value.isEmpty() ? unquoted : value;
-        if (isRemoteUrl(candidate)) {
-            urls.insert(decodeHtmlAmp(candidate.trimmed()));
+        const auto value = match.captured(attrValueGroup(match));
+        if (isRemoteUrl(value)) {
+            urls.insert(decodeHtmlAmp(value.trimmed()));
         }
     }
 
@@ -207,13 +215,9 @@ QString MailBodyView::blockRemoteResources(const QString &html, int *blockedCoun
     auto attrMatches = kAttrRe.globalMatch(result);
     while (attrMatches.hasNext()) {
         const auto match = attrMatches.next();
-        const auto value = match.captured(2).isEmpty() ? match.captured(3) : match.captured(2);
-        const auto unquoted = match.captured(4);
-        if (isRemoteUrl(value)) {
-            apply(match.capturedStart(2), match.capturedLength(2), QString(kBlockedPixel));
-            ++blocked;
-        } else if (isRemoteUrl(unquoted)) {
-            apply(match.capturedStart(4), match.capturedLength(4), QString(kBlockedPixel));
+        const auto group = attrValueGroup(match);
+        if (isRemoteUrl(match.captured(group))) {
+            apply(match.capturedStart(group), match.capturedLength(group), QString(kBlockedPixel));
             ++blocked;
         }
     }

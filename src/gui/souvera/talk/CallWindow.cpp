@@ -19,6 +19,7 @@
 
 #ifdef BUILD_WITH_WEBENGINE
 #include <QAuthenticator>
+#include <QPointer>
 #include <QWebEnginePage>
 #include <QWebEngineProfile>
 #include <QWebEngineView>
@@ -68,8 +69,9 @@ void CallWindow::setupUi(AccountState *accountState, const QUrl &roomUrl, const 
 
     // Answer HTTP basic auth challenges with the account credentials so the
     // Talk web app opens with the user's session instead of a login prompt.
+    // The QPointer guards against a removed account while the window is open.
     connect(page, &QWebEnginePage::authenticationRequired, this,
-            [accountState](const QUrl &, QAuthenticator *authenticator) {
+            [accountState = QPointer<AccountState>(accountState)](const QUrl &, QAuthenticator *authenticator) {
         if (!accountState || !accountState->account() || !authenticator) return;
         const auto creds = accountState->account()->credentials();
         if (!creds) return;
