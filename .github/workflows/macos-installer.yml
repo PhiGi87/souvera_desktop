@@ -58,11 +58,15 @@ jobs:
       - name: Compile
         run: |
           craft() { python "$CRAFT_MASTER_LOCATION/CraftMaster.py" --config "$CRAFT_MASTER_CONFIG" --target "$CRAFT_TARGET" -c "$@"; }
-          craft --src-dir "${{ github.workspace }}" nextcloud-client
+          # WebEngine stays off on macOS: its bundle deployment breaks craft
+          # --package (the client then links QtWebEngine whose helper
+          # structure the packager does not fix up), which previously left
+          # a bundle without Contents/Frameworks. CallWindow falls back to
+          # the system browser without WebEngine.
+          craft --src-dir "${{ github.workspace }}" --options nextcloud-client.buildWithWebEngine=False nextcloud-client
 
       - name: Package disk image (DMG)
         id: package
-        continue-on-error: true
         run: |
           craft() { python "$CRAFT_MASTER_LOCATION/CraftMaster.py" --config "$CRAFT_MASTER_CONFIG" --target "$CRAFT_TARGET" -c "$@"; }
 
@@ -84,7 +88,59 @@ jobs:
             echo "WARNING: blueprint not found at $BP"
           fi
 
-          craft --package nextcloud-client
+          # Surface packaging failures instead of silently shipping a raw
+          # build-tree bundle that is missing every deployed dylib.
+          if ! craft --package nextcloud-client 2>&1 | tee packaging.log; then
+            echo "PACKAGING_FAILED=true" >> "$GITHUB_ENV"
+            echo "!! craft --package FAILED — log tail follows !!"
+            tail -n 120 packaging.log || true
+          fi
+
+      - name: Fallback — fix up the raw app bundle and zip it
+        if: env.PACKAGING_FAILED == 'true'
+        run: |
+          set -e
+          APP=$(find "${{ github.workspace }}/$CRAFT_TARGET" -maxdepth 5 \( -name 'Souvera*.app' -o -name 'nextcloud*.app' \) -type d | head -1)
+          if [ -z "$APP" ]; then
+            echo "No app bundle found for fallback deployment"
+            exit 1
+          fi
+          echo "Fixing up bundle: $APP"
+
+          LIBDIRS="${{ github.workspace }}/$CRAFT_TARGET/lib"
+          QT_LIB=$(find "${{ github.workspace }}/$CRAFT_TARGET" -type f -name 'libQt6Core.*.dylib' | head -1)
+          if [ -n "$QT_LIB" ]; then
+            QTDIR=$(dirname "$QT_LIB")
+            LIBDIRS="$LIBDIRS;$QTDIR"
+            echo "Qt lib dir: $QTDIR"
+          fi
+          SPARKLE=$(find "${{ github.workspace }}" -maxdepth 6 -type d -name 'Sparkle.framework' | head -1)
+          if [ -n "$SPARKLE" ]; then
+            LIBDIRS="$LIBDIRS;$(dirname "$SPARKLE")"
+            echo "Sparkle dir: $(dirname "$SPARKLE")"
+          fi
+          echo "Search dirs: $LIBDIRS"
+
+          # fixup_bundle copies every non-system dylib the executable links
+          # (libsouverasync, csync, Qt, Sparkle) into Contents/Frameworks and
+          # rewrites the load commands — the craft packaging step normally
+          # does this before building the DMG.
+          cat > /tmp/fixup_bundle.cmake <<'CMEOF'
+            include(BundleUtilities)
+            fixup_bundle("$ENV{APP_PATH}" "" "$ENV{SEARCH_PATHS}")
+          CMEOF
+          APP_PATH="$APP" SEARCH_PATHS="$LIBDIRS" cmake -P /tmp/fixup_bundle.cmake
+
+          # fixup invalidates existing signatures; re-sign ad hoc so the
+          # bundle at least launches locally.
+          codesign --force --deep --sign - "$APP"
+
+          OUT="${{ github.workspace }}/souvera-artifacts"
+          mkdir -p "$OUT"
+          ( cd "$(dirname "$APP")" && zip -qry "$OUT/Souvera-Workspace-macOS-app.zip" "$(basename "$APP")" )
+          echo "== Fallback bundle contents =="
+          ls "$APP/Contents/Frameworks" | head -20
+          ls -lh "$OUT"
 
       - name: Collect installer artifacts
         run: |
