@@ -832,10 +832,11 @@ void DeckPanel::onCardDropped(int cardId, int fromStackId, int targetStackId, in
                 break;
             }
         }
-        if (sourceColumn && sourceColumn != targetColumn) {
+        // Optimistic move works cross-column AND within the same column.
+        if (sourceColumn) {
             sourceColumn->removeCardWidget(card);
         }
-        if (sourceColumn != targetColumn) {
+        if (targetColumn) {
             targetColumn->insertCardWidget(card, insertIndex);
         }
     }

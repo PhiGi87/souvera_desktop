@@ -163,6 +163,13 @@ void OcsDavClient::ocsRequest(AccountState *accountState, const QByteArray &verb
         }
 
         const auto rawData = reply->readAll();
+        // Some OCS endpoints (e.g. Deck comment DELETE) answer with an EMPTY
+        // body on success — treat it as success with no payload instead of a
+        // JSON parse failure.
+        if (rawData.trimmed().isEmpty()) {
+            onJson(QJsonValue(QJsonValue::Null), status);
+            return;
+        }
         const auto doc = QJsonDocument::fromJson(rawData);
         if (doc.isNull()) {
             // Log the first 300 bytes so the user report tells us exactly
@@ -182,13 +189,14 @@ void OcsDavClient::ocsRequest(AccountState *accountState, const QByteArray &verb
         // them from the top level silently returns empty values.
         const auto ocs = root.value(QStringLiteral("ocs")).toObject();
         const auto meta = ocs.value(QStringLiteral("meta")).toObject();
-        const auto metaStatus = meta.value(QStringLiteral("status")).toInt(0);
+        const auto metaStatusCode = meta.value(QStringLiteral("statuscode")).toInt(0);
         const auto payload = ocs.value(QStringLiteral("data"));
 
-        // OCS wraps errors in meta.statuscode even on HTTP 200.
-        if (metaStatus != 0 && (metaStatus < 200 || metaStatus >= 300)) {
-            onError(metaStatus, meta.value(QStringLiteral("message")).toString(
-                   QStringLiteral("OCS-Fehler %1").arg(metaStatus)));
+        // OCS wraps errors in meta.statuscode even on HTTP 200. Success codes
+        // are 100 (OCS v1) and 200 (OCS v2) — everything else is an error.
+        if (metaStatusCode != 100 && (metaStatusCode < 200 || metaStatusCode >= 300)) {
+            onError(metaStatusCode, meta.value(QStringLiteral("message")).toString(
+                   QStringLiteral("OCS-Fehler %1").arg(metaStatusCode)));
             return;
         }
         onJson(payload, status);

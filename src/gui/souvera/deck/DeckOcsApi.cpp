@@ -32,6 +32,8 @@ DeckOcsApi::DeckOcsApi(QObject *parent)
 void DeckOcsApi::setAccountState(AccountState *state)
 {
     _accountState = state;
+    // Invalidate all in-flight stacks fetches of the previous account.
+    ++_stacksFetchGeneration;
 }
 
 QString DeckOcsApi::apiUrl(const QString &path) const
@@ -179,12 +181,13 @@ namespace {
 // Comments are served by the NextcloudServerAPI (Android ApiProvider:
 // NC_API_ENDPOINT = /ocs/v2.php/) — NOT by the plain Deck REST base. Requests
 // against /index.php/apps/deck/api/v1.0/cards/{id}/comments answer 405.
-QString commentsApiUrl(const QString &deckApiBase, int cardId, const QString &suffix = {})
+QString commentsApiUrl(const QString &serverRootIn, int cardId, const QString &suffix = {})
 {
-    // deckApiBase = "<server>/index.php/apps/deck/api/v1.0" → derive the
-    // server root and prepend the OCS v2 base.
-    const auto root = deckApiBase.section(QStringLiteral("/index.php/"), 0, 0);
-    return root + QStringLiteral("/ocs/v2.php/apps/deck/api/v1.0/cards/%1%2")
+    auto serverRoot = serverRootIn;
+    while (serverRoot.endsWith(QLatin1Char('/'))) {
+        serverRoot.chop(1);
+    }
+    return serverRoot + QStringLiteral("/ocs/v2.php/apps/deck/api/v1.0/cards/%1/comments%2")
         .arg(cardId).arg(suffix);
 }
 }
@@ -193,9 +196,7 @@ void DeckOcsApi::fetchComments(int cardId)
 {
     // GET /ocs/v2.php/apps/deck/api/v1.0/cards/{cardId}/comments
     if (!_accountState || !_accountState->account()) return;
-    const auto url = commentsApiUrl(
-        apiUrl(QStringLiteral("/cards/%1").arg(cardId)).section(
-            QStringLiteral("/cards/"), 0, 0), cardId);
+    const auto url = commentsApiUrl(_accountState->account()->url().toString(), cardId);
     if (url.isEmpty()) return;
 
     OcsDavClient::ocsRequest(_accountState, "GET", url, {},
@@ -215,9 +216,7 @@ void DeckOcsApi::fetchComments(int cardId)
 void DeckOcsApi::createComment(int cardId, const QString &message)
 {
     if (!_accountState || !_accountState->account()) return;
-    const auto url = commentsApiUrl(
-        apiUrl(QStringLiteral("/cards/%1").arg(cardId)).section(
-            QStringLiteral("/cards/"), 0, 0), cardId);
+    const auto url = commentsApiUrl(_accountState->account()->url().toString(), cardId);
     if (url.isEmpty()) return;
 
     QJsonObject body;
@@ -237,10 +236,8 @@ void DeckOcsApi::createComment(int cardId, const QString &message)
 void DeckOcsApi::updateComment(int cardId, int commentId, const QString &message)
 {
     if (!_accountState || !_accountState->account()) return;
-    const auto url = commentsApiUrl(
-        apiUrl(QStringLiteral("/cards/%1").arg(cardId)).section(
-            QStringLiteral("/cards/"), 0, 0), cardId,
-        QStringLiteral("/%1").arg(commentId));
+    const auto url = commentsApiUrl(_accountState->account()->url().toString(), cardId,
+                                    QStringLiteral("/%1").arg(commentId));
     if (url.isEmpty()) return;
 
     QJsonObject body;
@@ -260,10 +257,8 @@ void DeckOcsApi::updateComment(int cardId, int commentId, const QString &message
 void DeckOcsApi::deleteComment(int cardId, int commentId)
 {
     if (!_accountState || !_accountState->account()) return;
-    const auto url = commentsApiUrl(
-        apiUrl(QStringLiteral("/cards/%1").arg(cardId)).section(
-            QStringLiteral("/cards/"), 0, 0), cardId,
-        QStringLiteral("/%1").arg(commentId));
+    const auto url = commentsApiUrl(_accountState->account()->url().toString(), cardId,
+                                    QStringLiteral("/%1").arg(commentId));
     if (url.isEmpty()) return;
 
     OcsDavClient::ocsRequest(_accountState, "DELETE", url, {},

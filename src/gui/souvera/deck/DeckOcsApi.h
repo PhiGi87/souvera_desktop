@@ -27,7 +27,6 @@ public:
 
     void fetchBoards();
     void fetchStacks(int boardId);
-    void reorderFailed();
     void createStack(int boardId, const QString &title);
     void updateStack(int boardId, int stackId, const QString &title);
     void deleteStack(int boardId, int stackId);
@@ -58,6 +57,7 @@ signals:
     void stacksReceived(const QJsonArray &stacks);
     void cardCreated(const QJsonObject &card, int boardId, int stackId);
     void cardMoved();
+    void reorderFailed();
     void cardUpdated(const QJsonObject &card, int boardId, int stackId);
     void stackCreated(const QJsonObject &stack, int boardId);
     void stackUpdated(int boardId, int stackId);
@@ -77,6 +77,7 @@ private:
     [[nodiscard]] QString apiUrl(const QString &path) const;
 
     AccountState *_accountState = nullptr;
+    int _stacksFetchGeneration = 0;
 };
 
 } // namespace OCC
