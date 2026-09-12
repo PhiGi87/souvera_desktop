@@ -86,6 +86,7 @@ public:
 private:
     void setupUi();
     void clearColumns();
+    void renderStacks(const QJsonArray &stacks);
     void loadBoard(int boardId);
     void onNewCard();
     void onEditCard(int cardId, int stackId);

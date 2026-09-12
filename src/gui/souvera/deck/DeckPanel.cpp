@@ -28,6 +28,7 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QLoggingCategory>
+#include <QMenu>
 #include <QMimeData>
 #include <QMessageBox>
 #include <QPlainTextEdit>
