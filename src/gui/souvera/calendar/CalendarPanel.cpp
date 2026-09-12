@@ -7,6 +7,7 @@
 #include "CalendarMonthView.h"
 #include "CalDavSync.h"
 #include "CalendarEventDialog.h"
+#include "net/SouveraAccountGate.h"
 
 #include "accountstate.h"
 #include "theme/SouveraTheme.h"
@@ -40,7 +41,11 @@ void CalendarPanel::setAccountState(AccountState *state)
 {
     _calDavSync->setAccountState(state);
     if (state && state->account()) {
-        _calDavSync->fetchCalendars();
+        // Wait for the keychain fetch: requests fired with empty credentials
+        // never complete.
+        Sou::whenCredentialsReady(state, this, [this, state]() {
+            _calDavSync->fetchCalendars();
+        });
     }
 }
 
@@ -177,7 +182,11 @@ void CalendarPanel::onCalendarsLoaded(const QVariantList &calendars)
         _monthView->setMonth(today);
         _monthView->setSelectedDate(today);
     }
-    _calDavSync->fetchEvents(_currentCalendarUri, today, today);
+    // The month view displays a whole month — fetch the whole month, not
+    // just today, or every other day renders empty.
+    const auto firstOfMonth = QDate(today.year(), today.month(), 1);
+    const auto lastOfMonth = QDate(firstOfMonth.year(), firstOfMonth.month(), firstOfMonth.daysInMonth());
+    _calDavSync->fetchEvents(_currentCalendarUri, firstOfMonth, lastOfMonth);
 }
 
 void CalendarPanel::onEventsLoaded(const QVariantList &events)

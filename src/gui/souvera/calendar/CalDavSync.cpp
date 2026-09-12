@@ -12,6 +12,7 @@
 #include <QLoggingCategory>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QRegularExpression>
 #include <QUrl>
 #include <QXmlStreamReader>
 #include <QUuid>
@@ -66,8 +67,9 @@ void CalDavSync::fetchEvents(const QString &calendarUri, const QDate &from, cons
     auto body = buildReportBody(from, to);
     OcsDavClient::davRequest(_accountState, "REPORT", url, body,
         [this](const QByteArray &xml, int) {
-            auto events = parseEvents(xml);
-            emit eventsLoaded(events);
+            qCInfo(lcCalDavSync) << "REPORT response:" << xml.size() << "bytes, VEVENTs:"
+                                 << xml.count("BEGIN:VEVENT");
+            emit eventsLoaded(parseEvents(xml));
         },
         [this](int status, const QString &message) {
             qCWarning(lcCalDavSync) << "fetchEvents failed:" << status << message;
@@ -243,8 +245,22 @@ QVariantList CalDavSync::parseEvents(const QByteArray &data)
 QVariantMap CalDavSync::parseICalendar(const QString &iCalText)
 {
     QVariantMap result;
-    auto lines = iCalText.split(QStringLiteral("\r\n"));
+
+    // RFC 5545 unfolding: continuation lines start with a space or tab.
+    // Servers may normalize CRLF to LF inside XML payloads, so handle both.
+    QString unfolded;
+    unfolded.reserve(iCalText.size() + 16);
+    const auto rawLines = iCalText.split(QRegularExpression(QStringLiteral("[\r\n]+")), Qt::SkipEmptyParts);
+    for (const auto &line : rawLines) {
+        if (line.startsWith(QLatin1Char(' ')) || line.startsWith(QLatin1Char('\t'))) {
+            unfolded += line.mid(1);
+        } else {
+            unfolded += QStringLiteral("\n") + line;
+        }
+    }
+
     auto inVevent = false;
+    const auto lines = unfolded.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
     for (const auto &line : lines) {
         if (line == QStringLiteral("BEGIN:VEVENT")) {
             inVevent = true;
@@ -256,7 +272,8 @@ QVariantMap CalDavSync::parseICalendar(const QString &iCalText)
         auto colonPos = line.indexOf(QLatin1Char(':'));
         if (colonPos < 0) continue;
 
-        auto key = line.left(colonPos);
+        // Strip property parameters: "DTSTART;TZID=Europe/Berlin" -> "DTSTART".
+        auto key = line.left(colonPos).section(QLatin1Char(';'), 0, 0);
         auto value = line.mid(colonPos + 1);
 
         if (key == QStringLiteral("SUMMARY")) {
