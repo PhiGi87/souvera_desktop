@@ -101,7 +101,10 @@ void SettingsPanel::setAccountState(AccountState *accountState)
     const auto creds = acc ? acc->credentials() : nullptr;
     const auto user = creds ? creds->user() : QString();
     const auto host = acc ? acc->url().host() : QString();
-    _accountLabel->setText(user.isEmpty() ? host : QStringLiteral("%1@%2").arg(user, host));
+    // Email logins already carry their domain — never append the host twice.
+    _accountLabel->setText(user.isEmpty()
+        ? host
+        : (user.contains(QLatin1Char('@')) ? user : QStringLiteral("%1@%2").arg(user, host)));
     _serverLabel->setText(acc ? acc->url().toString() : QString());
 
     // Re-entrancy guard: drop any previous connection for this sender first.

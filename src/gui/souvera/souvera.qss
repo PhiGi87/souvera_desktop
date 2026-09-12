@@ -337,12 +337,14 @@ QSplitter#MailSplitter::handle {
     font-size: 13px;
     border: none;
     outline: none;
+    show-decoration-selected: 0;
 }
 
 #MailFolderView::item {
-    padding: 8px 16px;
+    height: 30px;
     border-radius: 6px;
-    margin: 1px 6px;
+    margin: 1px 8px 1px 2px;
+    padding-left: 4px;
 }
 
 #MailFolderView::item:selected {
@@ -353,6 +355,20 @@ QSplitter#MailSplitter::handle {
 #MailFolderView::item:hover:!selected {
     background: @overlayHover@;
     color: @textPrimary@;
+}
+
+/* Chevron expand/collapse indicators instead of the default tree arrows */
+#MailFolderView::branch {
+    background: transparent;
+    border-image: none;
+}
+
+#MailFolderView::branch:closed:has-children {
+    image: url(:/souvera/icons/chevron-right.svg);
+}
+
+#MailFolderView::branch:open:has-children {
+    image: url(:/souvera/icons/chevron-down.svg);
 }
 
 /* ---- Message List ---- */
@@ -614,6 +630,7 @@ QLabel#DeckColumnCount {
 QWidget#DeckColumnHeader {
     background: transparent;
     border-bottom: 2px solid @borderStrong@;
+    padding: 2px 4px;
 }
 
 QToolButton#DeckBoardsButton,

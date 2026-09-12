@@ -53,7 +53,11 @@ void MailPanel::wireAccount(AccountState *accountState)
     const auto user = creds->user();
     const auto host = acc->url().host();
 
-    auto email = QStringLiteral("%1@%2").arg(user, host);
+    // The login id is usually already the mail address — only append the
+    // host for non-mail usernames.
+    auto email = user.contains(QLatin1Char('@'))
+        ? user
+        : QStringLiteral("%1@%2").arg(user, host);
     _sendAsCombo->clear();
     _sendAsCombo->addItem(email);
 

@@ -14,9 +14,10 @@
 namespace OCC {
 
 namespace {
-constexpr int RowHeight = 68;
-constexpr int RowHeightCompact = 50;
+constexpr int RowHeight = 76;
+constexpr int RowHeightCompact = 58;
 constexpr int Padding = 14;
+constexpr int AvatarDiameter = 34;
 }
 
 QString EmailListDelegate::formatDate(const QDateTime &received)
@@ -66,6 +67,26 @@ void EmailListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
     const auto unread = !isRead;
     const auto dateText = formatDate(received);
 
+    // Avatar circle with the sender initial (like the Nextcloud Mail app).
+    const auto avatarCx = rect.left() + Padding + AvatarDiameter / 2;
+    const auto avatarCy = rect.center().y();
+    const auto hue = qHash(fromName.isEmpty() ? QStringLiteral("?") : fromName) % 360;
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(QColor::fromHsl(hue, 120, 110));
+    painter->drawEllipse(QPoint(avatarCx, avatarCy), AvatarDiameter / 2, AvatarDiameter / 2);
+    {
+        QFont avatarFont = option.font;
+        avatarFont.setPixelSize(14);
+        avatarFont.setBold(true);
+        painter->setFont(avatarFont);
+        painter->setPen(Qt::white);
+        const auto initial = fromName.isEmpty()
+            ? QStringLiteral("?") : fromName.left(1).toUpper();
+        painter->drawText(QRect(avatarCx - AvatarDiameter / 2, avatarCy - AvatarDiameter / 2,
+                                AvatarDiameter, AvatarDiameter),
+                          Qt::AlignCenter, initial);
+    }
+
     // Date (top right)
     QFont dateFont = option.font;
     dateFont.setPointSizeF(option.font.pointSizeF() * 0.85);
@@ -75,14 +96,15 @@ void EmailListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
     painter->setPen(theme->color(SouveraTheme::Color::TextMuted));
     painter->drawText(QPoint(dateX, rect.top() + Padding + dateFm.ascent()), dateText);
 
-    // Unread dot
-    auto textX = rect.left() + Padding;
+    // Text starts right of the avatar; unread adds a small accent dot.
+    auto textX = rect.left() + Padding + AvatarDiameter + 10;
     if (unread) {
         painter->setPen(Qt::NoPen);
         painter->setBrush(theme->color(SouveraTheme::Color::Accent));
-        painter->drawEllipse(QPoint(rect.left() + Padding + 3, rect.top() + Padding + 8), 3, 3);
-        textX = rect.left() + Padding + 14;
+        painter->drawEllipse(QPoint(textX - 5, rect.top() + Padding + 8), 3, 3);
+        textX += 8;
     }
+    const auto textRight = rect.right() - Padding;
 
     // Sender (top line)
     QFont senderFont = option.font;
@@ -91,7 +113,7 @@ void EmailListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
     painter->setFont(senderFont);
     painter->setPen(theme->color(SouveraTheme::Color::TextPrimary));
     const auto senderText = senderFm.elidedText(fromName, Qt::ElideRight, dateX - textX - 12);
-    painter->drawText(QPoint(textX, rect.top() + Padding + senderFm.ascent()), senderText);
+    painter->drawText(QPoint(textX, rect.top() + Padding - 2 + senderFm.ascent()), senderText);
 
     // Subject (second line)
     QFont subjectFont = option.font;
@@ -101,10 +123,10 @@ void EmailListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
     painter->setFont(subjectFont);
     painter->setPen(theme->color(unread ? SouveraTheme::Color::TextPrimary
                                         : SouveraTheme::Color::TextSecondary));
-    const auto availWidth = rect.width() - Padding * 2 - (hasAttachment ? 26 : 0);
+    const auto availWidth = textRight - textX - (hasAttachment ? 26 : 0);
     const auto subjectText = subjectFm.elidedText(
         subject.isEmpty() ? QStringLiteral("(kein Betreff)") : subject, Qt::ElideRight, availWidth);
-    painter->drawText(QPoint(rect.left() + Padding, subjectY), subjectText);
+    painter->drawText(QPoint(textX, subjectY), subjectText);
 
     // Attachment indicator (right of subject line)
     if (hasAttachment) {
@@ -122,8 +144,8 @@ void EmailListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
         painter->setFont(previewFont);
         painter->setPen(theme->color(SouveraTheme::Color::TextMuted));
         const auto previewText = previewFm.elidedText(preview, Qt::ElideRight,
-                                                      rect.width() - Padding * 2);
-        painter->drawText(QPoint(rect.left() + Padding, previewY), previewText);
+                                                      textRight - textX);
+        painter->drawText(QPoint(textX, previewY), previewText);
     }
 
     // Flagged star (next to date, second line)

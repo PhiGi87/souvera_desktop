@@ -37,7 +37,11 @@ QString MailAccount::emailAddress() const
 {
     auto acc = _accountState->account();
     auto *creds = acc->credentials();
-    return QStringLiteral("%1@%2").arg(creds->user(), acc->url().host());
+    const auto user = creds->user();
+    // Email logins already contain the domain.
+    return user.contains(QLatin1Char('@'))
+        ? user
+        : QStringLiteral("%1@%2").arg(user, acc->url().host());
 }
 
 QString MailAccount::userName() const

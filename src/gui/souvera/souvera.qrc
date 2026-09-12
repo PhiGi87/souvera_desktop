@@ -10,5 +10,7 @@
         <file>icons/settings.svg</file>
         <file>icons/sun.svg</file>
         <file>icons/moon.svg</file>
+        <file>icons/chevron-right.svg</file>
+        <file>icons/chevron-down.svg</file>
     </qresource>
 </RCC>

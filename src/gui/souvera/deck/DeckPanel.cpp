@@ -54,6 +54,7 @@ constexpr auto DeckCardMimeType = "application/x-souvera-deck-card";
 DeckColumnWidget::DeckColumnWidget(const QString &title, QWidget *parent)
     : QFrame(parent)
 {
+    setAttribute(Qt::WA_StyledBackground, true);
     setFixedWidth(280);
     applyColumnTheme();
     connect(SouveraTheme::instance(), &SouveraTheme::themeChanged, this, [this]() {
@@ -66,6 +67,9 @@ DeckColumnWidget::DeckColumnWidget(const QString &title, QWidget *parent)
 
     auto *headerWidget = new QWidget(this);
     headerWidget->setObjectName(QStringLiteral("DeckColumnHeader"));
+    // Plain QWidgets only honour stylesheet background/border with this attr —
+    // without it the header renders as an unstyled white bar.
+    headerWidget->setAttribute(Qt::WA_StyledBackground, true);
     auto *headerLayout = new QHBoxLayout(headerWidget);
     headerLayout->setContentsMargins(4, 0, 4, 0);
 

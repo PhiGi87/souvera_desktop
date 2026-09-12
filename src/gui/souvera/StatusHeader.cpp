@@ -39,9 +39,15 @@ StatusHeader::StatusHeader(QWidget *parent)
         const auto creds = acc ? acc->credentials() : nullptr;
         const auto user = creds ? creds->user() : QString();
         const auto host = acc ? acc->url().host() : QString();
-        _userLabel->setText(user.isEmpty()
-            ? QStringLiteral("Nicht verbunden")
-            : QStringLiteral("%1@%2").arg(user, host));
+        // The login id may already BE the mail address (email login) —
+        // appending the workspace host would duplicate the domain.
+        if (user.isEmpty()) {
+            _userLabel->setText(QStringLiteral("Nicht verbunden"));
+        } else {
+            _userLabel->setText(user.contains(QLatin1Char('@'))
+                ? user
+                : QStringLiteral("%1@%2").arg(user, host));
+        }
     };
 
     _userLabel = new QLabel(this);
