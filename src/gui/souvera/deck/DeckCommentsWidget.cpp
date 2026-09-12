@@ -73,12 +73,8 @@ DeckCommentsWidget::DeckCommentsWidget(DeckOcsApi *api, QWidget *parent)
     if (_api) {
         connect(_api, &DeckOcsApi::commentsReceived, this,
                 &DeckCommentsWidget::onCommentsReceived);
-        connect(_api, &DeckOcsApi::commentCreated, this, [this](int cardId) {
-            if (cardId == _cardId) {
-                _composer->clear();
-                loadComments();
-            }
-        });
+        connect(_api, &DeckOcsApi::commentCreated, this,
+                &DeckCommentsWidget::onCommentCreated);
         connect(_api, &DeckOcsApi::commentDeleted, this, [this](int cardId) {
             if (cardId == _cardId) loadComments();
         });
@@ -108,6 +104,13 @@ void DeckCommentsWidget::onCommentsReceived(int cardId, const QVector<DeckCommen
 {
     if (cardId != _cardId) return;
     rebuildList(comments);
+}
+
+void DeckCommentsWidget::onCommentCreated(int cardId)
+{
+    if (cardId != _cardId) return;
+    _composer->clear();
+    loadComments();
 }
 
 void DeckCommentsWidget::rebuildList(const QVector<DeckComment> &comments)
