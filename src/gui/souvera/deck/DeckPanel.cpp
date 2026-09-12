@@ -9,6 +9,7 @@
 #include "DeckManager.h"
 #include "DeckModels.h"
 #include "DeckOcsApi.h"
+#include "net/SouveraAccountGate.h"
 #include "theme/SouveraTheme.h"
 #include "account.h"
 #include "accountstate.h"
@@ -157,16 +158,26 @@ void DeckColumnWidget::updateCardCount()
 void DeckColumnWidget::applyColumnTheme()
 {
     const auto *theme = SouveraTheme::instance();
+    const auto bg = theme->color(SouveraTheme::Color::Background).name();
+    const auto border = theme->color(SouveraTheme::Color::Border).name();
+    const auto borderStrong = theme->color(SouveraTheme::Color::BorderStrong).name();
+    const auto textMuted = theme->color(SouveraTheme::Color::TextMuted).name();
+    const auto textPrimary = theme->color(SouveraTheme::Color::TextPrimary).name();
+    const auto surfaceHover = theme->color(SouveraTheme::Color::SurfaceHover).name();
+    const auto accent = theme->color(SouveraTheme::Color::Accent).name();
+    // One widget-level stylesheet for the whole column: a widget stylesheet
+    // replaces the app stylesheet for this subtree, so every style the column
+    // relies on must be restated here.
     setStyleSheet(QStringLiteral(
-        "DeckColumnWidget { background-color: %1; border-radius: 10px; border: 1px solid %2; }"
-        "DeckColumnWidget QPushButton#DeckColumnAddBtn { background: transparent;"
-        "  border: 1px solid %2; border-radius: 6px; color: %3; font-size: 13px; }"
-        "DeckColumnWidget QPushButton#DeckColumnAddBtn:hover { background: %4; border-color: %5; }")
-        .arg(theme->color(SouveraTheme::Color::Background).name(),
-             theme->color(SouveraTheme::Color::Border).name(),
-             theme->color(SouveraTheme::Color::TextMuted).name(),
-             theme->color(SouveraTheme::Color::SurfaceHover).name(),
-             theme->color(SouveraTheme::Color::Accent).name()));
+        "QFrame { background-color: %1; border-radius: 10px; border: 1px solid %2; }"
+        "QWidget#DeckColumnHeader { background: transparent; border: none;"
+        "  border-bottom: 2px solid %3; }"
+        "QLabel#DeckColumnTitle { color: %4; background: transparent; font-weight: 600; }"
+        "QLabel#DeckColumnCount { color: %5; background: %6; }"
+        "QPushButton#DeckColumnAddBtn { background: transparent;"
+        "  border: 1px solid %2; border-radius: 6px; color: %5; font-size: 13px; }"
+        "QPushButton#DeckColumnAddBtn:hover { background: %6; border-color: %7; }")
+        .arg(bg, border, borderStrong, textPrimary, textMuted, surfaceHover, accent));
     setAcceptDrops(true);
 }
 
@@ -321,6 +332,7 @@ DeckPanel::DeckPanel(QWidget *parent)
         qCInfo(lcDeckPanel) << "Stacks received:" << stacks.size();
         DeckManager::instance()->storeStacksCache(_currentBoardId, stacks);
         renderStacks(stacks);
+        setStatus(QString());
     });
 
     connect(_ocsApi, &DeckOcsApi::cardCreated, this, [this](const QJsonObject &, int boardId, int) {
@@ -363,7 +375,11 @@ void DeckPanel::setAccountState(AccountState *state)
     DeckManager::instance()->setAccountState(state);
     if (state && state->account()) {
         setStatus(QStringLiteral("Lade Boards\u2026"));
-        loadBoards();
+        // Wait for the keychain fetch: requests fired with empty credentials
+        // never complete.
+        Sou::whenCredentialsReady(state, this, [this]() {
+            loadBoards();
+        });
     } else {
         setStatus(QStringLiteral("Kein Konto verbunden."), true);
     }
@@ -496,6 +512,8 @@ void DeckPanel::setupUi()
     _scrollArea->setObjectName(QStringLiteral("PanelScroll"));
 
     _columnsContainer = new QWidget(_scrollArea);
+    _columnsContainer->setObjectName(QStringLiteral("DeckColumnsArea"));
+    _columnsContainer->setAttribute(Qt::WA_StyledBackground, true);
     _columnsLayout = new QHBoxLayout(_columnsContainer);
     _columnsLayout->setContentsMargins(16, 12, 16, 12);
     _columnsLayout->setSpacing(12);

@@ -82,6 +82,18 @@ QWidget#ContentArea QSpinBox {
     selection-color: @onAccent@;
 }
 
+/* Document-style editors (e.g. Notes) must follow the theme as well. */
+QWidget#ContentArea QTextEdit,
+QWidget#ContentArea QPlainTextEdit {
+    background-color: @surface@;
+    color: @textPrimary@;
+    border: 1px solid @border@;
+    border-radius: 8px;
+    padding: 6px;
+    selection-background-color: @accent@;
+    selection-color: @onAccent@;
+}
+
 QWidget#ContentArea QComboBox {
     background-color: @surface@;
     color: @textPrimary@;
@@ -657,6 +669,10 @@ QWidget#DeckColumnHeader {
     background: transparent;
     border-bottom: 2px solid @borderStrong@;
     padding: 2px 4px;
+}
+
+QWidget#DeckColumnsArea {
+    background-color: @contentBackground@;
 }
 
 QToolButton#DeckBoardsButton,
