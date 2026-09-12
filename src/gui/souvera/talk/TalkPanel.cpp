@@ -483,17 +483,21 @@ void TalkPanel::onMessagesReceived(const QJsonArray &messages, const QString &to
         if (id > maxIdInBatch) maxIdInBatch = id;
     }
     if (maxIdInBatch > _lastKnownId) {
+        auto *scrollBar = _chatScroll->verticalScrollBar();
+        const auto wasAtBottom = scrollBar->value() >= scrollBar->maximum() - 50;
+
         rebuildChatArea(messages);
         _lastKnownId = maxIdInBatch;
 
-        // Always jump to the newest message after a rebuild. The deferred
+        // Autoscroll only when the user was already at the bottom. The deferred
         // call repeats it once the new layout has been computed.
-        auto *scrollBar = _chatScroll->verticalScrollBar();
-        scrollBar->setValue(scrollBar->maximum());
-        QTimer::singleShot(0, this, [this]() {
-            auto *bar = _chatScroll->verticalScrollBar();
-            bar->setValue(bar->maximum());
-        });
+        if (wasAtBottom) {
+            scrollBar->setValue(scrollBar->maximum());
+            QTimer::singleShot(0, this, [this]() {
+                auto *bar = _chatScroll->verticalScrollBar();
+                bar->setValue(bar->maximum());
+            });
+        }
     }
 
     setApiStatus(QString());

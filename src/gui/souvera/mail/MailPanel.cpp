@@ -419,7 +419,7 @@ void MailPanel::setupConnections()
         onMessageSelected(cur);
     });
 
-    // Attachment links and external links from the preview
+    // Attachment links from the preview; external links are handled by MailBodyView
     connect(_preview, &QTextBrowser::anchorClicked, this, [this](const QUrl &url) {
         if (url.toString().startsWith(QLatin1String("souvera-attachment:"))) {
             const auto blobId = url.toString().mid(QStringLiteral("souvera-attachment:").size()).section(QLatin1Char('?'), 0, 0);
@@ -428,10 +428,6 @@ void MailPanel::setupConnections()
                 setStatus(QStringLiteral("Lade Anhang \u201E%1\u201C\u2026").arg(name));
                 _jmapClient->downloadAttachment(blobId, name);
             }
-            return;
-        }
-        if (url.scheme().startsWith(QLatin1String("http"))) {
-            QDesktopServices::openUrl(url);
         }
     });
 

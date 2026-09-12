@@ -96,10 +96,6 @@ MailReaderWindow::MailReaderWindow(AccountState *accountState, const JmapEmail &
             if (_client) {
                 _client->downloadAttachment(blobId, name);
             }
-            return;
-        }
-        if (url.scheme().startsWith(QLatin1String("http"))) {
-            QDesktopServices::openUrl(url);
         }
     });
 

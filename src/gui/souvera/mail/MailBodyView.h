@@ -7,9 +7,11 @@
 #define MAILBODYVIEW_H
 
 #include <QHash>
+#include <QSet>
 #include <QTextBrowser>
 
 class QNetworkAccessManager;
+class QNetworkReply;
 
 namespace OCC {
 
@@ -35,9 +37,6 @@ public:
     /** Renders a mail body. Remote content stays blocked unless allowRemote. */
     void setMailBody(const QString &html, bool allowRemote = false);
 
-signals:
-    void remoteContentLoaded(int count);
-
 private slots:
     void onAnchorClicked(const QUrl &url);
 
@@ -46,12 +45,17 @@ private:
     void loadRemoteImages(const QString &html);
     [[nodiscard]] static bool prefersDarkPaper(const QString &html);
     [[nodiscard]] static QString blockRemoteResources(const QString &html, int *blockedCount);
+    [[nodiscard]] static QSet<QString> remoteUrls(const QString &html);
+    void insertCachedImage(const QString &url, const QString &dataUri);
 
     QNetworkAccessManager *_nam = nullptr;
     QString _rawHtml;
     bool _remoteLoaded = false;
+    int _generation = 0; //!< bumped on every setMailBody; stale async completions are dropped
     int _pendingImages = 0;
+    QList<QNetworkReply *> _activeReplies; //!< running image fetches, aborted by the next setMailBody
     QHash<QString, QString> _imageCache;
+    qint64 _cacheBytes = 0;
 };
 
 } // namespace OCC
