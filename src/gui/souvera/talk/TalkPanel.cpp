@@ -428,7 +428,7 @@ void TalkPanel::startCall()
     auto url = acc->url();
     url.setPath(QStringLiteral("/index.php/call/") + _currentToken);
 
-    auto *callWindow = new CallWindow(url, displayName.isEmpty() ? _currentToken : displayName, this);
+    auto *callWindow = new CallWindow(_accountState, url, displayName.isEmpty() ? _currentToken : displayName, this);
     callWindow->show();
 }
 

@@ -5,6 +5,9 @@
 
 #include "CallWindow.h"
 
+#include "account.h"
+#include "accountstate.h"
+#include "creds/abstractcredentials.h"
 #include "config.h"
 
 #include <QDesktopServices>
@@ -15,6 +18,7 @@
 #include <QVBoxLayout>
 
 #ifdef BUILD_WITH_WEBENGINE
+#include <QAuthenticator>
 #include <QWebEnginePage>
 #include <QWebEngineProfile>
 #include <QWebEngineView>
@@ -22,18 +26,18 @@
 
 namespace OCC {
 
-CallWindow::CallWindow(const QUrl &roomUrl, const QString &roomName,
-                       QWidget *parent)
+CallWindow::CallWindow(AccountState *accountState, const QUrl &roomUrl,
+                       const QString &roomName, QWidget *parent)
     : QWidget(parent, Qt::Window)
 {
     setWindowTitle(QStringLiteral("Anruf \u2014 %1").arg(roomName));
     setAttribute(Qt::WA_DeleteOnClose);
     resize(1100, 720);
 
-    setupUi(roomUrl, roomName);
+    setupUi(accountState, roomUrl, roomName);
 }
 
-void CallWindow::setupUi(const QUrl &roomUrl, const QString &roomName)
+void CallWindow::setupUi(AccountState *accountState, const QUrl &roomUrl, const QString &roomName)
 {
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -61,6 +65,17 @@ void CallWindow::setupUi(const QUrl &roomUrl, const QString &roomName)
 #ifdef BUILD_WITH_WEBENGINE
     auto *view = new QWebEngineView(this);
     auto *page = new QWebEnginePage(QWebEngineProfile::defaultProfile(), view);
+
+    // Answer HTTP basic auth challenges with the account credentials so the
+    // Talk web app opens with the user's session instead of a login prompt.
+    connect(page, &QWebEnginePage::authenticationRequired, this,
+            [accountState](const QUrl &, QAuthenticator *authenticator) {
+        if (!accountState || !accountState->account() || !authenticator) return;
+        const auto creds = accountState->account()->credentials();
+        if (!creds) return;
+        authenticator->setUser(creds->user());
+        authenticator->setPassword(creds->password());
+    });
 
     // Video calls need microphone and camera; desktop sharing is requested by Talk.
     connect(page, &QWebEnginePage::featurePermissionRequested, this,
