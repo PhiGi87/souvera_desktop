@@ -2,9 +2,10 @@
  * SPDX-FileCopyrightText: 2026 Souvera (Host-On Service Provider GmbH)
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-
 #ifndef OCSDAVCLIENT_H
 #define OCSDAVCLIENT_H
+
+#include <QHttpMultiPart>
 
 #include <QByteArray>
 #include <QList>
@@ -70,7 +71,7 @@ public:
      * the parsed JSON response root.
      */
     static void multipartRequest(AccountState *accountState, const QUrl &url,
-                                 class QHttpMultiPart *multiPart,
+                                 QHttpMultiPart *multiPart,
                                  const std::function<void(const QJsonDocument &, int)> &onJson,
                                  const ErrorCallback &onError);
 
