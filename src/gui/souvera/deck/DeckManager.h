@@ -12,9 +12,9 @@
 
 #include "DeckModels.h"
 
-class AccountState;
-
 namespace OCC {
+
+class AccountState;
 
 /**
  * @brief Account-bound Deck hub: server capability gate + board cache.
