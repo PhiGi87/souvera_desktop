@@ -4,6 +4,7 @@
  */
 
 #include "MailReaderWindow.h"
+#include "MailBodyView.h"
 #include "MailComposer.h"
 #include "MailLoginFlow.h"
 
@@ -74,8 +75,11 @@ MailReaderWindow::MailReaderWindow(AccountState *accountState, const JmapEmail &
     headerLayout->addWidget(btnRow);
     layout->addWidget(headerWidget);
 
-    _bodyView = new QTextBrowser(this);
+    _bodyView = new MailBodyView(this);
     _bodyView->setObjectName(QStringLiteral("MailPreview"));
+    if (_accountState && _accountState->account()) {
+        _bodyView->setNetworkAccessManager(_accountState->account()->networkAccessManager());
+    }
     _bodyView->setOpenExternalLinks(false);
     _bodyView->setOpenLinks(false);
     layout->addWidget(_bodyView, 1);
@@ -129,16 +133,16 @@ void MailReaderWindow::buildHeader()
 void MailReaderWindow::loadBody()
 {
     if (!_accountState || !_accountState->account()) {
-        _bodyView->setHtml(QStringLiteral("<p style='color:#94a3b8;'>Kein Konto verbunden.</p>"));
+        _bodyView->setMailBody(QStringLiteral("<p style='color:#94a3b8;'>Kein Konto verbunden.</p>"));
         return;
     }
 
-    _bodyView->setHtml(QStringLiteral("<p style='color:#64748b;'>Nachricht wird geladen\u2026</p>"));
+    _bodyView->setMailBody(QStringLiteral("<p style='color:#64748b;'>Nachricht wird geladen\u2026</p>"));
 
     const auto mailPassword = MailLoginFlow::cachedPassword(_accountState);
     if (mailPassword.isEmpty()) {
-        _bodyView->setHtml(QStringLiteral("<p style='color:#ef4444;'>Mail-Anmeldedaten nicht verf\u00FCgbar. "
-                                          "Bitte das Mail-Panel einmal \u00F6ffnen und erneut versuchen.</p>"));
+        _bodyView->setMailBody(QStringLiteral("<p style='color:#ef4444;'>Mail-Anmeldedaten nicht verf\u00FCgbar. "
+                                              "Bitte das Mail-Panel einmal \u00F6ffnen und erneut versuchen.</p>"));
         return;
     }
 
@@ -182,12 +186,12 @@ void MailReaderWindow::loadBody()
         }
 
         if (!html.isEmpty()) {
-            _bodyView->setHtml(html);
+            _bodyView->setMailBody(html);
         }
     });
 
     connect(_client, &JmapClient::sessionError, this, [this](const QString &error) {
-        _bodyView->setHtml(QStringLiteral("<p style='color:#ef4444;'>%1</p>")
+        _bodyView->setMailBody(QStringLiteral("<p style='color:#ef4444;'>%1</p>")
             .arg(error.toHtmlEscaped()));
     });
 

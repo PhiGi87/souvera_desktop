@@ -15,6 +15,7 @@
 #include "accountstate.h"
 
 #include <QDateTime>
+#include <QTimer>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QPainter>
@@ -482,16 +483,17 @@ void TalkPanel::onMessagesReceived(const QJsonArray &messages, const QString &to
         if (id > maxIdInBatch) maxIdInBatch = id;
     }
     if (maxIdInBatch > _lastKnownId) {
-        auto *scrollBar = _chatScroll->verticalScrollBar();
-        const auto wasAtBottom = scrollBar->value() >= scrollBar->maximum() - 50;
-
         rebuildChatArea(messages);
         _lastKnownId = maxIdInBatch;
 
-        // Autoscroll only when the user was already at the bottom.
-        if (wasAtBottom) {
-            scrollBar->setValue(scrollBar->maximum());
-        }
+        // Always jump to the newest message after a rebuild. The deferred
+        // call repeats it once the new layout has been computed.
+        auto *scrollBar = _chatScroll->verticalScrollBar();
+        scrollBar->setValue(scrollBar->maximum());
+        QTimer::singleShot(0, this, [this]() {
+            auto *bar = _chatScroll->verticalScrollBar();
+            bar->setValue(bar->maximum());
+        });
     }
 
     setApiStatus(QString());
@@ -510,8 +512,11 @@ void TalkPanel::rebuildChatArea(const QJsonArray &messages)
     layout->setSpacing(4);
     layout->addStretch();
 
+    // The Talk API returns messages newest-first; render oldest→newest so the
+    // latest message is always at the BOTTOM (WhatsApp-style).
     QDate lastDate;
-    for (const auto &msgVal : messages) {
+    for (int i = messages.size() - 1; i >= 0; --i) {
+        const auto msgVal = messages.at(i);
         const auto msgObj = msgVal.toObject();
         const auto actorId = msgObj.value(QStringLiteral("actorId")).toString();
         const auto isOwn = (actorId == _currentUserId);

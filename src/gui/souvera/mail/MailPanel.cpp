@@ -4,6 +4,7 @@
  */
 
 #include "MailPanel.h"
+#include "MailBodyView.h"
 #include "MailComposer.h"
 #include "EmailListDelegate.h"
 #include "MailReaderWindow.h"
@@ -95,6 +96,9 @@ void MailPanel::startJmap(const QString &user, const QString &mailPassword)
         _jmapClient->deleteLater();
         _jmapClient = nullptr;
     }
+    if (_preview && accountState && accountState->account()) {
+        _preview->setNetworkAccessManager(accountState->account()->networkAccessManager());
+    }
     _jmapClient = new JmapClient(accountState, this);
     _jmapClient->setCredentials(user, mailPassword);
 
@@ -167,7 +171,7 @@ void MailPanel::startJmap(const QString &user, const QString &mailPassword)
         }
 
         if (!html.isEmpty()) {
-            _preview->setHtml(html);
+            _preview->setMailBody(html);
         }
     });
 
@@ -281,7 +285,7 @@ void MailPanel::setupUi()
     previewLayout->setContentsMargins(0, 0, 0, 0);
     previewLayout->setSpacing(0);
 
-    _preview = new QTextBrowser(previewPanel);
+    _preview = new MailBodyView(previewPanel);
     _preview->setObjectName(QStringLiteral("MailPreview"));
     _preview->setOpenExternalLinks(false);
     _preview->setOpenLinks(false);
@@ -492,7 +496,7 @@ void MailPanel::onMessageSelected(const QModelIndex &index)
     const auto textSecondary = theme->color(SouveraTheme::Color::TextSecondary).name();
     const auto textMuted = theme->color(SouveraTheme::Color::TextMuted).name();
 
-    _preview->setHtml(QStringLiteral(
+    _preview->setMailBody(QStringLiteral(
         "<div style='border-bottom: 1px solid %4; padding-bottom: 14px; margin-bottom: 14px;'>"
         "<h2 style='margin: 0 0 10px 0; color: %5; font-size: 18px; font-weight: 700;'>%1</h2>"
         "<p style='color: %6; margin: 4px 0;'><b style='color: %5;'>Von:</b> %2</p>"

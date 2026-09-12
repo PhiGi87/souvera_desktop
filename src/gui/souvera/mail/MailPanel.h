@@ -27,6 +27,7 @@ namespace OCC {
 
 class AccountState;
 class EmailListDelegate;
+class MailBodyView;
 
 class MailPanel : public QWidget
 {
@@ -60,7 +61,7 @@ private:
     QSplitter *_rightSplitter = nullptr;
     QTreeView *_folderView = nullptr;
     QListView *_messageView = nullptr;
-    QTextBrowser *_preview = nullptr;
+    MailBodyView *_preview = nullptr;
     QWidget *_toolbar = nullptr;
     QLabel *_statusLabel = nullptr;
     QLineEdit *_searchEdit = nullptr;

@@ -12,6 +12,7 @@
 
 class QLabel;
 class QTextBrowser;
+class MailBodyView;
 class QPushButton;
 
 namespace OCC {
@@ -47,7 +48,7 @@ private:
     JmapClient *_client = nullptr;
     QLabel *_subjectLabel = nullptr;
     QLabel *_metaLabel = nullptr;
-    QTextBrowser *_bodyView = nullptr;
+    MailBodyView *_bodyView = nullptr;
     QPushButton *_replyBtn = nullptr;
     QPushButton *_forwardBtn = nullptr;
     QPushButton *_deleteBtn = nullptr;
