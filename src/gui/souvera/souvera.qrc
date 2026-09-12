@@ -12,5 +12,11 @@
         <file>icons/moon.svg</file>
         <file>icons/chevron-right.svg</file>
         <file>icons/chevron-down.svg</file>
+        <file>icons/user.svg</file>
+        <file>icons/bell.svg</file>
+        <file>icons/palette.svg</file>
+        <file>icons/globe.svg</file>
+        <file>icons/activity.svg</file>
+        <file>icons/check.svg</file>
     </qresource>
 </RCC>

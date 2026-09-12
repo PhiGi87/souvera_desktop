@@ -33,6 +33,29 @@ QWidget#ContentArea QRadioButton {
     spacing: 8px;
 }
 
+QWidget#ContentArea QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid @borderStrong@;
+    border-radius: 4px;
+    background: @surface@;
+}
+
+QWidget#ContentArea QCheckBox::indicator:hover {
+    border-color: @accent@;
+}
+
+QWidget#ContentArea QCheckBox::indicator:checked {
+    background: @accent@;
+    border-color: @accent@;
+    image: url(:/souvera/icons/check.svg);
+}
+
+QWidget#ContentArea QCheckBox::indicator:disabled {
+    background: transparent;
+    border-color: @border@;
+}
+
 QWidget#ContentArea QGroupBox {
     color: @textPrimary@;
     border: 1px solid @border@;
@@ -459,13 +482,15 @@ QLabel#FilesHeaderLabel {
     padding: 0 0 16px 0;
 }
 
-#FilesPanel QLabel#FolderAliasLabel {
+#FilesPanel QLabel#FolderAliasLabel,
+#SettingsPanel QLabel#FolderAliasLabel {
     color: @textPrimary@;
     font-size: 14px;
     font-weight: 600;
 }
 
-#FilesPanel QLabel#FolderStatusLabel {
+#FilesPanel QLabel#FolderStatusLabel,
+#SettingsPanel QLabel#FolderStatusLabel {
     color: @textSecondary@;
     font-size: 12px;
 }
@@ -492,7 +517,8 @@ QLabel#FilesHeaderLabel {
     border-color: @accent@;
 }
 
-#FilesPanel QLabel#EmptyLabel {
+#FilesPanel QLabel#EmptyLabel,
+#SettingsPanel QLabel#EmptyLabel {
     color: @textDisabled@;
     font-size: 14px;
     padding: 48px 0;
@@ -676,6 +702,43 @@ QLabel#DeckCardDescription {
     font-size: 11px;
     color: @textSecondary@;
     background: transparent;
+}
+
+/* ==========================================================================
+   Settings Panel
+   ========================================================================== */
+
+#SettingsPanel {
+    background-color: @contentBackground@;
+}
+
+#SettingsNav {
+    background-color: @background@;
+    border-right: 1px solid @border@;
+    padding: 12px 8px;
+    outline: none;
+}
+
+#SettingsNav::item {
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin: 2px 4px;
+    color: @textSecondary@;
+    font-size: 13px;
+}
+
+#SettingsNav::item:hover:!selected {
+    background: @overlayHover@;
+    color: @textPrimary@;
+}
+
+#SettingsNav::item:selected {
+    background: @accentOverlay@;
+    color: @accent@;
+}
+
+#SettingsPages {
+    background-color: @contentBackground@;
 }
 
 /* ==========================================================================

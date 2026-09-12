@@ -361,6 +361,7 @@ set(client_SRCS
     souvera/calendar/CalDavSync.cpp
     souvera/calendar/CalendarEventDialog.h
     souvera/calendar/CalendarEventDialog.cpp
+    souvera/theme/SouveraMetrics.h
     souvera/theme/SouveraTheme.h
     souvera/theme/SouveraTheme.cpp
     )

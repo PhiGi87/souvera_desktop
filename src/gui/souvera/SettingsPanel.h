@@ -6,12 +6,15 @@
 #ifndef SETTINGSPANEL_H
 #define SETTINGSPANEL_H
 
+#include <QStringList>
 #include <QWidget>
 
 class QLabel;
 class QPushButton;
 class QVBoxLayout;
 class QScrollArea;
+class QListWidget;
+class QStackedWidget;
 
 class QCheckBox;
 
@@ -35,6 +38,8 @@ signals:
 
 private:
     void setupUi();
+    QScrollArea *createPage(int category);
+    void refreshNavIcons();
     void rebuildSyncFolders();
     void addFolderRow(Folder *folder, QVBoxLayout *container);
     void onTogglePause(Folder *folder);
@@ -57,6 +62,9 @@ private:
     JmapClient *_testClient = nullptr;
     QCheckBox *_verticalLayoutCheck = nullptr;
     QCheckBox *_previewLinesCheck = nullptr;
+    QListWidget *_nav = nullptr;
+    QStackedWidget *_pages = nullptr;
+    QStringList _navIconNames;
 };
 
 } // namespace OCC

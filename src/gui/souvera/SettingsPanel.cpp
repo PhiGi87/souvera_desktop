@@ -23,6 +23,7 @@
 #include <QMessageBox>
 #include <QUuid>
 #include "theme.h"
+#include "theme/SouveraMetrics.h"
 #include "theme/SouveraTheme.h"
 
 #include <QDateTime>
@@ -34,6 +35,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QListWidget>
 #include <QLoggingCategory>
 #include <QCheckBox>
 #include <QPointer>
@@ -41,21 +43,39 @@
 #include <QScrollArea>
 #include <QSaveFile>
 #include <QSettings>
+#include <QStackedWidget>
 #include <QVBoxLayout>
 
 Q_LOGGING_CATEGORY(lcSettingsPanel, "souvera.settings.panel")
 
 namespace OCC {
 
+namespace Metrics = Sou::Metrics;
+
 namespace {
+
+// Settings categories, in display order. The index doubles as the page index
+// in the QStackedWidget and the row index in the navigation list.
+enum Category {
+    CatAccount,
+    CatSync,
+    CatAppearance,
+    CatMail,
+    CatNotifications,
+    CatNetwork,
+    CatAdvanced,
+    CatDiagnostics,
+    CatCount
+};
 
 QFrame *makeCard(const QString &title, QWidget *parent, QVBoxLayout **outLayout)
 {
     auto *card = new QFrame(parent);
     card->setObjectName(QStringLiteral("FolderRow"));
     auto *layout = new QVBoxLayout(card);
-    layout->setContentsMargins(16, 14, 16, 14);
-    layout->setSpacing(10);
+    layout->setContentsMargins(Metrics::CardPaddingH, Metrics::CardPaddingV,
+                               Metrics::CardPaddingH, Metrics::CardPaddingV);
+    layout->setSpacing(Metrics::CardSpacing);
 
     auto *label = new QLabel(title, card);
     label->setObjectName(QStringLiteral("SettingsCardTitle"));
@@ -65,6 +85,18 @@ QFrame *makeCard(const QString &title, QWidget *parent, QVBoxLayout **outLayout)
         *outLayout = layout;
     }
     return card;
+}
+
+QWidget *cardRow(QWidget *parent, QHBoxLayout **outLayout)
+{
+    auto *row = new QWidget(parent);
+    auto *rowLayout = new QHBoxLayout(row);
+    rowLayout->setContentsMargins(0, 0, 0, 0);
+    rowLayout->setSpacing(Metrics::SpacingS);
+    if (outLayout) {
+        *outLayout = rowLayout;
+    }
+    return row;
 }
 
 } // namespace
@@ -129,6 +161,8 @@ void SettingsPanel::setAccountState(AccountState *accountState)
 
 void SettingsPanel::setupUi()
 {
+    setObjectName(QStringLiteral("SettingsPanel"));
+
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
@@ -136,117 +170,195 @@ void SettingsPanel::setupUi()
     auto *toolbar = new QWidget(this);
     toolbar->setObjectName(QStringLiteral("PanelToolbar"));
     auto *toolbarLayout = new QHBoxLayout(toolbar);
-    toolbarLayout->setContentsMargins(16, 8, 16, 8);
+    toolbarLayout->setContentsMargins(Metrics::CardMargin, 8, Metrics::CardMargin, 8);
     auto *title = new QLabel(QStringLiteral("Einstellungen"), toolbar);
     title->setObjectName(QStringLiteral("PanelTitle"));
     toolbarLayout->addWidget(title);
     toolbarLayout->addStretch();
     layout->addWidget(toolbar);
 
-    auto *scroll = new QScrollArea(this);
+    auto *body = new QWidget(this);
+    auto *bodyLayout = new QHBoxLayout(body);
+    bodyLayout->setContentsMargins(0, 0, 0, 0);
+    bodyLayout->setSpacing(0);
+
+    _nav = new QListWidget(body);
+    _nav->setObjectName(QStringLiteral("SettingsNav"));
+    _nav->setFixedWidth(Metrics::NavWidth);
+    _nav->setUniformItemSizes(true);
+    _nav->setIconSize(QSize(20, 20));
+    _nav->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+    _pages = new QStackedWidget(body);
+    _pages->setObjectName(QStringLiteral("SettingsPages"));
+
+    bodyLayout->addWidget(_nav);
+    bodyLayout->addWidget(_pages, 1);
+    layout->addWidget(body, 1);
+
+    static const struct {
+        const char *label;
+        const char *icon;
+    } categories[CatCount] = {
+        {"Konto", "user"},
+        {"Synchronisation", "folder"},
+        {"Erscheinungsbild", "palette"},
+        {"Mail", "mail"},
+        {"Benachrichtigungen", "bell"},
+        {"Netzwerk", "globe"},
+        {"Erweitert", "settings"},
+        {"Diagnose", "activity"},
+    };
+    for (int i = 0; i < CatCount; ++i) {
+        _nav->addItem(new QListWidgetItem(
+            QIcon(), QLatin1String(categories[i].label)));
+        _navIconNames.append(QLatin1String(categories[i].icon));
+        _pages->addWidget(createPage(i));
+    }
+    refreshNavIcons();
+
+    connect(_nav, &QListWidget::currentRowChanged, _pages, &QStackedWidget::setCurrentIndex);
+    connect(_nav, &QListWidget::currentRowChanged, this, [this](int) { refreshNavIcons(); });
+    connect(SouveraTheme::instance(), &SouveraTheme::themeChanged, this, &SettingsPanel::refreshNavIcons);
+    _nav->setCurrentRow(0);
+    rebuildSyncFolders();
+}
+
+QScrollArea *SettingsPanel::createPage(int category)
+{
+    auto *scroll = new QScrollArea(_pages);
     scroll->setObjectName(QStringLiteral("PanelScroll"));
     scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+
     auto *content = new QWidget(scroll);
     content->setObjectName(QStringLiteral("ContentArea"));
     auto *contentLayout = new QVBoxLayout(content);
-    contentLayout->setContentsMargins(16, 16, 16, 16);
-    contentLayout->setSpacing(12);
+    contentLayout->setContentsMargins(Metrics::CardMargin, Metrics::CardMargin,
+                                      Metrics::CardMargin, Metrics::CardMargin);
+    contentLayout->setSpacing(Metrics::SpacingM);
 
-    // ---- Account ----
-    QVBoxLayout *accountLayout = nullptr;
-    auto *accountCard = makeCard(QStringLiteral("Konto"), content, &accountLayout);
-    _accountLabel = new QLabel(QStringLiteral("Kein Konto verbunden"), accountCard);
-    _accountLabel->setObjectName(QStringLiteral("FolderAliasLabel"));
-    accountLayout->addWidget(_accountLabel);
-    _serverLabel = new QLabel(accountCard);
-    _serverLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
-    accountLayout->addWidget(_serverLabel);
-    _connectionLabel = new QLabel(accountCard);
-    _connectionLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
-    accountLayout->addWidget(_connectionLabel);
-    contentLayout->addWidget(accountCard);
-
-    // ---- Datei-Synchronisation ----
-    QVBoxLayout *syncLayout = nullptr;
-    auto *syncCard = makeCard(QStringLiteral("Datei-Synchronisation"), content, &syncLayout);
-    auto *syncHint = new QLabel(
-        QStringLiteral("Synchronisierte Ordner laufen automatisch im Hintergrund weiter."),
-        syncCard);
-    syncHint->setObjectName(QStringLiteral("FolderStatusLabel"));
-    syncHint->setWordWrap(true);
-    syncLayout->addWidget(syncHint);
-
-    _syncFolderContainer = new QWidget(syncCard);
-    auto *folderLayout = new QVBoxLayout(_syncFolderContainer);
-    folderLayout->setContentsMargins(0, 0, 0, 0);
-    folderLayout->setSpacing(8);
-    syncLayout->addWidget(_syncFolderContainer);
-
-    auto *addFolderRow = new QWidget(syncCard);
-    auto *addFolderLayout = new QHBoxLayout(addFolderRow);
-    addFolderLayout->setContentsMargins(0, 0, 0, 0);
-    addFolderLayout->addStretch();
-    auto *addFolderBtn = new QPushButton(QStringLiteral("Ordner hinzufügen..."), addFolderRow);
-    addFolderBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
-    connect(addFolderBtn, &QPushButton::clicked, this, &SettingsPanel::onAddFolder);
-    addFolderLayout->addWidget(addFolderBtn);
-    syncLayout->addWidget(addFolderRow);
-    contentLayout->addWidget(syncCard);
-
-    // ---- Erscheinungsbild ----
-    QVBoxLayout *themeLayout = nullptr;
-    auto *themeCard = makeCard(QStringLiteral("Erscheinungsbild"), content, &themeLayout);
-    auto *themeRow = new QWidget(themeCard);
-    auto *themeRowLayout = new QHBoxLayout(themeRow);
-    themeRowLayout->setContentsMargins(0, 0, 0, 0);
-    auto *themeLabel = new QLabel(QStringLiteral("Dunkles Design verwenden"), themeRow);
-    themeLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
-    themeRowLayout->addWidget(themeLabel);
-    themeRowLayout->addStretch();
-    auto *themeBtn = new QPushButton(QStringLiteral("Umschalten"), themeRow);
-    themeBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
-    connect(themeBtn, &QPushButton::clicked, this, []() {
-        SouveraTheme::instance()->toggleTheme();
-    });
-    themeRowLayout->addWidget(themeBtn);
-    themeLayout->addWidget(themeRow);
-    contentLayout->addWidget(themeCard);
-
-    // ---- Mail-Ansicht ----
-    QVBoxLayout *mailViewLayout = nullptr;
-    auto *mailViewCard = makeCard(QStringLiteral("Mail-Ansicht"), content, &mailViewLayout);
-
-    _verticalLayoutCheck = new QCheckBox(QStringLiteral("Nachrichten untereinander anzeigen (vertikale Ansicht)"), mailViewCard);
-    _previewLinesCheck = new QCheckBox(QStringLiteral("Vorschauzeilen in der Nachrichtenliste zeigen"), mailViewCard);
-    mailViewLayout->addWidget(_verticalLayoutCheck);
-    mailViewLayout->addWidget(_previewLinesCheck);
-
-    {
-        QSettings settings;
-        settings.beginGroup(QStringLiteral("souvera/mailview"));
-        _verticalLayoutCheck->setChecked(settings.value(QStringLiteral("verticalLayout"), false).toBool());
-        _previewLinesCheck->setChecked(settings.value(QStringLiteral("previewLines"), true).toBool());
-        settings.endGroup();
+    switch (category) {
+    case CatAccount: {
+        QVBoxLayout *accountLayout = nullptr;
+        auto *accountCard = makeCard(QStringLiteral("Konto"), content, &accountLayout);
+        _accountLabel = new QLabel(QStringLiteral("Kein Konto verbunden"), accountCard);
+        _accountLabel->setObjectName(QStringLiteral("FolderAliasLabel"));
+        accountLayout->addWidget(_accountLabel);
+        _serverLabel = new QLabel(accountCard);
+        _serverLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
+        accountLayout->addWidget(_serverLabel);
+        _connectionLabel = new QLabel(accountCard);
+        _connectionLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
+        accountLayout->addWidget(_connectionLabel);
+        contentLayout->addWidget(accountCard);
+        contentLayout->addStretch();
+        break;
     }
 
-    connect(_verticalLayoutCheck, &QCheckBox::toggled, this, [this](bool checked) {
-        QSettings settings;
-        settings.beginGroup(QStringLiteral("souvera/mailview"));
-        settings.setValue(QStringLiteral("verticalLayout"), checked);
-        settings.endGroup();
-        emit viewSettingsChanged();
-    });
-    connect(_previewLinesCheck, &QCheckBox::toggled, this, [this](bool checked) {
-        QSettings settings;
-        settings.beginGroup(QStringLiteral("souvera/mailview"));
-        settings.setValue(QStringLiteral("previewLines"), checked);
-        settings.endGroup();
-        emit viewSettingsChanged();
-    });
-    contentLayout->addWidget(mailViewCard);
+    case CatSync: {
+        QVBoxLayout *syncLayout = nullptr;
+        auto *syncCard = makeCard(QStringLiteral("Datei-Synchronisation"), content, &syncLayout);
+        auto *syncHint = new QLabel(
+            QStringLiteral("Synchronisierte Ordner laufen automatisch im Hintergrund weiter."),
+            syncCard);
+        syncHint->setObjectName(QStringLiteral("FolderStatusLabel"));
+        syncHint->setWordWrap(true);
+        syncLayout->addWidget(syncHint);
 
-    // ---- Benachrichtigungen ----
-    {
+        _syncFolderContainer = new QWidget(syncCard);
+        auto *folderLayout = new QVBoxLayout(_syncFolderContainer);
+        folderLayout->setContentsMargins(0, 0, 0, 0);
+        folderLayout->setSpacing(Metrics::SpacingS);
+        syncLayout->addWidget(_syncFolderContainer);
+
+        QHBoxLayout *addFolderLayout = nullptr;
+        auto *addFolderRow = cardRow(syncCard, &addFolderLayout);
+        addFolderLayout->addStretch();
+        auto *addFolderBtn = new QPushButton(QStringLiteral("Ordner hinzufügen..."), addFolderRow);
+        addFolderBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+        connect(addFolderBtn, &QPushButton::clicked, this, &SettingsPanel::onAddFolder);
+        addFolderLayout->addWidget(addFolderBtn);
+        syncLayout->addWidget(addFolderRow);
+        contentLayout->addWidget(syncCard);
+        contentLayout->addStretch();
+        break;
+    }
+
+    case CatAppearance: {
+        QVBoxLayout *themeLayout = nullptr;
+        auto *themeCard = makeCard(QStringLiteral("Erscheinungsbild"), content, &themeLayout);
+        QHBoxLayout *themeRowLayout = nullptr;
+        auto *themeRow = cardRow(themeCard, &themeRowLayout);
+        auto *themeLabel = new QLabel(QStringLiteral("Dunkles Design verwenden"), themeRow);
+        themeLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
+        themeRowLayout->addWidget(themeLabel);
+        themeRowLayout->addStretch();
+        auto *themeBtn = new QPushButton(QStringLiteral("Umschalten"), themeRow);
+        themeBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+        connect(themeBtn, &QPushButton::clicked, this, []() {
+            SouveraTheme::instance()->toggleTheme();
+        });
+        themeRowLayout->addWidget(themeBtn);
+        themeLayout->addWidget(themeRow);
+        contentLayout->addWidget(themeCard);
+        contentLayout->addStretch();
+        break;
+    }
+
+    case CatMail: {
+        QVBoxLayout *mailViewLayout = nullptr;
+        auto *mailViewCard = makeCard(QStringLiteral("Nachrichtenliste"), content, &mailViewLayout);
+
+        _verticalLayoutCheck = new QCheckBox(QStringLiteral("Nachrichten untereinander anzeigen (vertikale Ansicht)"), mailViewCard);
+        _previewLinesCheck = new QCheckBox(QStringLiteral("Vorschauzeilen in der Nachrichtenliste zeigen"), mailViewCard);
+        mailViewLayout->addWidget(_verticalLayoutCheck);
+        mailViewLayout->addWidget(_previewLinesCheck);
+
+        {
+            QSettings settings;
+            settings.beginGroup(QStringLiteral("souvera/mailview"));
+            _verticalLayoutCheck->setChecked(settings.value(QStringLiteral("verticalLayout"), false).toBool());
+            _previewLinesCheck->setChecked(settings.value(QStringLiteral("previewLines"), true).toBool());
+            settings.endGroup();
+        }
+
+        connect(_verticalLayoutCheck, &QCheckBox::toggled, this, [this](bool checked) {
+            QSettings settings;
+            settings.beginGroup(QStringLiteral("souvera/mailview"));
+            settings.setValue(QStringLiteral("verticalLayout"), checked);
+            settings.endGroup();
+            emit viewSettingsChanged();
+        });
+        connect(_previewLinesCheck, &QCheckBox::toggled, this, [this](bool checked) {
+            QSettings settings;
+            settings.beginGroup(QStringLiteral("souvera/mailview"));
+            settings.setValue(QStringLiteral("previewLines"), checked);
+            settings.endGroup();
+            emit viewSettingsChanged();
+        });
+        contentLayout->addWidget(mailViewCard);
+
+        QVBoxLayout *mailTestLayout = nullptr;
+        auto *mailTestCard = makeCard(QStringLiteral("Mail-Verbindung"), content, &mailTestLayout);
+        QHBoxLayout *mailRowLayout = nullptr;
+        auto *mailRow = cardRow(mailTestCard, &mailRowLayout);
+        _mailTestBtn = new QPushButton(QStringLiteral("Verbindung testen"), mailRow);
+        _mailTestBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+        connect(_mailTestBtn, &QPushButton::clicked, this, &SettingsPanel::onTestMail);
+        mailRowLayout->addWidget(_mailTestBtn);
+        mailRowLayout->addStretch();
+        _mailTestResult = new QLabel(mailRow);
+        _mailTestResult->setObjectName(QStringLiteral("FolderStatusLabel"));
+        _mailTestResult->setWordWrap(true);
+        mailRowLayout->addWidget(_mailTestResult, 1);
+        mailTestLayout->addWidget(mailRow);
+        contentLayout->addWidget(mailTestCard);
+        contentLayout->addStretch();
+        break;
+    }
+
+    case CatNotifications: {
         QVBoxLayout *notifLayout = nullptr;
         auto *notifCard = makeCard(QStringLiteral("Benachrichtigungen"), content, &notifLayout);
 
@@ -274,80 +386,90 @@ void SettingsPanel::setupUi()
             NotificationService::setMailNotificationsEnabled(checked);
         });
         contentLayout->addWidget(notifCard);
+        contentLayout->addStretch();
+        break;
     }
 
-    // ---- Allgemein (Erweitert) ----
-    {
-        QVBoxLayout *generalLayout = nullptr;
-        auto *generalCard = makeCard(QStringLiteral("Allgemein (Erweitert)"), content, &generalLayout);
-        auto *generalSettings = new GeneralSettings(generalCard);
-        generalSettings->setContentsMargins(0, 0, 0, 0);
-        generalLayout->addWidget(generalSettings);
-        contentLayout->addWidget(generalCard);
-    }
-
-    // ---- Netzwerk ----
-    // The widget needs a valid Account; it is created in setAccountState().
-    {
+    case CatNetwork: {
+        // The widget needs a valid Account; it is created in setAccountState().
         QVBoxLayout *networkLayout = nullptr;
         auto *networkCard = makeCard(QStringLiteral("Netzwerk"), content, &networkLayout);
         _networkCardLayout = networkLayout;
         contentLayout->addWidget(networkCard);
+        contentLayout->addStretch();
+        break;
     }
 
-    // ---- Diagnose ----
-    QVBoxLayout *diagLayout = nullptr;
-    auto *diagCard = makeCard(QStringLiteral("Diagnose"), content, &diagLayout);
+    case CatAdvanced: {
+        QVBoxLayout *generalLayout = nullptr;
+        auto *generalCard = makeCard(QStringLiteral("Allgemein"), content, &generalLayout);
+        auto *generalSettings = new GeneralSettings(generalCard);
+        generalSettings->setContentsMargins(0, 0, 0, 0);
+        generalLayout->addWidget(generalSettings);
+        contentLayout->addWidget(generalCard);
+        contentLayout->addStretch();
+        break;
+    }
 
-    auto *versionLabel = new QLabel(
-        QStringLiteral("Souvera Workspace %1").arg(Theme::instance()->version()), diagCard);
-    versionLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
-    diagLayout->addWidget(versionLabel);
+    case CatDiagnostics: {
+        QVBoxLayout *diagLayout = nullptr;
+        auto *diagCard = makeCard(QStringLiteral("Diagnose"), content, &diagLayout);
 
-    auto *mailRow = new QWidget(diagCard);
-    auto *mailRowLayout = new QHBoxLayout(mailRow);
-    mailRowLayout->setContentsMargins(0, 0, 0, 0);
-    _mailTestBtn = new QPushButton(QStringLiteral("Mail-Verbindung testen"), mailRow);
-    _mailTestBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
-    connect(_mailTestBtn, &QPushButton::clicked, this, &SettingsPanel::onTestMail);
-    mailRowLayout->addWidget(_mailTestBtn);
-    mailRowLayout->addStretch();
-    _mailTestResult = new QLabel(mailRow);
-    _mailTestResult->setObjectName(QStringLiteral("FolderStatusLabel"));
-    _mailTestResult->setWordWrap(true);
-    mailRowLayout->addWidget(_mailTestResult, 1);
-    diagLayout->addWidget(mailRow);
+        auto *versionLabel = new QLabel(
+            QStringLiteral("Souvera Workspace %1").arg(Theme::instance()->version()), diagCard);
+        versionLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
+        diagLayout->addWidget(versionLabel);
 
-    auto *logPathLabel = new QLabel(QStringLiteral(
-        "Debug-Log: %LOCALAPPDATA%\\Souvera\\startup.log"), diagCard);
-    logPathLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
-    logPathLabel->setWordWrap(true);
-    diagLayout->addWidget(logPathLabel);
-
-    auto *logBtn = new QPushButton(QStringLiteral("Debug-Log \u00F6ffnen"), diagCard);
-    logBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
-    connect(logBtn, &QPushButton::clicked, this, []() {
 #ifdef Q_OS_WIN
-        const auto base = qEnvironmentVariable("LOCALAPPDATA");
-        const auto logPath = base + QStringLiteral("\\Souvera\\startup.log");
+        const auto logHint = QStringLiteral("Debug-Log: %LOCALAPPDATA%\\Souvera\\startup.log");
 #else
-        const auto logPath = QDir::homePath() + QStringLiteral("/.local/share/Souvera/startup.log");
+        const auto logHint = QStringLiteral("Debug-Log: ~/.local/share/Souvera/startup.log");
 #endif
-        QDesktopServices::openUrl(QUrl::fromLocalFile(logPath));
-    });
-    diagLayout->addWidget(logBtn);
+        auto *logPathLabel = new QLabel(logHint, diagCard);
+        logPathLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
+        logPathLabel->setWordWrap(true);
+        diagLayout->addWidget(logPathLabel);
 
-    auto *exportBtn = new QPushButton(QStringLiteral("Diagnose-Bericht exportieren"), diagCard);
-    exportBtn->setObjectName(QStringLiteral("PanelPrimaryBtn"));
-    connect(exportBtn, &QPushButton::clicked, this, &SettingsPanel::onExportDiagnostics);
-    diagLayout->addWidget(exportBtn);
-    contentLayout->addWidget(diagCard);
+        auto *logBtn = new QPushButton(QStringLiteral("Debug-Log \u00F6ffnen"), diagCard);
+        logBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+        connect(logBtn, &QPushButton::clicked, this, []() {
+#ifdef Q_OS_WIN
+            const auto base = qEnvironmentVariable("LOCALAPPDATA");
+            const auto logPath = base + QStringLiteral("\\Souvera\\startup.log");
+#else
+            const auto logPath = QDir::homePath() + QStringLiteral("/.local/share/Souvera/startup.log");
+#endif
+            QDesktopServices::openUrl(QUrl::fromLocalFile(logPath));
+        });
+        diagLayout->addWidget(logBtn);
 
-    contentLayout->addStretch();
+        auto *exportBtn = new QPushButton(QStringLiteral("Diagnose-Bericht exportieren"), diagCard);
+        exportBtn->setObjectName(QStringLiteral("PanelPrimaryBtn"));
+        connect(exportBtn, &QPushButton::clicked, this, &SettingsPanel::onExportDiagnostics);
+        diagLayout->addWidget(exportBtn);
+        contentLayout->addWidget(diagCard);
+        contentLayout->addStretch();
+        break;
+    }
+
+    default:
+        break;
+    }
+
     scroll->setWidget(content);
-    layout->addWidget(scroll, 1);
+    return scroll;
+}
 
-    rebuildSyncFolders();
+void SettingsPanel::refreshNavIcons()
+{
+    if (!_nav) return;
+    const auto *theme = SouveraTheme::instance();
+    for (int i = 0; i < _nav->count() && i < _navIconNames.size(); ++i) {
+        const auto tint = i == _nav->currentRow()
+            ? SouveraTheme::Color::Accent
+            : SouveraTheme::Color::TextSecondary;
+        _nav->item(i)->setIcon(theme->icon(_navIconNames.at(i), tint));
+    }
 }
 
 void SettingsPanel::ensureNetworkSettings(AccountState *accountState)
@@ -362,7 +484,7 @@ void SettingsPanel::ensureNetworkSettings(AccountState *accountState)
 
 void SettingsPanel::rebuildSyncFolders()
 {
-    if (!_syncFolderContainer) return;
+    if (!_syncFolderContainer || !FolderMan::instance()) return;
     auto *containerLayout = qobject_cast<QVBoxLayout *>(_syncFolderContainer->layout());
     if (!containerLayout) return;
 
