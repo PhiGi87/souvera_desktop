@@ -346,6 +346,13 @@ set(client_SRCS
     souvera/deck/DeckOcsApi.cpp
     souvera/deck/DeckCardWidget.h
     souvera/deck/DeckCardWidget.cpp
+    souvera/deck/DeckModels.h
+    souvera/deck/DeckManager.h
+    souvera/deck/DeckManager.cpp
+    souvera/deck/DeckCommentsWidget.h
+    souvera/deck/DeckCommentsWidget.cpp
+    souvera/deck/DeckCardDetailDialog.h
+    souvera/deck/DeckCardDetailDialog.cpp
     souvera/calendar/CalendarPanel.h
     souvera/calendar/CalendarPanel.cpp
     souvera/calendar/CalDavSync.h
