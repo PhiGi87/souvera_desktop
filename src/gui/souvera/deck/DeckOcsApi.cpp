@@ -422,11 +422,14 @@ void DeckOcsApi::createCard(int boardId, int stackId, const QString &title, cons
 
 void DeckOcsApi::moveCard(int boardId, int sourceStackId, int targetStackId, int cardId, int order)
 {
-    // PUT /boards/{boardId}/stacks/{sourceStackId}/cards/{cardId}/reorder
-    // (Android DeckAPI.moveCard + Reorder.java: the URL carries the SOURCE
-    // column, the JSON body carries the TARGET column in "stackId".)
+    // PUT /boards/{boardId}/stacks/{stackId}/cards/{cardId}/reorder
+    // Verified against a live server: the stack in the URL is the TARGET
+    // column — the server looks the card up by id and inserts it into the
+    // URL stack at the given order. A URL carrying the source column only
+    // reorders the card within its current stack. The body repeats the
+    // target stackId and order.
     const auto url = apiUrl(QStringLiteral("/boards/%1/stacks/%2/cards/%3/reorder")
-                                .arg(boardId).arg(sourceStackId).arg(cardId));
+                                .arg(boardId).arg(targetStackId).arg(cardId));
     if (url.isEmpty()) return;
 
     QJsonObject body;

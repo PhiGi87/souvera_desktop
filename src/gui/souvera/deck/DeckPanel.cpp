@@ -56,6 +56,10 @@ DeckColumnWidget::DeckColumnWidget(const QString &title, QWidget *parent)
     : QFrame(parent)
 {
     setAttribute(Qt::WA_StyledBackground, true);
+    // The column stylesheet addresses this frame via object name — a bare
+    // type selector would also style every QLabel (QLabel inherits QFrame)
+    // and every card inside the column subtree.
+    setObjectName(QStringLiteral("DeckColumnFrame"));
     setFixedWidth(280);
     applyColumnTheme();
     connect(SouveraTheme::instance(), &SouveraTheme::themeChanged, this, [this]() {
@@ -169,7 +173,7 @@ void DeckColumnWidget::applyColumnTheme()
     // replaces the app stylesheet for this subtree, so every style the column
     // relies on must be restated here.
     setStyleSheet(QStringLiteral(
-        "QFrame { background-color: %1; border-radius: 10px; border: 1px solid %2; }"
+        "QFrame#DeckColumnFrame { background-color: %1; border-radius: 10px; border: 1px solid %2; }"
         "QWidget#DeckColumnHeader { background: transparent; border: none;"
         "  border-bottom: 2px solid %3; }"
         "QLabel#DeckColumnTitle { color: %4; background: transparent; font-weight: 600; }"
