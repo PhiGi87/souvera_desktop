@@ -264,7 +264,12 @@ void MailPanel::setupUi()
     _folderView = new QTreeView(folderPanel);
     _folderView->setObjectName(QStringLiteral("MailFolderView"));
     _folderView->setHeaderHidden(true);
-    _folderView->setFixedWidth(220);
+    // The mailbox list is a flat two-level structure that is always shown
+    // expanded; the branch column of a decorated tree pushes the chevrons
+    // far away from the items and tears the selection bar apart.
+    _folderView->setRootIsDecorated(false);
+    _folderView->setItemsExpandable(false);
+    _folderView->setUniformRowHeights(true);
     _folderView->setIndentation(16);
     _folderView->setAnimated(true);
     _folderView->setEditTriggers(QAbstractItemView::NoEditTriggers);

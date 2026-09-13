@@ -378,7 +378,7 @@ QSplitter#MailSplitter::handle {
 #MailFolderView::item {
     height: 30px;
     border-radius: 6px;
-    margin: 1px 8px 1px 2px;
+    margin: 1px 6px 1px 4px;
     padding-left: 4px;
 }
 
@@ -392,18 +392,13 @@ QSplitter#MailSplitter::handle {
     color: @textPrimary@;
 }
 
-/* Chevron expand/collapse indicators instead of the default tree arrows */
+/* The tree renders undecorated (always expanded); keep the branch area
+   invisible so nothing drifts around the selection bar. */
 #MailFolderView::branch {
     background: transparent;
     border-image: none;
-}
-
-#MailFolderView::branch:closed:has-children {
-    image: url(:/souvera/icons/chevron-right.svg);
-}
-
-#MailFolderView::branch:open:has-children {
-    image: url(:/souvera/icons/chevron-down.svg);
+    image: none;
+    width: 0px;
 }
 
 /* ---- Message List ---- */
