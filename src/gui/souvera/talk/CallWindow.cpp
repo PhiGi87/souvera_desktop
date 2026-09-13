@@ -4,188 +4,170 @@
  */
 
 #include "CallWindow.h"
+#include "TalkOcsApi.h"
+#include "TalkSignalingClient.h"
 
-#include "account.h"
-#include "accountstate.h"
-#include "creds/abstractcredentials.h"
-#include "config.h"
+#include "theme/SouveraTheme.h"
 
+#include <QCloseEvent>
+#include <QColor>
 #include <QDesktopServices>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QListWidget>
 #include <QPushButton>
-#include <QShortcut>
-#include <QStandardPaths>
+#include <QTimer>
+#include <QUrl>
 #include <QVBoxLayout>
-
-#ifdef BUILD_WITH_WEBENGINE
-#include <QApplication>
-#include <QAuthenticator>
-#include <QNetworkAccessManager>
-#include <QNetworkCookieJar>
-#include <QNetworkReply>
-#include <QNetworkRequest>
-#include <QPointer>
-#include <QWebEngineCookieStore>
-#include <QWebEnginePage>
-#include <QWebEngineProfile>
-#include <QWebEngineView>
-#endif
 
 namespace OCC {
 
-#ifdef BUILD_WITH_WEBENGINE
-namespace {
-// Dedicated persistent profile: session cookies of the embedded Talk login
-// survive app restarts, so the room opens directly after the first sign-in.
-QWebEngineProfile *talkProfile()
-{
-    static QWebEngineProfile *profile = nullptr;
-    if (!profile) {
-        profile = new QWebEngineProfile(QStringLiteral("souveraTalk"), qApp);
-        profile->setPersistentStoragePath(
-            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-            + QStringLiteral("/talk-webprofile"));
-        profile->setHttpCacheType(QWebEngineProfile::DiskHttpCache);
-        profile->setPersistentCookiesPolicy(QWebEngineProfile::AllowPersistentCookies);
-    }
-    return profile;
-}
-} // namespace
-#endif
-
-CallWindow::CallWindow(AccountState *accountState, const QUrl &roomUrl,
-                       const QString &roomName, QWidget *parent)
+CallWindow::CallWindow(TalkOcsApi *api, TalkSignalingClient *signaling,
+                       const QString &token, const QString &displayName,
+                       const QUrl &roomUrl, QWidget *parent)
     : QWidget(parent, Qt::Window)
+    , _api(api)
+    , _signaling(signaling)
+    , _token(token)
+    , _roomUrl(roomUrl)
 {
-    setWindowTitle(QStringLiteral("Anruf \u2014 %1").arg(roomName));
-    setAttribute(Qt::WA_DeleteOnClose);
-    resize(1100, 720);
+    setWindowTitle(QStringLiteral("Anruf \u2014 %1").arg(displayName));
+    resize(420, 560);
 
-    setupUi(accountState, roomUrl, roomName);
-}
-
-void CallWindow::setupUi(AccountState *accountState, const QUrl &roomUrl, const QString &roomName)
-{
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(0);
+    layout->setContentsMargins(24, 24, 24, 24);
+    layout->setSpacing(16);
 
-    auto *header = new QWidget(this);
-    header->setObjectName(QStringLiteral("PanelToolbar"));
-    auto *headerLayout = new QHBoxLayout(header);
-    headerLayout->setContentsMargins(16, 8, 16, 8);
+    auto *title = new QLabel(QStringLiteral("\U0001F4DE %1").arg(displayName), this);
+    title->setObjectName(QStringLiteral("PanelTitle"));
+    layout->addWidget(title);
 
-    auto *titleLabel = new QLabel(QStringLiteral("\U0001F4DE %1").arg(roomName), header);
-    titleLabel->setObjectName(QStringLiteral("PanelTitle"));
-    headerLayout->addWidget(titleLabel);
-    headerLayout->addStretch();
+    _durationLabel = new QLabel(QStringLiteral("00:00"), this);
+    _durationLabel->setObjectName(QStringLiteral("CallDuration"));
+    layout->addWidget(_durationLabel);
 
-    auto *browserBtn = new QPushButton(QStringLiteral("Im Browser \u00F6ffnen"), header);
-    browserBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
-    connect(browserBtn, &QPushButton::clicked, this, [roomUrl]() {
-        QDesktopServices::openUrl(roomUrl);
-    });
-    headerLayout->addWidget(browserBtn);
+    _stateLabel = new QLabel(QStringLiteral("Verbunden \u2014 du nimmst an diesem Anruf teil."), this);
+    _stateLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
+    _stateLabel->setWordWrap(true);
+    layout->addWidget(_stateLabel);
 
-    layout->addWidget(header);
+    auto *participantsTitle = new QLabel(QStringLiteral("Teilnehmer"), this);
+    participantsTitle->setObjectName(QStringLiteral("SettingsCardTitle"));
+    layout->addWidget(participantsTitle);
 
-#ifdef BUILD_WITH_WEBENGINE
-    auto *view = new QWebEngineView(this);
-    auto *page = new QWebEnginePage(talkProfile(), view);
+    _participants = new QListWidget(this);
+    _participants->setObjectName(QStringLiteral("CallParticipants"));
+    layout->addWidget(_participants, 1);
 
-    // Answer HTTP basic auth challenges with the account credentials so the
-    // Talk web app opens with the user's session instead of a login prompt.
-    // The QPointer guards against a removed account while the window is open.
-    connect(page, &QWebEnginePage::authenticationRequired, this,
-            [accountState = QPointer<AccountState>(accountState)](const QUrl &, QAuthenticator *authenticator) {
-        if (!accountState || !accountState->account() || !authenticator) return;
-        const auto creds = accountState->account()->credentials();
-        if (!creds) return;
-        authenticator->setUser(creds->user());
-        authenticator->setPassword(creds->password());
-    });
+    auto *buttons = new QHBoxLayout;
+    buttons->setSpacing(8);
 
-    // Video calls need microphone and camera; desktop sharing is requested by Talk.
-    connect(page, &QWebEnginePage::featurePermissionRequested, this,
-            [page](const QUrl &origin, QWebEnginePage::Feature feature) {
-        switch (feature) {
-        case QWebEnginePage::MediaAudioCapture:
-        case QWebEnginePage::MediaVideoCapture:
-        case QWebEnginePage::MediaAudioVideoCapture:
-        case QWebEnginePage::DesktopVideoCapture:
-        case QWebEnginePage::DesktopAudioVideoCapture:
-        case QWebEnginePage::Notifications:
-            page->setFeaturePermission(origin, feature, QWebEnginePage::PermissionGrantedByUser);
-            break;
-        default:
-            page->setFeaturePermission(origin, feature, QWebEnginePage::PermissionDeniedByUser);
-            break;
+    auto *leaveBtn = new QPushButton(QStringLiteral("Anruf beenden"), this);
+    leaveBtn->setObjectName(QStringLiteral("PanelPrimaryBtn"));
+    connect(leaveBtn, &QPushButton::clicked, this, [this]() {
+        if (_inCall && _api) {
+            _api->leaveCall(_token);
         }
+        close();
     });
+    buttons->addWidget(leaveBtn);
+    buttons->addStretch();
 
-    view->setPage(page);
-    _view = view;
-    layout->addWidget(view, 1);
-    // Establish a legitimate web session (basic auth is accepted on web
-    // routes and answers with session cookies) before loading the room, so
-    // calls open directly instead of showing the login page.
-    establishWebSession(accountState, roomUrl);
-#else
-    auto *fallback = new QWidget(this);
-    auto *fallbackLayout = new QVBoxLayout(fallback);
-    auto *hint = new QLabel(QStringLiteral(
-        "Der eingebettete Anruf ist in diesem Build nicht verf\u00FCgbar.\n"
-        "Der Raum wurde im Browser ge\u00F6ffnet \u2014 dieses Fenster kann geschlossen werden."),
-        fallback);
-    hint->setObjectName(QStringLiteral("PanelPlaceholder"));
-    hint->setAlignment(Qt::AlignCenter);
-    fallbackLayout->addWidget(hint);
-    _view = fallback;
-    layout->addWidget(fallback, 1);
+    auto *mediaBtn = new QPushButton(QStringLiteral("Ton & Bild im Browser"), this);
+    mediaBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+    mediaBtn->setToolTip(QStringLiteral("\u00DCbergang bis zur nativen Medien-Engine"));
+    connect(mediaBtn, &QPushButton::clicked, this, [this]() {
+        QDesktopServices::openUrl(_roomUrl);
+    });
+    buttons->addWidget(mediaBtn);
+    layout->addLayout(buttons);
 
-    QDesktopServices::openUrl(roomUrl);
-#endif
-}
+    _durationTimer = new QTimer(this);
+    _elapsed.start();
+    connect(_durationTimer, &QTimer::timeout, this, [this]() {
+        const auto secs = _elapsed.elapsed() / 1000;
+        _durationLabel->setText(QStringLiteral("%1:%2:%3")
+            .arg(secs / 3600, 2, 10, QLatin1Char('0'))
+            .arg((secs / 60) % 60, 2, 10, QLatin1Char('0'))
+            .arg(secs % 60, 2, 10, QLatin1Char('0')));
+    });
+    _durationTimer->start(1000);
 
-#ifdef BUILD_WITH_WEBENGINE
-// Nextcloud accepts HTTP basic auth on web routes (LoginCredentials store)
-// and answers with a legitimate web session (oc… cookies). The embedded
-// Talk view cannot send that header itself, so the client performs one
-// authenticated request and injects the session cookies into the Talk
-// profile — the mobile-paralleled automatic sign-in. Servers that reject
-// basic auth on web routes simply leave the login page as fallback.
-void CallWindow::establishWebSession(AccountState *accountState, const QUrl &roomUrl)
-{
-    auto *view = qobject_cast<QWebEngineView *>(_view);
-    const auto acc = accountState ? accountState->account() : nullptr;
-    const auto creds = acc ? acc->credentials() : nullptr;
-    if (!view || !acc || !creds || creds->password().isEmpty()) {
-        if (view) view->load(roomUrl);
-        return;
+    _pollTimer = new QTimer(this);
+    _pollTimer->setInterval(5000);
+    connect(_pollTimer, &QTimer::timeout, this, [this]() {
+        if (_api) _api->fetchParticipants(_token);
+    });
+    _pollTimer->start();
+
+    if (_api) {
+        connect(_api, &TalkOcsApi::participantsReceived, this,
+                [this](const QString &token, const QVector<TalkParticipant> &participants) {
+            if (token != _token) return;
+            _names.clear();
+            for (const auto &p : participants) {
+                if (!p.actorId.isEmpty()) {
+                    _names.insert(p.actorId, p.displayName);
+                }
+            }
+            // The REST names and the signaling in-call flags are merged in
+            // the rendering pass driven by the signaling updates.
+            const auto *theme = SouveraTheme::instance();
+            const auto inCallColor = theme->color(SouveraTheme::Color::Success).name();
+            const auto idleColor = theme->color(SouveraTheme::Color::TextMuted).name();
+            _participants->clear();
+            for (auto it = _names.cbegin(); it != _names.cend(); ++it) {
+                const auto inCall = _inCallFlags.value(it.key()) != 0;
+                auto *item = new QListWidgetItem(it.value(), _participants);
+                item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
+                item->setForeground(QColor(inCall ? inCallColor : idleColor));
+            }
+        });
+        connect(_api, &TalkOcsApi::callLeft, this, [this](const QString &token) {
+            if (token == _token) {
+                _inCall = false;
+            }
+        });
+        _api->fetchParticipants(_token);
     }
-
-    auto *nam = new QNetworkAccessManager(this);
-    auto *jar = new QNetworkCookieJar(nam);
-    nam->setCookieJar(jar);
-
-    const auto credentials64 = QStringLiteral("%1:%2")
-        .arg(creds->user(), creds->password()).toUtf8().toBase64();
-
-    QNetworkRequest request{roomUrl};
-    request.setRawHeader(QByteArray("Authorization"), "Basic " + credentials64);
-    request.setTransferTimeout(15000);
-    auto *reply = nam->get(request);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, jar, view, roomUrl]() {
-        reply->deleteLater();
-        const auto baseUrl = roomUrl.adjusted(QUrl::RemovePath | QUrl::RemoveQuery | QUrl::RemoveFragment);
-        auto *store = talkProfile()->cookieStore();
-        for (const auto &cookie : jar->cookiesForUrl(baseUrl)) {
-            store->setCookie(cookie, baseUrl);
-        }
-        QTimer::singleShot(0, this, [view, roomUrl]() { view->load(roomUrl); });
-    });
+    if (_signaling) {
+        connect(_signaling, &TalkSignalingClient::participantsChanged, this,
+                [this](const QString &token, const QVector<TalkParticipant> &participants) {
+            if (token != _token) return;
+            for (const auto &p : participants) {
+                if (p.actorId.isEmpty()) continue;
+                _inCallFlags.insert(p.actorId, p.inCall);
+                if (_names.value(p.actorId).isEmpty()) {
+                    _names.insert(p.actorId, p.actorId);
+                }
+            }
+            const auto *theme = SouveraTheme::instance();
+            const auto inCallColor = theme->color(SouveraTheme::Color::Success).name();
+            const auto idleColor = theme->color(SouveraTheme::Color::TextMuted).name();
+            _participants->clear();
+            for (auto it = _names.cbegin(); it != _names.cend(); ++it) {
+                const auto inCall = _inCallFlags.value(it.key()) != 0;
+                auto *item = new QListWidgetItem(it.value(), _participants);
+                item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
+                item->setForeground(QColor(inCall ? inCallColor : idleColor));
+            }
+        });
+    }
 }
-#endif
+
+CallWindow::~CallWindow() = default;
+
+void CallWindow::closeEvent(QCloseEvent *event)
+{
+    if (_inCall && _api) {
+        // Never leave the server-side call state dangling behind the window.
+        _api->leaveCall(_token);
+        _inCall = false;
+    }
+    if (_signaling) {
+        _signaling->leaveRoom();
+    }
+    QWidget::closeEvent(event);
+}
 
 } // namespace OCC

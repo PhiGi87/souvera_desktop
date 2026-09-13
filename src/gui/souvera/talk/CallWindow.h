@@ -6,37 +6,54 @@
 #ifndef CALLWINDOW_H
 #define CALLWINDOW_H
 
+#include <QElapsedTimer>
+#include <QHash>
+#include <QUrl>
 #include <QWidget>
 
-class QLineEdit;
+class QLabel;
+class QListWidget;
+class QTimer;
 
 namespace OCC {
 
-class AccountState;
+class TalkOcsApi;
+class TalkSignalingClient;
 
 /**
- * @brief Embedded Talk room window for video calls.
+ * @brief Native call window for a Talk room.
  *
- * With QtWebEngine available the Talk room is rendered inside the app,
- * microphone/camera permissions are granted automatically and HTTP basic
- * auth challenges are answered with the account credentials, so the room
- * opens with the user's session. Without WebEngine the room opens in the
- * system browser instead.
+ * The window represents the desktop client as a call participant (registered
+ * over the Talk REST API and the high-performance-backend signaling), shows
+ * the live participant list with in-call badges and the elapsed time, and
+ * deregisters on leave/close. Audio/video transport is provided by the
+ * separate media engine layer.
  */
 class CallWindow : public QWidget
 {
     Q_OBJECT
 public:
-    explicit CallWindow(AccountState *accountState, const QUrl &roomUrl,
-                        const QString &roomName, QWidget *parent = nullptr);
+    explicit CallWindow(TalkOcsApi *api, TalkSignalingClient *signaling,
+                        const QString &token, const QString &displayName,
+                        const QUrl &roomUrl, QWidget *parent = nullptr);
+    ~CallWindow() override;
 
 private:
-    void setupUi(AccountState *accountState, const QUrl &roomUrl, const QString &roomName);
-#ifdef BUILD_WITH_WEBENGINE
-    void establishWebSession(AccountState *accountState, const QUrl &roomUrl);
-#endif
+    void closeEvent(QCloseEvent *event) override;
 
-    QWidget *_view = nullptr;
+    TalkOcsApi *_api = nullptr;
+    TalkSignalingClient *_signaling = nullptr;
+    QString _token;
+    QUrl _roomUrl;
+    bool _inCall = true;
+    QHash<QString, QString> _names; // actorId -> display name (REST)
+    QHash<QString, int> _inCallFlags; // actorId -> inCall (signaling)
+    QLabel *_durationLabel = nullptr;
+    QLabel *_stateLabel = nullptr;
+    QListWidget *_participants = nullptr;
+    QTimer *_durationTimer = nullptr;
+    QTimer *_pollTimer = nullptr;
+    QElapsedTimer _elapsed;
 };
 
 } // namespace OCC

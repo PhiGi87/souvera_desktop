@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2014 ownCloud GmbH
 # SPDX-License-Identifier: GPL-2.0-or-later
 project(gui)
-find_package(Qt${QT_MAJOR_VERSION} REQUIRED COMPONENTS Widgets Svg Qml Quick QuickControls2 QuickWidgets Xml Network)
+find_package(Qt${QT_MAJOR_VERSION} REQUIRED COMPONENTS Widgets Svg Qml Quick QuickControls2 QuickWidgets Xml Network WebSockets)
 
 if(BUILD_WITH_WEBENGINE)
     find_package(Qt${QT_MAJOR_VERSION} COMPONENTS WebEngineWidgets)
@@ -336,6 +336,8 @@ set(client_SRCS
     souvera/talk/TalkPanel.cpp
     souvera/talk/TalkOcsApi.h
     souvera/talk/TalkOcsApi.cpp
+    souvera/talk/TalkSignalingClient.h
+    souvera/talk/TalkSignalingClient.cpp
     souvera/talk/TalkConversationModel.h
     souvera/talk/TalkConversationModel.cpp
     souvera/talk/TalkMessageWidget.h
@@ -689,6 +691,7 @@ target_link_libraries(nextcloudCore
   Qt::Quick
   Qt::QuickControls2
   Qt::QuickWidgets
+  Qt::WebSockets
   KF6::Archive
   KDAB::kdsingleapplication
 

@@ -184,4 +184,81 @@ void TalkOcsApi::sendRequest(const QString &apiBase, const QString &token, const
         {{QByteArray("Content-Type"), QByteArray("application/x-www-form-urlencoded")}});
 }
 
+// ---------------------------------------------------------------------------
+// Native call layer — the mobile-app flow: register / deregister as a call
+// participant over the REST API. Media transport (WebRTC) is a separate
+// engine on top of this layer.
+// ---------------------------------------------------------------------------
+
+void TalkOcsApi::joinCall(const QString &token, int flags)
+{
+    const auto base = baseUrlOf(_accountState);
+    if (base.isEmpty()) {
+        emit apiError(QStringLiteral("Kein Konto verbunden."));
+        return;
+    }
+    // v4 join; older servers keep the same endpoint since Talk 4.
+    const auto url = base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4/room/%1/participants/active?flags=%2")
+        .arg(token).arg(flags);
+    OcsDavClient::ocsRequest(_accountState, "POST", url, {},
+        [this, token](const QJsonValue &payload, int) {
+            // The response carries the room session id that identifies this
+            // participant's call session at the signaling backend.
+            const auto sessionId = payload.toObject().value(QStringLiteral("sessionId")).toString();
+            qCInfo(lcTalkOcsApi) << "Call joined:" << token << "session:" << sessionId.left(8);
+            emit callJoined(token, sessionId);
+        },
+        [this](int status, const QString &message) {
+            qCWarning(lcTalkOcsApi) << "joinCall failed:" << status << message;
+            emit apiError(message);
+        });
+}
+
+void TalkOcsApi::leaveCall(const QString &token)
+{
+    const auto base = baseUrlOf(_accountState);
+    if (base.isEmpty()) return;
+    const auto url = base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4/room/%1/participants/active").arg(token);
+    OcsDavClient::ocsRequest(_accountState, "DELETE", url, {},
+        [this, token](const QJsonValue &, int) {
+            qCInfo(lcTalkOcsApi) << "Call left:" << token;
+            emit callLeft(token);
+        },
+        [this](int status, const QString &message) {
+            qCWarning(lcTalkOcsApi) << "leaveCall failed:" << status << message;
+            emit apiError(message);
+        });
+}
+
+void TalkOcsApi::fetchParticipants(const QString &token)
+{
+    participantsRequest(baseUrlOf(_accountState) + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), token);
+}
+
+void TalkOcsApi::participantsRequest(const QString &apiBase, const QString &token)
+{
+    const auto url = apiBase + QStringLiteral("/room/%1/participants").arg(token);
+    OcsDavClient::ocsRequest(_accountState, "GET", url, {},
+        [this, token](const QJsonValue &payload, int) {
+            QVector<TalkParticipant> participants;
+            const auto data = payload.toArray();
+            for (const auto &v : data) {
+                const auto obj = v.toObject();
+                TalkParticipant p;
+                p.actorId = obj.value(QStringLiteral("actorId")).toString();
+                p.displayName = obj.value(QStringLiteral("displayName")).toString();
+                p.inCall = obj.value(QStringLiteral("inCall")).toInt();
+                participants.append(p);
+            }
+            emit participantsReceived(token, participants);
+        },
+        [this, apiBase, token](int status, const QString &message) {
+            if (status == 404 && apiBase.contains(QStringLiteral("v1"))) {
+                participantsRequest(baseUrlOf(_accountState) + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), token);
+                return;
+            }
+            qCWarning(lcTalkOcsApi) << "fetchParticipants failed:" << status << message;
+        });
+}
+
 } // namespace OCC

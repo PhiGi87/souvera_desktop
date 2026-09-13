@@ -6,6 +6,7 @@
 #include "TalkPanel.h"
 #include "EmojiPicker.h"
 #include "CallWindow.h"
+#include "TalkSignalingClient.h"
 #include "theme/SouveraTheme.h"
 #include "TalkConversationModel.h"
 #include "TalkOcsApi.h"
@@ -165,6 +166,7 @@ TalkPanel::TalkPanel(QWidget *parent)
     : QWidget(parent)
 {
     _ocsApi = new TalkOcsApi(this);
+    _signaling = new TalkSignalingClient(this);
     _conversationModel = new TalkConversationModel(this);
 
     setupUi();
@@ -429,13 +431,39 @@ void TalkPanel::startCall()
     const auto acc = _accountState->account();
     if (!acc) return;
 
+    if (_callWindow) {
+        _callWindow->raise();
+        _callWindow->activateWindow();
+        return;
+    }
+
     const auto displayName = _conversationList->currentIndex()
         .data(TalkConversationModel::DisplayNameRole).toString();
     auto url = acc->url();
     url.setPath(QStringLiteral("/index.php/call/") + _currentToken);
 
-    auto *callWindow = new CallWindow(_accountState, url, displayName.isEmpty() ? _currentToken : displayName, this);
-    callWindow->show();
+    // The mobile-app flow: register the participant via the REST API first
+    // (the server then knows the room session), connect to the
+    // high-performance-backend signaling and join the room there. The native
+    // call window opens once the backend confirms the room join.
+    const auto token = _currentToken;
+    const auto name = displayName.isEmpty() ? _currentToken : displayName;
+    connect(_ocsApi, &TalkOcsApi::callJoined, this,
+            [this, token, name, url](const QString &joinedToken, const QString &sessionId) {
+        if (joinedToken != token) return;
+        _signaling->setAccountState(_accountState);
+        _signaling->joinRoom(token, sessionId);
+    }, Qt::SingleShotConnection);
+    connect(_signaling, &TalkSignalingClient::roomJoined, this,
+            [this, token, name, url](const QString &joinedToken) {
+        if (joinedToken != token) return;
+        _callWindow = new CallWindow(_ocsApi, _signaling, token, name, url, this);
+        connect(_callWindow, &QObject::destroyed, this, [this]() {
+            _callWindow.clear();
+        });
+        _callWindow->show();
+    }, Qt::SingleShotConnection);
+    _ocsApi->joinCall(token, 1);
 }
 
 void TalkPanel::sendMessage()

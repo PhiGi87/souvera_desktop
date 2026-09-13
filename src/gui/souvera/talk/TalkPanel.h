@@ -23,6 +23,7 @@ namespace OCC {
 class TalkConversationModel;
 class EmojiPicker;
 class TalkOcsApi;
+class TalkSignalingClient;
 class AccountState;
 
 class TalkPanel : public QWidget
@@ -62,7 +63,9 @@ private:
     TalkConversationModel *_conversationModel = nullptr;
     EmojiPicker *_emojiPicker = nullptr;
     TalkOcsApi *_ocsApi = nullptr;
+    TalkSignalingClient *_signaling = nullptr;
     QPointer<AccountState> _accountState;
+    QPointer<class CallWindow> _callWindow;
 
     QString _currentToken;
     qint64 _lastKnownId = 0;
