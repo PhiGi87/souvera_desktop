@@ -21,7 +21,12 @@
 #ifdef BUILD_WITH_WEBENGINE
 #include <QApplication>
 #include <QAuthenticator>
+#include <QNetworkAccessManager>
+#include <QNetworkCookieJar>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QPointer>
+#include <QWebEngineCookieStore>
 #include <QWebEnginePage>
 #include <QWebEngineProfile>
 #include <QWebEngineView>
@@ -122,9 +127,10 @@ void CallWindow::setupUi(AccountState *accountState, const QUrl &roomUrl, const 
     view->setPage(page);
     _view = view;
     layout->addWidget(view, 1);
-    // The view runs in a dedicated persistent profile: after the user signs
-    // in once (the Talk login page offers the app-password option), the
-    // session cookies survive and later calls open the room directly.
+    // Establish a legitimate web session (basic auth is accepted on web
+    // routes and answers with session cookies) before loading the room, so
+    // calls open directly instead of showing the login page.
+    establishWebSession(accountState, roomUrl);
 #else
     auto *fallback = new QWidget(this);
     auto *fallbackLayout = new QVBoxLayout(fallback);
@@ -142,5 +148,44 @@ void CallWindow::setupUi(AccountState *accountState, const QUrl &roomUrl, const 
 #endif
 }
 
+#ifdef BUILD_WITH_WEBENGINE
+// Nextcloud accepts HTTP basic auth on web routes (LoginCredentials store)
+// and answers with a legitimate web session (oc… cookies). The embedded
+// Talk view cannot send that header itself, so the client performs one
+// authenticated request and injects the session cookies into the Talk
+// profile — the mobile-paralleled automatic sign-in. Servers that reject
+// basic auth on web routes simply leave the login page as fallback.
+void CallWindow::establishWebSession(AccountState *accountState, const QUrl &roomUrl)
+{
+    auto *view = qobject_cast<QWebEngineView *>(_view);
+    const auto acc = accountState ? accountState->account() : nullptr;
+    const auto creds = acc ? acc->credentials() : nullptr;
+    if (!view || !acc || !creds || creds->password().isEmpty()) {
+        if (view) view->load(roomUrl);
+        return;
+    }
+
+    auto *nam = new QNetworkAccessManager(this);
+    auto *jar = new QNetworkCookieJar(nam);
+    nam->setCookieJar(jar);
+
+    const auto credentials64 = QStringLiteral("%1:%2")
+        .arg(creds->user(), creds->password()).toUtf8().toBase64();
+
+    QNetworkRequest request{roomUrl};
+    request.setRawHeader(QByteArray("Authorization"), "Basic " + credentials64);
+    request.setTransferTimeout(15000);
+    auto *reply = nam->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, jar, view, roomUrl]() {
+        reply->deleteLater();
+        const auto baseUrl = roomUrl.adjusted(QUrl::RemovePath | QUrl::RemoveQuery | QUrl::RemoveFragment);
+        auto *store = talkProfile()->cookieStore();
+        for (const auto &cookie : jar->cookiesForUrl(baseUrl)) {
+            store->setCookie(cookie, baseUrl);
+        }
+        QTimer::singleShot(0, this, [view, roomUrl]() { view->load(roomUrl); });
+    });
+}
+#endif
 
 } // namespace OCC

@@ -32,6 +32,9 @@ public:
 
 private:
     void setupUi(AccountState *accountState, const QUrl &roomUrl, const QString &roomName);
+#ifdef BUILD_WITH_WEBENGINE
+    void establishWebSession(AccountState *accountState, const QUrl &roomUrl);
+#endif
 
     QWidget *_view = nullptr;
 };
