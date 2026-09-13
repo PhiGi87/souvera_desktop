@@ -15,9 +15,11 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QShortcut>
+#include <QStandardPaths>
 #include <QVBoxLayout>
 
 #ifdef BUILD_WITH_WEBENGINE
+#include <QApplication>
 #include <QAuthenticator>
 #include <QPointer>
 #include <QWebEnginePage>
@@ -26,6 +28,26 @@
 #endif
 
 namespace OCC {
+
+#ifdef BUILD_WITH_WEBENGINE
+namespace {
+// Dedicated persistent profile: session cookies of the embedded Talk login
+// survive app restarts, so the room opens directly after the first sign-in.
+QWebEngineProfile *talkProfile()
+{
+    static QWebEngineProfile *profile = nullptr;
+    if (!profile) {
+        profile = new QWebEngineProfile(QStringLiteral("souveraTalk"), qApp);
+        profile->setPersistentStoragePath(
+            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+            + QStringLiteral("/talk-webprofile"));
+        profile->setHttpCacheType(QWebEngineProfile::DiskHttpCache);
+        profile->setPersistentCookiesPolicy(QWebEngineProfile::AllowPersistentCookies);
+    }
+    return profile;
+}
+} // namespace
+#endif
 
 CallWindow::CallWindow(AccountState *accountState, const QUrl &roomUrl,
                        const QString &roomName, QWidget *parent)
@@ -65,7 +87,7 @@ void CallWindow::setupUi(AccountState *accountState, const QUrl &roomUrl, const 
 
 #ifdef BUILD_WITH_WEBENGINE
     auto *view = new QWebEngineView(this);
-    auto *page = new QWebEnginePage(QWebEngineProfile::defaultProfile(), view);
+    auto *page = new QWebEnginePage(talkProfile(), view);
 
     // Answer HTTP basic auth challenges with the account credentials so the
     // Talk web app opens with the user's session instead of a login prompt.
@@ -98,9 +120,11 @@ void CallWindow::setupUi(AccountState *accountState, const QUrl &roomUrl, const 
     });
 
     view->setPage(page);
-    view->load(roomUrl);
     _view = view;
     layout->addWidget(view, 1);
+    // The view runs in a dedicated persistent profile: after the user signs
+    // in once (the Talk login page offers the app-password option), the
+    // session cookies survive and later calls open the room directly.
 #else
     auto *fallback = new QWidget(this);
     auto *fallbackLayout = new QVBoxLayout(fallback);
@@ -117,5 +141,6 @@ void CallWindow::setupUi(AccountState *accountState, const QUrl &roomUrl, const 
     QDesktopServices::openUrl(roomUrl);
 #endif
 }
+
 
 } // namespace OCC
