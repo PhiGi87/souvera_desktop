@@ -457,6 +457,13 @@ void TalkPanel::startCall()
     connect(_signaling, &TalkSignalingClient::roomJoined, this,
             [this, token, name, url](const QString &joinedToken) {
         if (joinedToken != token) return;
+        // Web-app order: once the signaling room join is confirmed, the
+        // POST call/{token} starts the call and sets the in-call state.
+        _ocsApi->startCall(token, 1);
+    }, Qt::SingleShotConnection);
+    connect(_ocsApi, &TalkOcsApi::callStarted, this,
+            [this, token, name, url](const QString &startedToken) {
+        if (startedToken != token) return;
         _callWindow = new CallWindow(_ocsApi, _signaling, token, name, url, this);
         connect(_callWindow, &QObject::destroyed, this, [this]() {
             _callWindow.clear();

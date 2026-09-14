@@ -214,20 +214,67 @@ void TalkOcsApi::joinCall(const QString &token, int flags)
         });
 }
 
+void TalkOcsApi::startCall(const QString &token, int flags)
+{
+    const auto base = baseUrlOf(_accountState);
+    if (base.isEmpty()) {
+        emit apiError(QStringLiteral("Kein Konto verbunden."));
+        return;
+    }
+    // The web app (signaling.js joinCall) posts JSON to call/{token} after
+    // the signaling room join — this is what sets the in-call state.
+    const auto url = base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4/call/%1").arg(token);
+    QJsonObject body;
+    body.insert(QStringLiteral("flags"), flags);
+    body.insert(QStringLiteral("silent"), false);
+    body.insert(QStringLiteral("recordingConsent"), 0);
+    body.insert(QStringLiteral("silentFor"), 0);
+    OcsDavClient::ocsRequest(_accountState, "POST", url,
+        QJsonDocument(body).toJson(QJsonDocument::Compact),
+        [this, token](const QJsonValue &, int) {
+            qCInfo(lcTalkOcsApi) << "Call started:" << token;
+            emit callStarted(token);
+        },
+        [this](int status, const QString &message) {
+            qCWarning(lcTalkOcsApi) << "startCall failed:" << status << message;
+            emit apiError(message);
+        },
+        {{QByteArray("Content-Type"), QByteArray("application/json")}});
+}
+
 void TalkOcsApi::leaveCall(const QString &token)
 {
     const auto base = baseUrlOf(_accountState);
     if (base.isEmpty()) return;
-    const auto url = base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4/room/%1/participants/active").arg(token);
-    OcsDavClient::ocsRequest(_accountState, "DELETE", url, {},
-        [this, token](const QJsonValue &, int) {
-            qCInfo(lcTalkOcsApi) << "Call left:" << token;
+
+    // Web-app leave order (signaling.js leaveCall): first leave the call
+    // (DELETE call/{token}, {all}), then the room session
+    // (DELETE room/{token}/participants/active).
+    const auto callUrl = base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4/call/%1").arg(token);
+    QJsonObject body;
+    body.insert(QStringLiteral("all"), false);
+    OcsDavClient::ocsRequest(_accountState, "DELETE", callUrl,
+        QJsonDocument(body).toJson(QJsonDocument::Compact),
+        [this, token, base](const QJsonValue &, int) {
+            qCInfo(lcTalkOcsApi) << "Call call-session left:" << token;
+            const auto url = base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4/room/%1/participants/active").arg(token);
+            OcsDavClient::ocsRequest(_accountState, "DELETE", url, {},
+                [this, token](const QJsonValue &, int) {
+                    qCInfo(lcTalkOcsApi) << "Call left:" << token;
+                    emit callLeft(token);
+                },
+                [this, token](int status, const QString &message) {
+                    qCWarning(lcTalkOcsApi) << "leaveCall (room) failed:" << status << message;
+                    emit callLeft(token);
+                });
+        },
+        [this, token](int status, const QString &message) {
+            // A 404 here means no call was active for this room — the room
+            // session still needs to be released.
+            qCWarning(lcTalkOcsApi) << "leaveCall (call) failed:" << status << message;
             emit callLeft(token);
         },
-        [this](int status, const QString &message) {
-            qCWarning(lcTalkOcsApi) << "leaveCall failed:" << status << message;
-            emit apiError(message);
-        });
+        {{QByteArray("Content-Type"), QByteArray("application/json")}});
 }
 
 void TalkOcsApi::fetchParticipants(const QString &token)

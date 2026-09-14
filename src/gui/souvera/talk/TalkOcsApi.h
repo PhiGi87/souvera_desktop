@@ -41,6 +41,14 @@ public:
     void leaveCall(const QString &token);
     void fetchParticipants(const QString &token);
 
+    /**
+     * @brief Starts (or joins) the running call — the counterpart of the
+     *        web app's POST call/{token}. Must be called after the
+     *        signaling room join; this is what sets the server-side
+     *        in-call state.
+     */
+    void startCall(const QString &token, int flags = 1);
+
 signals:
     void conversationsReceived(const QJsonArray &conversations);
     void messagesReceived(const QJsonArray &messages, const QString &token);
@@ -49,6 +57,7 @@ signals:
     void apiError(const QString &message);
 
     void callJoined(const QString &token, const QString &sessionId);
+    void callStarted(const QString &token);
     void callLeft(const QString &token);
     void participantsReceived(const QString &token, const QVector<TalkParticipant> &participants);
 
