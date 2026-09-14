@@ -86,6 +86,11 @@ jobs:
               $c = $c -replace 'self\.defines\["appname"\] = "nextcloud"', ('self.defines["appname"] = "souvera"' + "`r`n        " + 'self.defines["productname"] = "Souvera Workspace"')
               $c = $c -replace 'self\.defines\["company"\] = "Nextcloud GmbH"', 'self.defines["company"] = "Host-On Service Provider GmbH"'
               $c = $c -replace 'self\.applicationExecutable = "nextcloud"', 'self.applicationExecutable = "souvera"'
+              # Qt Multimedia: required by the client (call audio/video
+              # settings + native media engine). Without this runtime
+              # dependency the craft packager skips the package's image dir
+              # and Qt6Multimedia.dll ends up missing from the MSI.
+              $c = $c -replace 'self\.runtimeDependencies\["libs/qt6/qtwebsockets"\] = None', ('self.runtimeDependencies["libs/qt6/qtwebsockets"] = None' + "`r`n        " + 'self.runtimeDependencies["libs/qt6/qtmultimedia"] = None')
               $c = $c -replace 'self\.subinfo\.options\.configure\.args \+= \[f"-DMIRALL_VERSION_SUFFIX=\{versionSuffix\}"\]', ('$0' + "`r`n        self.subinfo.options.configure.args += [""-DBUILD_WIN_MSI=ON"", ""-DCMAKE_INSTALL_PREFIX=/""]")
               [System.IO.File]::WriteAllText($bp, $c)
               Write-Host "== Patched blueprint =="
@@ -173,9 +178,23 @@ jobs:
               }
           }
 
-          # Fail fast: heat must have harvested the main executable.
+          # Qt Multimedia plugins must sit at <appdir>\multimedia for the Qt
+          # plugin loader to find them (type subdir of the app dir).
+          $mmSrc = Join-Path $archive "plugins\multimedia"
+          if (Test-Path $mmSrc) {
+              New-Item -ItemType Directory -Force -Path (Join-Path $archive "multimedia") | Out-Null
+              Move-Item "$mmSrc\*" (Join-Path $archive "multimedia") -Force
+              Remove-Item $mmSrc -Force -Recurse -ErrorAction SilentlyContinue
+              Write-Host "== Multimedia plugins deployed to multimedia\ =="
+          }
+
+          # Fail fast: heat must have harvested the main executable AND the
+          # multimedia DLL — otherwise the app fails at startup.
           if (-not (Test-Path "$archive\souvera.exe")) {
               throw "souvera.exe missing from archive root (flatten failed?)."
+          }
+          if (-not (Test-Path "$archive\Qt6Multimedia.dll")) {
+              throw "Qt6Multimedia.dll missing from archive root — qtmultimedia runtime dependency patch did not apply?"
           }
 
           cmd /c "cd /d `"$msiDir`" && make-msi.bat `"$archive`""

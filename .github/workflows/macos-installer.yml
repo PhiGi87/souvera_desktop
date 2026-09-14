@@ -86,6 +86,10 @@ jobs:
             perl -0pi -e 's/self\.defines\["appname"\] = "nextcloud"/self.defines["appname"] = "Souvera Workspace"\n        self.defines["productname"] = "Souvera Workspace"/' "$BP"
             perl -0pi -e 's/self\.defines\["company"\] = "Nextcloud GmbH"/self.defines["company"] = "Host-On Service Provider GmbH"/' "$BP"
             perl -0pi -e 's/self\.applicationExecutable = "nextcloud"/self.applicationExecutable = "Souvera Workspace"/' "$BP"
+          # Qt Multimedia runtime dependency: without it the macOS packager
+          # skips the qtmultimedia image dir and Qt6Multimedia.framework is
+          # missing from the DMG.
+          perl -0pi -e 's/self\.runtimeDependencies\["libs\/qt6\/qtwebsockets"\] = None/self.runtimeDependencies["libs\/qt6\/qtwebsockets"] = None\n        self.runtimeDependencies["libs\/qt6\/qtmultimedia"] = None/' "$BP"
             echo "== Patched blueprint =="
             grep -nE 'displayName|appname|productname|"company"|applicationExecutable|^import os' "$BP"
           else
