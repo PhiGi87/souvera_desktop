@@ -6,6 +6,7 @@
 #ifndef TALKSIGNALINGCLIENT_H
 #define TALKSIGNALINGCLIENT_H
 
+#include <QJsonObject>
 #include <QObject>
 #include <QVector>
 
@@ -64,8 +65,8 @@ private:
     QString _roomToken;
     QString _roomSessionId;
     QString _signalingServerUrl;
-    QString _ticket;
-    QString _userId;
+    QString _helloVersion;      //!< "1.0" (userid+ticket) or "2.0" (JWT token)
+    QJsonObject _helloAuthParams;
     bool _joinedRoom = false;
     int _reconnectDelayMs = 2000;
 };

@@ -66,9 +66,25 @@ void TalkSignalingClient::fetchSettings()
         [this](const QJsonValue &payload, int) {
             const auto settings = payload.toObject();
             _signalingServerUrl = settings.value(QStringLiteral("server")).toString();
-            _ticket = settings.value(QStringLiteral("ticket")).toString();
-            _userId = settings.value(QStringLiteral("userId")).toString();
-            if (_signalingServerUrl.isEmpty() || _ticket.isEmpty()) {
+            // Prefer hello v2 (short-lived JWT token); fall back to v1
+            // (userid + one-time ticket) for older backends.
+            const auto helloParams = settings.value(QStringLiteral("helloAuthParams")).toObject();
+            const auto v2 = helloParams.value(QStringLiteral("2.0")).toObject();
+            const auto v1 = helloParams.value(QStringLiteral("1.0")).toObject();
+            if (!v2.value(QStringLiteral("token")).toString().isEmpty()) {
+                _helloVersion = QStringLiteral("2.0");
+                _helloAuthParams = v2;
+            } else if (!v1.value(QStringLiteral("userid")).toString().isEmpty()) {
+                _helloVersion = QStringLiteral("1.0");
+                _helloAuthParams = v1;
+            } else {
+                _helloVersion = QStringLiteral("1.0");
+                _helloAuthParams = QJsonObject{
+                    {QStringLiteral("userid"), settings.value(QStringLiteral("userId")).toString()},
+                    {QStringLiteral("ticket"), settings.value(QStringLiteral("ticket")).toString()},
+                };
+            }
+            if (_signalingServerUrl.isEmpty() || _helloAuthParams.isEmpty()) {
                 emit errorOccurred(QStringLiteral("Signaling-Server nicht konfiguriert."));
                 return;
             }
@@ -106,25 +122,23 @@ void TalkSignalingClient::startHello()
     QString base = acc->url().toString();
     while (base.endsWith(QLatin1Char('/'))) base.chop(1);
 
-    // Hello V1: the server validates the one-time ticket against the
-    // Nextcloud backend. The auth url points at the Talk OCS base.
-    QJsonObject params;
-    params.insert(QStringLiteral("userid"), _userId);
-    params.insert(QStringLiteral("ticket"), _ticket);
-
+    // Hello v2 (JWT token from the settings helloAuthParams) or v1
+    // (userid + one-time ticket) for older backends.
     QJsonObject auth;
     auth.insert(QStringLiteral("type"), QStringLiteral("client"));
     auth.insert(QStringLiteral("url"),
                 QString(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v3")));
-    auth.insert(QStringLiteral("params"), params);
+    auth.insert(QStringLiteral("params"), _helloAuthParams);
 
     QJsonObject helloInner;
-    helloInner.insert(QStringLiteral("version"), QStringLiteral("1.0"));
+    helloInner.insert(QStringLiteral("version"), _helloVersion);
     helloInner.insert(QStringLiteral("auth"), auth);
 
     QJsonObject hello;
     hello.insert(QStringLiteral("type"), QStringLiteral("hello"));
     hello.insert(QStringLiteral("hello"), helloInner);
+    qCInfo(lcTalkSignaling) << "Sending hello:"
+        << QString::fromUtf8(QJsonDocument(helloInner).toJson(QJsonDocument::Compact)).left(200);
     sendJson(hello);
 }
 
@@ -186,11 +200,16 @@ void TalkSignalingClient::onTextMessageReceived(const QString &message)
 {
     const auto doc = QJsonDocument::fromJson(message.toUtf8());
     if (!doc.isObject()) return;
-    const auto root = doc.object().toVariantMap();
+    const auto root = doc.object();
     const auto type = root.value(QStringLiteral("type")).toString();
-    qCInfo(lcTalkSignaling) << "Signaling message:" << type
-                            << (root.contains(QStringLiteral("error"))
-                                    ? root.value(QStringLiteral("error")).toString() : QString());
+    if (root.contains(QStringLiteral("error"))) {
+        const auto error = root.value(QStringLiteral("error")).toObject();
+        qCWarning(lcTalkSignaling) << "Signaling error on message" << type << ":"
+                                   << error.value(QStringLiteral("code")).toString()
+                                   << error.value(QStringLiteral("message")).toString();
+    } else {
+        qCInfo(lcTalkSignaling) << "Signaling message:" << type;
+    }
 
     if (type == QStringLiteral("welcome")) {
         // Server announced its protocol version; authenticate now.
@@ -198,7 +217,7 @@ void TalkSignalingClient::onTextMessageReceived(const QString &message)
         return;
     }
     if (type == QStringLiteral("hello")) {
-        const auto hello = root.value(QStringLiteral("hello")).toMap();
+        const auto hello = root.value(QStringLiteral("hello")).toObject().toVariantMap();
         qCInfo(lcTalkSignaling) << "Signaling hello ok, session:" << hello.value(QStringLiteral("sessionid")).toString().left(8);
         _reconnectDelayMs = 2000;
         emit connected();
@@ -218,7 +237,7 @@ void TalkSignalingClient::onTextMessageReceived(const QString &message)
         return;
     }
     if (type == QStringLiteral("room")) {
-        const auto room = root.value(QStringLiteral("room")).toMap();
+        const auto room = root.value(QStringLiteral("room")).toObject().toVariantMap();
         if (room.contains(QStringLiteral("roomid"))) {
             qCInfo(lcTalkSignaling) << "Signaling room joined:" << room.value(QStringLiteral("roomid")).toString();
             _joinedRoom = true;
@@ -227,7 +246,7 @@ void TalkSignalingClient::onTextMessageReceived(const QString &message)
         return;
     }
     if (type == QStringLiteral("event")) {
-        handleEvent(root.value(QStringLiteral("event")).toMap());
+        handleEvent(root.value(QStringLiteral("event")).toObject().toVariantMap());
         return;
     }
     if (type == QStringLiteral("ping")) {
