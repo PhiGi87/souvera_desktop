@@ -8,6 +8,7 @@
 #include "notifications/NotificationService.h"
 #include "generalsettings.h"
 #include "networksettings.h"
+#include "settings/AudioVideoSettings.h"
 
 #include "mail/JmapClient.h"
 #include "mail/MailLoginFlow.h"
@@ -62,6 +63,7 @@ enum Category {
     CatAppearance,
     CatMail,
     CatNotifications,
+    CatAudioVideo,
     CatNetwork,
     CatAdvanced,
     CatDiagnostics,
@@ -205,6 +207,7 @@ void SettingsPanel::setupUi()
         {"Erscheinungsbild", "palette"},
         {"Mail", "mail"},
         {"Benachrichtigungen", "bell"},
+        {"Audio & Video", "mic"},
         {"Netzwerk", "globe"},
         {"Erweitert", "settings"},
         {"Diagnose", "activity"},
@@ -386,6 +389,17 @@ QScrollArea *SettingsPanel::createPage(int category)
             NotificationService::setMailNotificationsEnabled(checked);
         });
         contentLayout->addWidget(notifCard);
+        contentLayout->addStretch();
+        break;
+    }
+
+    case CatAudioVideo: {
+        QVBoxLayout *audioLayout = nullptr;
+        auto *audioCard = makeCard(QStringLiteral("Audio & Video"), content, &audioLayout);
+        auto *audioSettings = new AudioVideoSettings(audioCard);
+        audioSettings->setContentsMargins(0, 0, 0, 0);
+        audioLayout->addWidget(audioSettings);
+        contentLayout->addWidget(audioCard);
         contentLayout->addStretch();
         break;
     }

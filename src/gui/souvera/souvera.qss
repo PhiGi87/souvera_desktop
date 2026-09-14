@@ -558,6 +558,41 @@ QProgressBar#FolderProgressBar::chunk {
     border-radius: 3px;
 }
 
+/* Microphone level meter in the Audio & Video settings */
+QProgressBar#AudioLevelBar {
+    background: @surface@;
+    border: 1px solid @border@;
+    border-radius: 4px;
+    min-height: 22px;
+    max-height: 22px;
+    text-align: center;
+    font-size: 0px;
+}
+
+QProgressBar#AudioLevelBar::chunk {
+    background: @success@;
+    border-radius: 3px;
+}
+
+/* Device selection combos in the Audio & Video settings */
+QComboBox#AudioDeviceCombo {
+    background-color: @surface@;
+    color: @textPrimary@;
+    border: 1px solid @borderStrong@;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 30px;
+}
+
+QComboBox#AudioDeviceCombo:hover {
+    border-color: @borderStrong@;
+}
+
+QComboBox#AudioDeviceCombo:focus {
+    border: 1px solid @accent@;
+}
+
 
 /* ==========================================================================
    Shared panel styles (Talk, Deck, Kalender, Notizen)

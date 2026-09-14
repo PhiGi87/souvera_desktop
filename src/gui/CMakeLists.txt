@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2014 ownCloud GmbH
 # SPDX-License-Identifier: GPL-2.0-or-later
 project(gui)
-find_package(Qt${QT_MAJOR_VERSION} REQUIRED COMPONENTS Widgets Svg Qml Quick QuickControls2 QuickWidgets Xml Network WebSockets)
+find_package(Qt${QT_MAJOR_VERSION} REQUIRED COMPONENTS Widgets Svg Qml Quick QuickControls2 QuickWidgets Xml Network WebSockets Multimedia)
 
 if(BUILD_WITH_WEBENGINE)
     find_package(Qt${QT_MAJOR_VERSION} COMPONENTS WebEngineWidgets)
@@ -326,8 +326,10 @@ set(client_SRCS
      souvera/mail/MailBodyView.cpp
      souvera/mail/MailLoginFlow.h
      souvera/mail/MailLoginFlow.cpp
-     souvera/notifications/NotificationService.h
-     souvera/notifications/NotificationService.cpp
+    souvera/notifications/NotificationService.h
+    souvera/notifications/NotificationService.cpp
+    souvera/settings/AudioVideoSettings.h
+    souvera/settings/AudioVideoSettings.cpp
      souvera/LeftSidebar.h
      souvera/LeftSidebar.cpp
      souvera/notes/NotesPanel.h
@@ -692,6 +694,7 @@ target_link_libraries(nextcloudCore
   Qt::QuickControls2
   Qt::QuickWidgets
   Qt::WebSockets
+  Qt::Multimedia
   KF6::Archive
   KDAB::kdsingleapplication
 

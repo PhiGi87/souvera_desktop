@@ -18,5 +18,7 @@
         <file>icons/globe.svg</file>
         <file>icons/activity.svg</file>
         <file>icons/check.svg</file>
+        <file>icons/mic.svg</file>
+        <file>icons/headphones.svg</file>
     </qresource>
 </RCC>
