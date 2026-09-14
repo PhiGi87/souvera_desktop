@@ -79,7 +79,7 @@ jobs:
         if: steps.cache-craft-restore.outputs.cache-hit != 'true'
         run: |
           python "${{ env.CRAFT_MASTER_LOCATION }}/CraftMaster.py" --config "${{ env.CRAFT_MASTER_CONFIG }}" --target ${{ env.CRAFT_TARGET }} -c --install-deps nextcloud-client
-          python "${{ env.CRAFT_MASTER_LOCATION }}/CraftMaster.py" --config "${{ env.CRAFT_MASTER_CONFIG }}" --target ${{ env.CRAFT_TARGET }} -c --install-deps libs/qt6/qtmultimedia
+          python "${{ env.CRAFT_MASTER_LOCATION }}/CraftMaster.py" --config "${{ env.CRAFT_MASTER_CONFIG }}" --target ${{ env.CRAFT_TARGET }} -c libs/qt6/qtmultimedia
 
       - name: Cache Craft directories
         if: steps.cache-craft-restore.outputs.cache-hit != 'true'

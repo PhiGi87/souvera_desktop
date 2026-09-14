@@ -57,7 +57,7 @@ jobs:
           # Qt Multimedia is required by the client (call audio device
           # settings, native media engine) but is not part of the
           # nextcloud-client blueprint dependency set.
-          craft --install-deps libs/qt6/qtmultimedia
+          craft libs/qt6/qtmultimedia
 
       - name: Compile
         run: |
