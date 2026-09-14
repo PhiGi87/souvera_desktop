@@ -42,6 +42,7 @@ QString settingsGroup()
 // A 0.5 s 440 Hz sine with short fade in/out, 48 kHz mono 16-bit.
 QByteArray makeTestTone()
 {
+    constexpr double kTwoPi = 6.28318530717958647692;
     const int samples = SampleRate * ToneMs / 1000;
     QByteArray data;
     data.resize(samples * 2);
@@ -52,7 +53,7 @@ QByteArray makeTestTone()
         double envelope = 1.0;
         if (i < fadeIn) envelope = double(i) / fadeIn;
         else if (i > samples - fadeOut) envelope = double(samples - i) / fadeOut;
-        const auto value = qSin(2.0 * M_PI * ToneHz * i / SampleRate) * 0.3 * 32767.0 * envelope;
+        const auto value = qSin(kTwoPi * ToneHz * i / SampleRate) * 0.3 * 32767.0 * envelope;
         out[i] = qint16(value);
     }
     return data;
