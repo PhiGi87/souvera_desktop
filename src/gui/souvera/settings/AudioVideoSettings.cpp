@@ -118,7 +118,14 @@ AudioVideoSettings::AudioVideoSettings(QWidget *parent)
     connect(_mediaDevices, &QMediaDevices::audioInputsChanged, this, &AudioVideoSettings::populateDevices);
     connect(_mediaDevices, &QMediaDevices::audioOutputsChanged, this, &AudioVideoSettings::populateDevices);
 
-    connect(_inputCombo, &QComboBox::activated, this, [this](int) { storeSelection(); });
+    connect(_inputCombo, &QComboBox::activated, this, [this](int) {
+        storeSelection();
+        if (_audioSource) {
+            // The running test captures from the previously selected device.
+            stopMicTest();
+            startMicTest();
+        }
+    });
     connect(_outputCombo, &QComboBox::activated, this, [this](int) { storeSelection(); });
 
     connect(_micTestButton, &QPushButton::toggled, this, [this](bool checked) {
@@ -245,7 +252,6 @@ void AudioVideoSettings::startMicTest()
         _micTestButton->setChecked(false);
         return;
     }
-    connect(_sourceIo, &QIODevice::readyRead, _levelTimer, qOverload<>(&QTimer::start));
     _levelTimer->start();
     _micTestButton->setText(QStringLiteral("Test beenden"));
 }
@@ -310,6 +316,15 @@ void AudioVideoSettings::stopTestTone()
         delete _audioSink;
         _audioSink = nullptr;
     }
+}
+
+// Settings pages live inside a QStackedWidget for the whole app lifetime;
+// a running mic test must never continue once the page is hidden.
+void AudioVideoSettings::hideEvent(QHideEvent *event)
+{
+    stopMicTest();
+    stopTestTone();
+    QWidget::hideEvent(event);
 }
 
 } // namespace OCC

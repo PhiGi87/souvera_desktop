@@ -249,30 +249,34 @@ void TalkOcsApi::leaveCall(const QString &token)
 
     // Web-app leave order (signaling.js leaveCall): first leave the call
     // (DELETE call/{token}, {all}), then the room session
-    // (DELETE room/{token}/participants/active).
+    // (DELETE room/{token}/participants/active). The room session release
+    // runs regardless of the call request's outcome — a 404/failed call
+    // delete still leaves the room session dangling otherwise.
+    const auto leaveRoomSession = [this, token, base]() {
+        const auto url = base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4/room/%1/participants/active").arg(token);
+        OcsDavClient::ocsRequest(_accountState, "DELETE", url, {},
+            [this, token](const QJsonValue &, int) {
+                qCInfo(lcTalkOcsApi) << "Call left:" << token;
+                emit callLeft(token);
+            },
+            [this, token](int status, const QString &message) {
+                qCWarning(lcTalkOcsApi) << "leaveCall (room) failed:" << status << message;
+                emit callLeft(token);
+            });
+    };
+
     const auto callUrl = base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4/call/%1").arg(token);
     QJsonObject body;
     body.insert(QStringLiteral("all"), false);
     OcsDavClient::ocsRequest(_accountState, "DELETE", callUrl,
         QJsonDocument(body).toJson(QJsonDocument::Compact),
-        [this, token, base](const QJsonValue &, int) {
+        [this, token, leaveRoomSession](const QJsonValue &, int) {
             qCInfo(lcTalkOcsApi) << "Call call-session left:" << token;
-            const auto url = base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4/room/%1/participants/active").arg(token);
-            OcsDavClient::ocsRequest(_accountState, "DELETE", url, {},
-                [this, token](const QJsonValue &, int) {
-                    qCInfo(lcTalkOcsApi) << "Call left:" << token;
-                    emit callLeft(token);
-                },
-                [this, token](int status, const QString &message) {
-                    qCWarning(lcTalkOcsApi) << "leaveCall (room) failed:" << status << message;
-                    emit callLeft(token);
-                });
+            leaveRoomSession();
         },
-        [this, token](int status, const QString &message) {
-            // A 404 here means no call was active for this room — the room
-            // session still needs to be released.
+        [this, token, leaveRoomSession](int status, const QString &message) {
             qCWarning(lcTalkOcsApi) << "leaveCall (call) failed:" << status << message;
-            emit callLeft(token);
+            leaveRoomSession();
         },
         {{QByteArray("Content-Type"), QByteArray("application/json")}});
 }

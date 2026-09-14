@@ -32,6 +32,7 @@ CallWindow::CallWindow(TalkOcsApi *api, TalkSignalingClient *signaling,
     , _roomUrl(roomUrl)
 {
     setWindowTitle(QStringLiteral("Anruf \u2014 %1").arg(displayName));
+    setAttribute(Qt::WA_DeleteOnClose);
     resize(420, 560);
 
     auto *layout = new QVBoxLayout(this);

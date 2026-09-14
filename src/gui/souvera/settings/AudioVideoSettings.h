@@ -7,8 +7,8 @@
 #define AUDIOVIDEOSETTINGS_H
 
 #include <QAudioDevice>
+#include <QHideEvent>
 #include <QWidget>
-
 class QComboBox;
 class QLabel;
 class QMediaDevices;
@@ -49,6 +49,7 @@ private:
     void stopMicTest();
     void playTestTone();
     void stopTestTone();
+    void hideEvent(QHideEvent *event) override;
 
     QMediaDevices *_mediaDevices = nullptr;
     QComboBox *_inputCombo = nullptr;

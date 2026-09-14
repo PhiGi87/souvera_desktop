@@ -444,32 +444,41 @@ void TalkPanel::startCall()
 
     // The mobile-app flow: register the participant via the REST API first
     // (the server then knows the room session), connect to the
-    // high-performance-backend signaling and join the room there. The native
-    // call window opens once the backend confirms the room join.
+    // high-performance-backend signaling and join the room there. The call
+    // start (POST call/{token}) follows the confirmed signaling room join.
     const auto token = _currentToken;
     const auto name = displayName.isEmpty() ? _currentToken : displayName;
-    connect(_ocsApi, &TalkOcsApi::callJoined, this,
-            [this, token, name, url](const QString &joinedToken, const QString &sessionId) {
+    const auto callJoinedConn = new QMetaObject::Connection;
+    *callJoinedConn = connect(_ocsApi, &TalkOcsApi::callJoined, this,
+            [this, token, callJoinedConn](const QString &joinedToken, const QString &sessionId) {
         if (joinedToken != token) return;
+        QObject::disconnect(*callJoinedConn);
+        delete callJoinedConn;
         _signaling->setAccountState(_accountState);
         _signaling->joinRoom(token, sessionId);
-    }, Qt::SingleShotConnection);
-    connect(_signaling, &TalkSignalingClient::roomJoined, this,
-            [this, token, name, url](const QString &joinedToken) {
+    });
+    const auto roomJoinedConn = new QMetaObject::Connection;
+    *roomJoinedConn = connect(_signaling, &TalkSignalingClient::roomJoined, this,
+            [this, token, roomJoinedConn](const QString &joinedToken) {
         if (joinedToken != token) return;
         // Web-app order: once the signaling room join is confirmed, the
         // POST call/{token} starts the call and sets the in-call state.
+        QObject::disconnect(*roomJoinedConn);
+        delete roomJoinedConn;
         _ocsApi->startCall(token, 1);
-    }, Qt::SingleShotConnection);
-    connect(_ocsApi, &TalkOcsApi::callStarted, this,
-            [this, token, name, url](const QString &startedToken) {
+    });
+    const auto callStartedConn = new QMetaObject::Connection;
+    *callStartedConn = connect(_ocsApi, &TalkOcsApi::callStarted, this,
+            [this, token, name, url, callStartedConn](const QString &startedToken) {
         if (startedToken != token) return;
+        QObject::disconnect(*callStartedConn);
+        delete callStartedConn;
         _callWindow = new CallWindow(_ocsApi, _signaling, token, name, url, this);
         connect(_callWindow, &QObject::destroyed, this, [this]() {
             _callWindow.clear();
         });
         _callWindow->show();
-    }, Qt::SingleShotConnection);
+    });
     _ocsApi->joinCall(token, 1);
 }
 
