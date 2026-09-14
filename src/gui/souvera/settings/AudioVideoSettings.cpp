@@ -2,24 +2,29 @@
  * SPDX-FileCopyrightText: 2026 Souvera (Host-On Service Provider GmbH)
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-
 #include "AudioVideoSettings.h"
 #include "theme/SouveraMetrics.h"
+
 #include <QAudioDevice>
 #include <QAudioSink>
 #include <QAudioSource>
+#include <QCamera>
+#include <QCameraDevice>
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QIODevice>
 #include <QLabel>
 #include <QLoggingCategory>
+#include <cmath>
+#include <QMediaCaptureSession>
 #include <QMediaDevices>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSettings>
 #include <QTimer>
 #include <QVBoxLayout>
-#include <QtMath>
+#include <QVideoFrame>
+#include <QVideoSink>
 
 Q_LOGGING_CATEGORY(lcAudioVideoSettings, "souvera.settings.audiovideo")
 
@@ -53,7 +58,7 @@ QByteArray makeTestTone()
         double envelope = 1.0;
         if (i < fadeIn) envelope = double(i) / fadeIn;
         else if (i > samples - fadeOut) envelope = double(samples - i) / fadeOut;
-        const auto value = qSin(kTwoPi * ToneHz * i / SampleRate) * 0.3 * 32767.0 * envelope;
+        const auto value = std::sin(kTwoPi * ToneHz * i / SampleRate) * 0.3 * 32767.0 * envelope;
         out[i] = qint16(value);
     }
     return data;
@@ -91,6 +96,27 @@ AudioVideoSettings::AudioVideoSettings(QWidget *parent)
     micRow->addWidget(_levelBar, 1);
     layout->addLayout(micRow);
 
+    auto *cameraTitle = new QLabel(QStringLiteral("Kamera"), this);
+    cameraTitle->setObjectName(QStringLiteral("SettingsCardTitle"));
+    layout->addWidget(cameraTitle);
+
+    _cameraCombo = new QComboBox(this);
+    _cameraCombo->setObjectName(QStringLiteral("AudioDeviceCombo"));
+    layout->addWidget(_cameraCombo);
+
+    _cameraTestButton = new QPushButton(QStringLiteral("Kamera testen"), this);
+    _cameraTestButton->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+    _cameraTestButton->setCheckable(true);
+    layout->addWidget(_cameraTestButton);
+
+    _cameraPreview = new QLabel(this);
+    _cameraPreview->setObjectName(QStringLiteral("CameraPreview"));
+    _cameraPreview->setMinimumHeight(180);
+    _cameraPreview->setAlignment(Qt::AlignCenter);
+    _cameraPreview->setText(QStringLiteral("Vorschau aus \u2013 Kamera testen klicken"));
+    _cameraPreview->hide();
+    layout->addWidget(_cameraPreview);
+
     auto *outputTitle = new QLabel(QStringLiteral("Lautsprecher"), this);
     outputTitle->setObjectName(QStringLiteral("SettingsCardTitle"));
     layout->addWidget(outputTitle);
@@ -118,6 +144,7 @@ AudioVideoSettings::AudioVideoSettings(QWidget *parent)
     populateDevices();
     connect(_mediaDevices, &QMediaDevices::audioInputsChanged, this, &AudioVideoSettings::populateDevices);
     connect(_mediaDevices, &QMediaDevices::audioOutputsChanged, this, &AudioVideoSettings::populateDevices);
+    connect(_mediaDevices, &QMediaDevices::videoInputsChanged, this, &AudioVideoSettings::populateDevices);
 
     connect(_inputCombo, &QComboBox::activated, this, [this](int) {
         storeSelection();
@@ -128,6 +155,26 @@ AudioVideoSettings::AudioVideoSettings(QWidget *parent)
         }
     });
     connect(_outputCombo, &QComboBox::activated, this, [this](int) { storeSelection(); });
+
+    _captureSession = new QMediaCaptureSession(this);
+    _previewSink = new QVideoSink(this);
+    _captureSession->setVideoSink(_previewSink);
+    connect(_previewSink, &QVideoSink::videoFrameChanged, this, [this](const QVideoFrame &frame) {
+        if (!frame.isValid()) return;
+        const auto image = frame.toImage().scaled(
+            _cameraPreview->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        _cameraPreview->setPixmap(QPixmap::fromImage(image));
+    });
+    connect(_cameraTestButton, &QPushButton::toggled, this, [this](bool checked) {
+        if (checked) startCameraPreview(); else stopCameraPreview();
+    });
+    connect(_cameraCombo, &QComboBox::activated, this, [this](int) {
+        storeSelection();
+        if (_camera && _camera->isActive()) {
+            stopCameraPreview();
+            startCameraPreview();
+        }
+    });
 
     connect(_micTestButton, &QPushButton::toggled, this, [this](bool checked) {
         if (checked) startMicTest(); else stopMicTest();
@@ -162,8 +209,10 @@ void AudioVideoSettings::populateDevices()
 {
     _inputCombo->blockSignals(true);
     _outputCombo->blockSignals(true);
+    _cameraCombo->blockSignals(true);
     _inputCombo->clear();
     _outputCombo->clear();
+    _cameraCombo->clear();
 
     _inputCombo->addItem(QStringLiteral("Systemstandard"), QString());
     const auto inputs = QMediaDevices::audioInputs();
@@ -175,21 +224,30 @@ void AudioVideoSettings::populateDevices()
     for (const auto &device : outputs) {
         _outputCombo->addItem(device.description(), device.id());
     }
+    _cameraCombo->addItem(QStringLiteral("Systemstandard"), QString());
+    const auto cameras = QMediaDevices::videoInputs();
+    for (const auto &device : cameras) {
+        _cameraCombo->addItem(device.description(), device.id());
+    }
 
     // Restore the persisted selection.
     QSettings settings;
     settings.beginGroup(settingsGroup());
     const auto storedInput = settings.value(QStringLiteral("audioInputId")).toString();
     const auto storedOutput = settings.value(QStringLiteral("audioOutputId")).toString();
+    const auto storedCamera = settings.value(QStringLiteral("cameraId")).toString();
     settings.endGroup();
 
     const int inputIndex = _inputCombo->findData(storedInput);
     _inputCombo->setCurrentIndex(inputIndex >= 0 ? inputIndex : 0);
     const int outputIndex = _outputCombo->findData(storedOutput);
     _outputCombo->setCurrentIndex(outputIndex >= 0 ? outputIndex : 0);
+    const int cameraIndex = _cameraCombo->findData(storedCamera);
+    _cameraCombo->setCurrentIndex(cameraIndex >= 0 ? cameraIndex : 0);
 
     _inputCombo->blockSignals(false);
     _outputCombo->blockSignals(false);
+    _cameraCombo->blockSignals(false);
 }
 
 void AudioVideoSettings::storeSelection()
@@ -198,6 +256,7 @@ void AudioVideoSettings::storeSelection()
     settings.beginGroup(settingsGroup());
     settings.setValue(QStringLiteral("audioInputId"), _inputCombo->currentData().toString());
     settings.setValue(QStringLiteral("audioOutputId"), _outputCombo->currentData().toString());
+    settings.setValue(QStringLiteral("cameraId"), _cameraCombo->currentData().toString());
     settings.endGroup();
 }
 
@@ -229,6 +288,44 @@ QAudioDevice AudioVideoSettings::outputDevice()
         }
     }
     return QMediaDevices::defaultAudioOutput();
+}
+
+QCameraDevice AudioVideoSettings::cameraDevice()
+{
+    QSettings settings;
+    settings.beginGroup(settingsGroup());
+    const auto stored = settings.value(QStringLiteral("cameraId")).toString();
+    settings.endGroup();
+    if (!stored.isEmpty()) {
+        const auto cameras = QMediaDevices::videoInputs();
+        for (const auto &device : cameras) {
+            if (device.id() == stored.toUtf8()) return device;
+        }
+    }
+    return QMediaDevices::defaultVideoInput();
+}
+
+void AudioVideoSettings::startCameraPreview()
+{
+    const auto device = cameraDevice();
+    if (device.isNull()) {
+        _cameraTestButton->setChecked(false);
+        return;
+    }
+    _cameraPreview->show();
+    _camera = new QCamera(device, this);
+    _captureSession->setCamera(_camera);
+    _camera->start();
+}
+
+void AudioVideoSettings::stopCameraPreview()
+{
+    if (_camera) {
+        _camera->stop();
+        delete _camera;
+        _camera = nullptr;
+    }
+    _cameraPreview->hide();
 }
 
 void AudioVideoSettings::startMicTest()
@@ -325,6 +422,7 @@ void AudioVideoSettings::hideEvent(QHideEvent *event)
 {
     stopMicTest();
     stopTestTone();
+    stopCameraPreview();
     QWidget::hideEvent(event);
 }
 
