@@ -36,6 +36,9 @@ public:
 
     void setConversations(const QJsonArray &conversations);
 
+    /** True when joining this room's call requires recording consent. */
+    [[nodiscard]] bool recordingConsentRequired(const QString &token) const;
+
 private:
     QJsonArray _conversations;
 };

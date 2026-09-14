@@ -20,6 +20,7 @@
 #include <QTimer>
 #include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QMessageBox>
 #include <QPainter>
 #include <QStyledItemDelegate>
 #include <QLabel>
@@ -448,6 +449,20 @@ void TalkPanel::startCall()
     // start (POST call/{token}) follows the confirmed signaling room join.
     const auto token = _currentToken;
     const auto name = displayName.isEmpty() ? _currentToken : displayName;
+
+    // Rooms with recording consent required only join after the user
+    // explicitly agrees to being recorded (server replies 400 otherwise).
+    const auto recordingConsent = _conversationModel->recordingConsentRequired(token);
+    if (recordingConsent) {
+        const auto answer = QMessageBox::question(this,
+            QStringLiteral("Aufzeichnung"),
+            QStringLiteral("Anrufe in dieser Unterhaltung k\u00F6nnen aufgezeichnet werden. "
+                           "Mit dem Beitritt stimmen Sie der Aufzeichnung zu.\n\n"
+                           "Am Anruf teilnehmen?"),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+        if (answer != QMessageBox::Yes) return;
+    }
+
     const auto callJoinedConn = new QMetaObject::Connection;
     *callJoinedConn = connect(_ocsApi, &TalkOcsApi::callJoined, this,
             [this, token, callJoinedConn](const QString &joinedToken, const QString &sessionId) {
@@ -459,13 +474,13 @@ void TalkPanel::startCall()
     });
     const auto roomJoinedConn = new QMetaObject::Connection;
     *roomJoinedConn = connect(_signaling, &TalkSignalingClient::roomJoined, this,
-            [this, token, roomJoinedConn](const QString &joinedToken) {
+            [this, token, recordingConsent, roomJoinedConn](const QString &joinedToken) {
         if (joinedToken != token) return;
         // Web-app order: once the signaling room join is confirmed, the
         // POST call/{token} starts the call and sets the in-call state.
         QObject::disconnect(*roomJoinedConn);
         delete roomJoinedConn;
-        _ocsApi->startCall(token, 1);
+        _ocsApi->startCall(token, 1, recordingConsent);
     });
     const auto callStartedConn = new QMetaObject::Connection;
     *callStartedConn = connect(_ocsApi, &TalkOcsApi::callStarted, this,

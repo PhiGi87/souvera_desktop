@@ -214,7 +214,7 @@ void TalkOcsApi::joinCall(const QString &token, int flags)
         });
 }
 
-void TalkOcsApi::startCall(const QString &token, int flags)
+void TalkOcsApi::startCall(const QString &token, int flags, bool recordingConsent)
 {
     const auto base = baseUrlOf(_accountState);
     if (base.isEmpty()) {
@@ -227,8 +227,8 @@ void TalkOcsApi::startCall(const QString &token, int flags)
     QJsonObject body;
     body.insert(QStringLiteral("flags"), flags);
     body.insert(QStringLiteral("silent"), false);
-    body.insert(QStringLiteral("recordingConsent"), 0);
-    body.insert(QStringLiteral("silentFor"), 0);
+    body.insert(QStringLiteral("recordingConsent"), recordingConsent);
+    body.insert(QStringLiteral("silentFor"), QJsonArray{});
     OcsDavClient::ocsRequest(_accountState, "POST", url,
         QJsonDocument(body).toJson(QJsonDocument::Compact),
         [this, token](const QJsonValue &, int) {

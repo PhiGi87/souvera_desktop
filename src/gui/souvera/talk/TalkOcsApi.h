@@ -47,7 +47,7 @@ public:
      *        signaling room join; this is what sets the server-side
      *        in-call state.
      */
-    void startCall(const QString &token, int flags = 1);
+    void startCall(const QString &token, int flags = 1, bool recordingConsent = false);
 
 signals:
     void conversationsReceived(const QJsonArray &conversations);

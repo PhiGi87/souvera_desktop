@@ -122,16 +122,17 @@ void TalkSignalingClient::startHello()
     QString base = acc->url().toString();
     while (base.endsWith(QLatin1Char('/'))) base.chop(1);
 
-    // Hello v2 (JWT token from the settings helloAuthParams) or v1
-    // (userid + one-time ticket) for older backends.
+    // Web-app hello (signaling.js sendHello): the auth url is the backend
+    // endpoint including /signaling/backend, features lists chat-relay and
+    // auth.type is omitted (defaults to client).
     QJsonObject auth;
-    auth.insert(QStringLiteral("type"), QStringLiteral("client"));
     auth.insert(QStringLiteral("url"),
-                QString(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v3")));
+                QString(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v3/signaling/backend")));
     auth.insert(QStringLiteral("params"), _helloAuthParams);
 
     QJsonObject helloInner;
     helloInner.insert(QStringLiteral("version"), _helloVersion);
+    helloInner.insert(QStringLiteral("features"), QJsonArray{QStringLiteral("chat-relay")});
     helloInner.insert(QStringLiteral("auth"), auth);
 
     QJsonObject hello;

@@ -114,4 +114,17 @@ void TalkConversationModel::setConversations(const QJsonArray &conversations)
     qCInfo(lcTalkConvModel) << "Model updated with" << _conversations.size() << "conversations";
 }
 
+bool TalkConversationModel::recordingConsentRequired(const QString &token) const
+{
+    for (const auto &v : _conversations) {
+        const auto obj = v.toObject();
+        if (obj.value(QStringLiteral("token")).toString() == token) {
+            // RecordingService::CONSENT_REQUIRED_NO is 0; anything else
+            // (required/optional per room) needs explicit user consent.
+            return obj.value(QStringLiteral("recordingConsent")).toInt() != 0;
+        }
+    }
+    return false;
+}
+
 } // namespace OCC
