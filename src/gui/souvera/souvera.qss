@@ -770,6 +770,104 @@ QWidget#DeckColumnsArea {
     background-color: @contentBackground@;
 }
 
+/* ---- Native call window ---- */
+
+QWidget#CallWindow {
+    background-color: @background@;
+}
+
+QWidget#CallHeader {
+    background-color: @background@;
+    border-bottom: 1px solid @border@;
+}
+
+QLabel#CallTitle {
+    color: @textPrimary@;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+QLabel#CallDuration {
+    color: @textSecondary@;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+QLabel#CallStateDot {
+    min-width: 10px;
+    max-width: 10px;
+    min-height: 10px;
+    max-height: 10px;
+}
+
+QLabel#CallStatusLabel {
+    color: @textSecondary@;
+    font-size: 12px;
+}
+
+QWidget#CallTilesArea {
+    background-color: @contentBackground@;
+}
+
+QFrame#CallTile {
+    background: @surface@;
+    border: 1px solid @border@;
+    border-radius: 10px;
+}
+
+QFrame#CallTile:hover {
+    border: 1px solid @borderStrong@;
+}
+
+QLabel#CallAvatar {
+    background: @accentOverlay@;
+    color: @accent@;
+    border-radius: 20px;
+}
+
+QLabel#CallTileName {
+    background: transparent;
+}
+
+QWidget#CallFooter {
+    background-color: @background@;
+    border-top: 1px solid @border@;
+}
+
+QPushButton#CallToggleButton {
+    background: @surface@;
+    border: 1px solid @borderStrong@;
+    border-radius: 28px;
+}
+
+QPushButton#CallToggleButton:hover {
+    border-color: @accent@;
+    background: @surfaceHover@;
+}
+
+QPushButton#CallToggleButton:checked {
+    background: @danger@;
+    border-color: @danger@;
+}
+
+QPushButton#CallHangupButton {
+    background: @danger@;
+    border: none;
+    border-radius: 32px;
+}
+
+QPushButton#CallHangupButton:hover {
+    background: @accentPressed@;
+}
+
+QPushButton#CallHangupButton:pressed {
+    background: @danger@;
+}
+
+QWidget#DeckColumnsArea {
+    background-color: @contentBackground@;
+}
+
 QToolButton#DeckBoardsButton,
 QToolButton#DeckFilterButton {
     background: @surface@;

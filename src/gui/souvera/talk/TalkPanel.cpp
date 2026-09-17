@@ -484,16 +484,20 @@ void TalkPanel::startCall()
     });
     const auto callStartedConn = new QMetaObject::Connection;
     *callStartedConn = connect(_ocsApi, &TalkOcsApi::callStarted, this,
-            [this, token, name, url, callStartedConn](const QString &startedToken) {
+            [this, token, callStartedConn](const QString &startedToken) {
         if (startedToken != token) return;
         QObject::disconnect(*callStartedConn);
         delete callStartedConn;
-        _callWindow = new CallWindow(_ocsApi, _signaling, token, name, url, this);
-        connect(_callWindow, &QObject::destroyed, this, [this]() {
-            _callWindow.clear();
-        });
-        _callWindow->show();
+        // The call window is already open (connecting state); the user
+        // just sees the status flip to "Verbunden" + timer start.
     });
+    // Open the call window immediately (connecting state + ringback);
+    // the join chain runs in the background.
+    _callWindow = new CallWindow(_ocsApi, _signaling, token, name, url, this);
+    connect(_callWindow, &QObject::destroyed, this, [this]() {
+        _callWindow.clear();
+    });
+    _callWindow->show();
     _ocsApi->joinCall(token, 1);
 }
 

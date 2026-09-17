@@ -8,12 +8,15 @@
 
 #include <QElapsedTimer>
 #include <QHash>
+#include <QVBoxLayout>
 #include <QUrl>
 #include <QWidget>
 
 class QLabel;
-class QListWidget;
+class QPushButton;
 class QTimer;
+class QAudioSink;
+class QIODevice;
 
 namespace OCC {
 
@@ -21,13 +24,12 @@ class TalkOcsApi;
 class TalkSignalingClient;
 
 /**
- * @brief Native call window for a Talk room.
+ * @brief Native call window — the single UI surface for the full call
+ *        lifecycle (connecting, ringing, in-call, ended).
  *
- * The window represents the desktop client as a call participant (registered
- * over the Talk REST API and the high-performance-backend signaling), shows
- * the live participant list with in-call badges and the elapsed time, and
- * deregisters on leave/close. Audio/video transport is provided by the
- * separate media engine layer.
+ * Opens immediately when the user taps "Anrufen" (showing a connecting
+ * state with ringback tone), transitions to the in-call view when the
+ * server confirms, and shows call-ended feedback before closing.
  */
 class CallWindow : public QWidget
 {
@@ -39,21 +41,41 @@ public:
     ~CallWindow() override;
 
 private:
+    enum class State { Connecting, InCall, Ended };
+
+    void buildUi(const QString &displayName);
+    void setState(State state, const QString &error = {});
+    void refreshParticipants();
+    void updateTileRendering();
+    void startRingTone();
+    void stopRingTone();
     void closeEvent(QCloseEvent *event) override;
 
     TalkOcsApi *_api = nullptr;
     TalkSignalingClient *_signaling = nullptr;
     QString _token;
     QUrl _roomUrl;
-    bool _inCall = true;
-    QHash<QString, QString> _names; // actorId -> display name (REST)
-    QHash<QString, int> _inCallFlags; // actorId -> inCall (signaling)
+    State _state = State::Connecting;
+    bool _callLeft = false;
+    QHash<QString, QString> _names;    // actorId -> display name (REST)
+    QHash<QString, int> _inCallFlags;  // actorId -> inCall (signaling)
+    QList<QPair<QString, bool>> _tiles; // ordered (name, inCall) snapshot
+
+    QLabel *_titleLabel = nullptr;
     QLabel *_durationLabel = nullptr;
     QLabel *_stateLabel = nullptr;
-    QListWidget *_participants = nullptr;
+    QLabel *_stateDot = nullptr;
+    QWidget *_tilesArea = nullptr;
+    QVBoxLayout *_tilesLayout = nullptr;
+    QPushButton *_micButton = nullptr;
+    QPushButton *_hangupButton = nullptr;
+    QPushButton *_mediaButton = nullptr;
     QTimer *_durationTimer = nullptr;
     QTimer *_pollTimer = nullptr;
     QElapsedTimer _elapsed;
+    QAudioSink *_ringSink = nullptr;
+    QIODevice *_ringIo = nullptr;
+    QTimer *_ringTimer = nullptr;
 };
 
 } // namespace OCC

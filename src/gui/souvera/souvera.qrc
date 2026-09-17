@@ -20,5 +20,10 @@
         <file>icons/check.svg</file>
         <file>icons/mic.svg</file>
         <file>icons/headphones.svg</file>
+        <file>icons/phone-off.svg</file>
+        <file>icons/phone-incoming.svg</file>
+        <file>icons/phone-outgoing.svg</file>
+        <file>icons/mic-off.svg</file>
+        <file>icons/volume-2.svg</file>
     </qresource>
 </RCC>
