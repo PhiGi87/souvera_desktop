@@ -7,6 +7,7 @@
 #define SOUVERATHEME_H
 
 #include <QColor>
+#include <QComboBox>
 #include <QIcon>
 #include <QObject>
 #include <QPixmap>
@@ -64,6 +65,16 @@ public:
 
     [[nodiscard]] QString styleSheet() const;
     void applyStyleSheet() const;
+
+    /**
+     * @brief Themes the popup container of a combobox.
+     *
+     * The dropdown list is a top-level popup outside the widget hierarchy,
+     * so ancestor stylesheet rules cannot reach it. Without this call the
+     * container renders with the native palette (white bars framing the
+     * dark list).
+     */
+    void styleComboPopup(QComboBox *combo) const;
 
     /**
      * @brief Sets the global QPalette from the current theme.

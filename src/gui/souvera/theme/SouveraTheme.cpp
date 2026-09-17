@@ -6,7 +6,9 @@
 #include "SouveraTheme.h"
 
 #include <QApplication>
+#include <QComboBox>
 #include <QFile>
+#include <QListView>
 #include <QHash>
 #include <QLoggingCategory>
 #include <QPainter>
@@ -309,6 +311,34 @@ void SouveraTheme::applyStyleSheet() const
         return;
     }
     qApp->setStyleSheet(sheet);
+}
+
+void SouveraTheme::styleComboPopup(QComboBox *combo) const
+{
+    if (!combo || !combo->view()) {
+        return;
+    }
+    // The dropdown list is a top-level popup window outside the widget
+    // hierarchy — ancestor stylesheet rules (e.g. #ContentArea) cannot
+    // reach it and the native palette paints white bars around the dark
+    // list. Theme the container directly.
+    if (auto *container = combo->view()->parentWidget()) {
+        container->setStyleSheet(QStringLiteral(
+            "background: %1; border: none;")
+            .arg(color(Color::Surface).name()));
+    }
+    if (auto *view = qobject_cast<QWidget *>(combo->view())) {
+        view->setStyleSheet(QStringLiteral(
+            "QListView { background: %1; color: %2; border: none; outline: none; }"
+            "QListView::item { min-height: 28px; padding: 6px 12px; }"
+            "QListView::item:hover { background: %3; color: %4; }"
+            "QListView::item:selected { background: %5; color: %2; }")
+            .arg(color(Color::Surface).name(),
+                 color(Color::TextPrimary).name(),
+                 color(Color::SurfaceHover).name(),
+                 color(Color::TextPrimary).name(),
+                 color(Color::Accent).name()));
+    }
 }
 
 void SouveraTheme::applyPalette() const

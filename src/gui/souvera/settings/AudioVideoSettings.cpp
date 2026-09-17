@@ -4,6 +4,7 @@
  */
 #include "AudioVideoSettings.h"
 #include "theme/SouveraMetrics.h"
+#include "theme/SouveraTheme.h"
 
 #include <QAudioDevice>
 #include <QAudioSink>
@@ -155,6 +156,20 @@ AudioVideoSettings::AudioVideoSettings(QWidget *parent)
         }
     });
     connect(_outputCombo, &QComboBox::activated, this, [this](int) { storeSelection(); });
+    connect(_cameraCombo, &QComboBox::activated, this, [this](int) {
+        storeSelection();
+        if (_camera && _camera->isActive()) {
+            stopCameraPreview();
+            startCameraPreview();
+        }
+    });
+
+    // The dropdown popups are top-level windows outside the widget
+    // hierarchy — theme them explicitly (QSS ancestor rules can't reach).
+    const auto *theme = SouveraTheme::instance();
+    theme->styleComboPopup(_inputCombo);
+    theme->styleComboPopup(_outputCombo);
+    theme->styleComboPopup(_cameraCombo);
 
     _captureSession = new QMediaCaptureSession(this);
     _previewSink = new QVideoSink(this);

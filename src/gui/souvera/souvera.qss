@@ -97,9 +97,74 @@ QWidget#ContentArea QPlainTextEdit {
 QWidget#ContentArea QComboBox {
     background-color: @surface@;
     color: @textPrimary@;
-    border: 1px solid @border@;
+    border: 1px solid @borderStrong@;
     border-radius: 6px;
     padding: 5px 8px;
+}
+
+/* Combobox focus: themed accent instead of the native white focus frame */
+QWidget#ContentArea QComboBox:focus,
+QComboBox#AudioDeviceCombo:focus,
+QComboBox#MailSendAsCombo:focus {
+    border: 1px solid @accent@;
+    outline: none;
+}
+
+/* Dropdown popups live OUTSIDE the widget hierarchy (top-level popup) —
+   style them via Qt's internal object name, not via ancestor selectors.
+   Keep the view frame-less (the popup container behind it would show as
+   white bars otherwise). */
+QListView#qt_combobox_popup {
+    background-color: @surface@;
+    color: @textPrimary@;
+    border: none;
+    padding: 0px;
+    outline: none;
+    show-decoration-selected: 1;
+}
+
+QListView#qt_combobox_popup::item {
+    min-height: 28px;
+    padding: 6px 12px;
+    margin: 0px;
+    border-radius: 0px;
+    color: @textPrimary@;
+}
+
+QListView#qt_combobox_popup::item:hover {
+    background: @overlayHover@;
+}
+
+QListView#qt_combobox_popup::item:selected {
+    background: @accentOverlayHover@;
+    color: @accent@;
+}
+
+/* Chevron drop-down indicator for content-area comboboxes */
+QWidget#ContentArea QComboBox::drop-down {
+    border: none;
+    width: 22px;
+}
+
+QWidget#ContentArea QComboBox::down-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid @textMuted@;
+    margin-right: 8px;
+}
+
+QComboBox#AudioDeviceCombo::drop-down {
+    border: none;
+    width: 22px;
+}
+
+QComboBox#AudioDeviceCombo::down-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid @textMuted@;
+    margin-right: 8px;
 }
 
 QWidget#ContentArea QComboBox QAbstractItemView {
@@ -790,6 +855,34 @@ QLabel#DeckCardDescription {
 /* ==========================================================================
    General Widgets
    ========================================================================== */
+
+/* Dropdown menus (board picker, filter, context menus) are top-level
+   popups like combobox popups — they must follow the theme too. */
+QMenu {
+    background-color: @surface@;
+    color: @textPrimary@;
+    border: 1px solid @borderStrong@;
+    border-radius: 8px;
+    padding: 4px;
+}
+
+QMenu::item {
+    padding: 6px 16px;
+    border-radius: 4px;
+    margin: 1px 2px;
+    color: @textPrimary@;
+}
+
+QMenu::item:selected {
+    background: @accentOverlayHover@;
+    color: @textPrimary@;
+}
+
+QMenu::separator {
+    height: 1px;
+    background: @border@;
+    margin: 4px 8px;
+}
 
 QToolTip {
     background: @surface@;

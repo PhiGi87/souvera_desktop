@@ -406,6 +406,7 @@ void MailPanel::setupToolbar()
     _sendAsCombo = new QComboBox(_toolbar);
     _sendAsCombo->setObjectName(QStringLiteral("MailSendAsCombo"));
     _sendAsCombo->setMinimumWidth(200);
+    SouveraTheme::instance()->styleComboPopup(_sendAsCombo);
     toolbarLayout->addWidget(_sendAsCombo);
 }
 
