@@ -4,6 +4,19 @@
 project(gui)
 find_package(Qt${QT_MAJOR_VERSION} REQUIRED COMPONENTS Widgets Svg Qml Quick QuickControls2 QuickWidgets Xml Network WebSockets Multimedia)
 
+# GStreamer webrtcbin for the native media engine (optional — falls back
+# to the browser for audio/video if not available).
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(GSTREAMER QUIET IMPORTED_TARGET gstreamer-1.0>=1.20 gstreamer-webrtc-1.0 gstreamer-app-1.0)
+    if(GSTREAMER_FOUND)
+        set(HAVE_GSTREAMER ON)
+        message(STATUS "GStreamer found — native media engine enabled")
+    else()
+        message(STATUS "GStreamer not found — call media disabled, browser fallback")
+    endif()
+endif()
+
 if(BUILD_WITH_WEBENGINE)
     find_package(Qt${QT_MAJOR_VERSION} COMPONENTS WebEngineWidgets)
     if(Qt${QT_MAJOR_VERSION}WebEngineWidgets_FOUND)
@@ -342,6 +355,8 @@ set(client_SRCS
     souvera/talk/TalkSignalingClient.cpp
     souvera/talk/IncomingCallDialog.h
     souvera/talk/IncomingCallDialog.cpp
+    souvera/talk/TalkMediaEngine.h
+    souvera/talk/TalkMediaEngine.cpp
     souvera/talk/TalkConversationModel.h
     souvera/talk/TalkConversationModel.cpp
     souvera/talk/TalkMessageWidget.h
@@ -710,6 +725,15 @@ if(KF6GuiAddons_FOUND)
     KF6::GuiAddons
   )
   add_definitions(-DHAVE_KGUIADDONS)
+endif()
+
+if(HAVE_GSTREAMER)
+  target_link_libraries(nextcloudCore PUBLIC
+    PkgConfig::GSTREAMER
+    ${GSTREAMER_LINK_LIBRARIES}
+    gstsdp-1.0
+  )
+  target_compile_definitions(nextcloudCore PUBLIC HAVE_GSTREAMER=1)
 endif()
 
 if(KF6DBusAddons_FOUND)

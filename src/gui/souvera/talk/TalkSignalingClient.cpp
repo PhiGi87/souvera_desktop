@@ -164,6 +164,20 @@ void TalkSignalingClient::onSocketError()
     }
 }
 
+void TalkSignalingClient::sendMediaMessage(const QJsonObject &data)
+{
+    if (!_joinedRoom || !_socket) return;
+    QJsonObject recipient;
+    recipient.insert(QStringLiteral("type"), QStringLiteral("call"));
+    QJsonObject message;
+    message.insert(QStringLiteral("recipient"), recipient);
+    message.insert(QStringLiteral("data"), data);
+    QJsonObject msg;
+    msg.insert(QStringLiteral("type"), QStringLiteral("message"));
+    msg.insert(QStringLiteral("message"), message);
+    sendJson(msg);
+}
+
 void TalkSignalingClient::scheduleReconnect()
 {
     if (_roomToken.isEmpty()) return;
@@ -248,6 +262,15 @@ void TalkSignalingClient::onTextMessageReceived(const QString &message)
     }
     if (type == QStringLiteral("event")) {
         handleEvent(root.value(QStringLiteral("event")).toObject().toVariantMap());
+        return;
+    }
+    if (type == QStringLiteral("message")) {
+        // Media signaling message (offer, answer, candidate from MCU/peer).
+        const auto msg = root.value(QStringLiteral("message")).toObject();
+        const auto data = msg.value(QStringLiteral("data"));
+        if (data.isObject()) {
+            emit mediaMessageReceived(data.toObject());
+        }
         return;
     }
     if (type == QStringLiteral("ping")) {

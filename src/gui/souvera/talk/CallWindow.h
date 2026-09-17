@@ -22,6 +22,9 @@ namespace OCC {
 
 class TalkOcsApi;
 class TalkSignalingClient;
+#ifdef HAVE_GSTREAMER
+class TalkMediaEngine;
+#endif
 
 /**
  * @brief Native call window — the single UI surface for the full call
@@ -40,6 +43,9 @@ public:
                         const QUrl &roomUrl, QWidget *parent = nullptr);
     ~CallWindow() override;
 
+    /** Sets the room session id (from the REST join response). */
+    void setRoomSessionId(const QString &sessionId) { _roomSessionId = sessionId; }
+
 private:
     enum class State { Connecting, InCall, Ended };
 
@@ -53,7 +59,11 @@ private:
 
     TalkOcsApi *_api = nullptr;
     TalkSignalingClient *_signaling = nullptr;
+#ifdef HAVE_GSTREAMER
+    TalkMediaEngine *_mediaEngine = nullptr;
+#endif
     QString _token;
+    QString _roomSessionId;
     QUrl _roomUrl;
     State _state = State::Connecting;
     bool _callLeft = false;

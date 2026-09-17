@@ -488,8 +488,6 @@ void TalkPanel::startCall()
         if (startedToken != token) return;
         QObject::disconnect(*callStartedConn);
         delete callStartedConn;
-        // The call window is already open (connecting state); the user
-        // just sees the status flip to "Verbunden" + timer start.
     });
     // Open the call window immediately (connecting state + ringback);
     // the join chain runs in the background.
@@ -498,6 +496,13 @@ void TalkPanel::startCall()
         _callWindow.clear();
     });
     _callWindow->show();
+    // Pass the room session id to the call window when the REST join responds.
+    connect(_ocsApi, &TalkOcsApi::callJoined, this,
+            [this, token](const QString &joinedToken, const QString &sessionId) {
+        if (joinedToken == token && _callWindow) {
+            _callWindow->setRoomSessionId(sessionId);
+        }
+    }, Qt::SingleShotConnection);
     _ocsApi->joinCall(token, 1);
 }
 

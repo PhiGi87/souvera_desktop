@@ -41,11 +41,19 @@ public:
     void joinRoom(const QString &roomToken, const QString &roomSessionId);
     void leaveRoom();
 
+    /**
+     * Sends a media signaling message (offer, answer, candidate, etc.)
+     * broadcast to the current call.
+     */
+    void sendMediaMessage(const QJsonObject &data);
+
 signals:
     void connected();
     void roomJoined(const QString &roomToken);
     void participantsChanged(const QString &roomToken,
                              const QVector<TalkParticipant> &participants);
+    /** A media signaling message (offer/answer/candidate) was received. */
+    void mediaMessageReceived(const QJsonObject &data);
     void errorOccurred(const QString &message);
 
 private slots:

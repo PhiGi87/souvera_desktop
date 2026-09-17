@@ -6,6 +6,9 @@
 #include "CallWindow.h"
 #include "TalkOcsApi.h"
 #include "TalkSignalingClient.h"
+#ifdef HAVE_GSTREAMER
+#include "TalkMediaEngine.h"
+#endif
 
 #include "theme/SouveraTheme.h"
 
@@ -263,6 +266,20 @@ void CallWindow::setState(State state, const QString &error)
             QStringLiteral("background: %1; border-radius: 5px;")
             .arg(theme->color(SouveraTheme::Color::Success).name()));
         _stateLabel->setText(QStringLiteral("Verbunden"));
+#ifdef HAVE_GSTREAMER
+        // Start the media engine (audio + video over HPB signaling).
+        if (!_mediaEngine) {
+            _mediaEngine = new TalkMediaEngine(_signaling, this);
+            connect(_mediaEngine, &TalkMediaEngine::mediaConnected, this, [this]() {
+                _stateLabel->setText(QStringLiteral("Verbunden \u2014 Medien aktiv"));
+            });
+            connect(_mediaEngine, &TalkMediaEngine::errorOccurred, this,
+                    [this](const QString &msg) {
+                qCWarning(lcCallWindow) << "Media engine error:" << msg;
+            });
+            _mediaEngine->start(_token, _roomSessionId);
+        }
+#endif
         break;
     case State::Ended:
         stopRingTone();
@@ -388,6 +405,11 @@ void CallWindow::closeEvent(QCloseEvent *event)
     if (_signaling) {
         _signaling->leaveRoom();
     }
+#ifdef HAVE_GSTREAMER
+    if (_mediaEngine) {
+        _mediaEngine->stop();
+    }
+#endif
     stopRingTone();
     QWidget::closeEvent(event);
 }
