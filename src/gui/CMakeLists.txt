@@ -340,6 +340,8 @@ set(client_SRCS
     souvera/talk/TalkOcsApi.cpp
     souvera/talk/TalkSignalingClient.h
     souvera/talk/TalkSignalingClient.cpp
+    souvera/talk/IncomingCallDialog.h
+    souvera/talk/IncomingCallDialog.cpp
     souvera/talk/TalkConversationModel.h
     souvera/talk/TalkConversationModel.cpp
     souvera/talk/TalkMessageWidget.h

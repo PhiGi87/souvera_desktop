@@ -20,7 +20,7 @@ namespace OCC {
 Q_LOGGING_CATEGORY(lcNotificationService, "souvera.notifications", QtInfoMsg)
 
 namespace {
-constexpr int NcPollIntervalMs = 45 * 1000;
+constexpr int NcPollIntervalMs = 15 * 1000;
 constexpr int MailPollIntervalMs = 60 * 1000;
 constexpr int MaxSeenIds = 200;
 
@@ -111,6 +111,18 @@ void NotificationService::pollNextcloud()
                 const auto subject = obj[QStringLiteral("subject")].toString();
                 const auto app = obj[QStringLiteral("app")].toString();
                 if (subject.isEmpty()) continue;
+
+                // Talk call notification: emit incomingCall instead of a
+                // generic tray message so the caller can be connected.
+                const auto objectType = obj[QStringLiteral("object_type")].toString();
+                if (app == QStringLiteral("spreed") && objectType == QStringLiteral("call")) {
+                    const auto roomToken = obj[QStringLiteral("object_id")].toString();
+                    const auto callerName = obj[QStringLiteral("subject")].toString();
+                    if (!roomToken.isEmpty()) {
+                        emit incomingCall(roomToken, callerName);
+                    }
+                    continue;
+                }
                 showNotification(app.isEmpty() ? QStringLiteral("Souvera") : app, subject,
                                  QSystemTrayIcon::Information);
             }

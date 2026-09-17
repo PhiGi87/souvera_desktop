@@ -501,6 +501,13 @@ void TalkPanel::startCall()
     _ocsApi->joinCall(token, 1);
 }
 
+void TalkPanel::joinCallForRoom(const QString &roomToken)
+{
+    if (roomToken.isEmpty() || !_accountState) return;
+    _currentToken = roomToken;
+    startCall();
+}
+
 void TalkPanel::sendMessage()
 {
     const auto text = _messageInput->toPlainText().trimmed();

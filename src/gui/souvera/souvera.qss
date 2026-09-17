@@ -864,6 +864,41 @@ QPushButton#CallHangupButton:pressed {
     background: @danger@;
 }
 
+/* ---- Incoming call dialog ---- */
+
+QLabel#IncomingCallerName {
+    color: @textPrimary@;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+QLabel#IncomingCallHint {
+    color: @textMuted@;
+    font-size: 12px;
+}
+
+QPushButton#IncomingAcceptButton {
+    background: @success@;
+    border: none;
+    border-radius: 32px;
+}
+
+QPushButton#IncomingAcceptButton:hover {
+    background: @success@;
+    border: 2px solid @textPrimary@;
+}
+
+QPushButton#IncomingDeclineButton {
+    background: @danger@;
+    border: none;
+    border-radius: 32px;
+}
+
+QPushButton#IncomingDeclineButton:hover {
+    background: @danger@;
+    border: 2px solid @textPrimary@;
+}
+
 QWidget#DeckColumnsArea {
     background-color: @contentBackground@;
 }

@@ -34,6 +34,7 @@ public:
     ~TalkPanel() override = default;
 
     void setAccountState(AccountState *state);
+    void joinCallForRoom(const QString &roomToken);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;

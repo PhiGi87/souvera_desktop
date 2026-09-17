@@ -10,6 +10,7 @@
 #include "FilesPanel.h"
 #include "mail/MailPanel.h"
 #include "talk/TalkPanel.h"
+#include "talk/IncomingCallDialog.h"
 #include "deck/DeckPanel.h"
 #include "notifications/NotificationService.h"
 #include "calendar/CalendarPanel.h"
@@ -138,6 +139,16 @@ void SouveraMainWindow::connectAccount(AccountState *accountState)
         _notificationService = new NotificationService(this);
     }
     _notificationService->setAccountState(accountState);
+    connect(_notificationService, &NotificationService::incomingCall, this,
+            [this](const QString &roomToken, const QString &callerName) {
+        auto *dialog = new IncomingCallDialog(roomToken, callerName, this);
+        connect(dialog, &IncomingCallDialog::accepted, this,
+                [this](const QString &token) {
+            switchToTab(1); // Talk panel
+            _talkPanel->joinCallForRoom(token);
+        });
+        dialog->show();
+    });
 }
 
 void SouveraMainWindow::enforceWorkspaceSetup()

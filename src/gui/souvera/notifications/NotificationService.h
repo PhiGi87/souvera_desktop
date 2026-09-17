@@ -39,6 +39,10 @@ public:
     static bool mailNotificationsEnabled();
     static void setMailNotificationsEnabled(bool enabled);
 
+signals:
+    /** Emitted when a Talk call notification is detected (incoming call). */
+    void incomingCall(const QString &roomToken, const QString &callerName);
+
 private slots:
     void pollNextcloud();
     void pollMail();
