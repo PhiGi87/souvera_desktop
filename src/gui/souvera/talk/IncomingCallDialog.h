@@ -44,6 +44,7 @@ private:
     QPushButton *_acceptButton = nullptr;
     QPushButton *_declineButton = nullptr;
     QAudioSink *_ringSink = nullptr;
+    qint64 _ringPhase = 0;
     QIODevice *_ringIo = nullptr;
     QTimer *_ringTimer = nullptr;
 };

@@ -138,8 +138,13 @@ void TalkSignalingClient::startHello()
     QJsonObject hello;
     hello.insert(QStringLiteral("type"), QStringLiteral("hello"));
     hello.insert(QStringLiteral("hello"), helloInner);
+    // Never log the auth params: they carry the session JWT / ticket.
+    QJsonObject loggedHello = helloInner;
+    auto loggedAuth = loggedHello.value(QStringLiteral("auth")).toObject();
+    loggedAuth.insert(QStringLiteral("params"), QStringLiteral("[MASKED]"));
+    loggedHello.insert(QStringLiteral("auth"), loggedAuth);
     qCInfo(lcTalkSignaling) << "Sending hello:"
-        << QString::fromUtf8(QJsonDocument(helloInner).toJson(QJsonDocument::Compact)).left(200);
+        << QString::fromUtf8(QJsonDocument(loggedHello).toJson(QJsonDocument::Compact)).left(200);
     sendJson(hello);
 }
 

@@ -42,6 +42,8 @@ public:
 signals:
     /** Emitted when a Talk call notification is detected (incoming call). */
     void incomingCall(const QString &roomToken, const QString &callerName);
+    /** The call for roomToken was cancelled or answered elsewhere. */
+    void incomingCallGone(const QString &roomToken);
 
 private slots:
     void pollNextcloud();
@@ -65,6 +67,7 @@ private:
     bool _mailBaselineDone = false;
 
     QStringList _seenNcIds;
+    QSet<QString> _activeCallTokens; // room tokens with a live call notification
 };
 
 } // namespace OCC

@@ -12,6 +12,7 @@
 
 #include <QObject>
 #include <QJsonObject>
+#include <QPointer>
 #include <QString>
 
 #include <gst/gst.h>
@@ -64,6 +65,8 @@ private:
     void sendIceCandidate(const QString &candidate, guint mlineIndex);
 
     static void onNegotiationNeededCb(GstElement *webrtcbin, gpointer user_data);
+    static void onWebrtcPadAddedCb(GstElement *webrtcbin, GstPad *newPad, gpointer user_data);
+    static GstElement *createSourceElement(bool audio);
     static void onIceCandidateCb(GstElement *webrtcbin, guint mlineIndex,
                                  gchararray candidate, gpointer user_data);
     static void onIceGatheringStateNotifyCb(GstElement *webrtcbin, gpointer user_data);

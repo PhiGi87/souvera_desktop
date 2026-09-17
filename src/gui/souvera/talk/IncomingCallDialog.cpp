@@ -6,12 +6,14 @@
 #include "IncomingCallDialog.h"
 #include "theme/SouveraTheme.h"
 
+#include <QAudioDevice>
 #include <QCloseEvent>
 #include <QHBoxLayout>
 #include <QIODevice>
 #include <QLabel>
 #include <QMediaDevices>
 #include <QPushButton>
+#include <QSettings>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QAudioSink>
@@ -23,23 +25,28 @@ namespace {
 // Dual-tone ring: 440 + 480 Hz, 2 s on / 4 s off (German incoming ring).
 constexpr int RingCycleMs = 6000;
 constexpr int RingToneMs = 2000;
+constexpr int RingChunkMs = 100;
 constexpr int RingHz1 = 440;
 constexpr int RingHz2 = 480;
+constexpr int RingSampleRate = 48000;
 
-QByteArray makeIncomingRingCycle()
+// Generates the next RingChunkMs slice of the endless ring pattern
+// continuing at phase.
+QByteArray makeIncomingRingChunk(qint64 &phase)
 {
     constexpr double kTwoPi = 6.28318530717958647692;
-    const int sampleRate = 48000;
-    const int total = sampleRate * RingCycleMs / 1000;
-    const int toneSamples = sampleRate * RingToneMs / 1000;
+    const int samples = RingSampleRate * RingChunkMs / 1000;
+    const qint64 cycleSamples = qint64(RingSampleRate) * RingCycleMs / 1000;
+    const qint64 toneSamples = qint64(RingSampleRate) * RingToneMs / 1000;
     QByteArray data;
-    data.resize(total * 2);
+    data.resize(samples * 2);
     auto *out = reinterpret_cast<qint16 *>(data.data());
-    for (int i = 0; i < total; ++i) {
-        if (i < toneSamples) {
-            const double fade = qMin(1.0, double(i) / (sampleRate / 100));
-            const auto v = qSin(kTwoPi * RingHz1 * i / sampleRate) * 0.2 * 32767.0 * fade
-                         + qSin(kTwoPi * RingHz2 * i / sampleRate) * 0.2 * 32767.0 * fade;
+    for (int i = 0; i < samples; ++i, ++phase) {
+        const qint64 inCycle = phase % cycleSamples;
+        if (inCycle < toneSamples) {
+            const double fade = qMin(1.0, double(inCycle) / (RingSampleRate / 100));
+            const auto v = qSin(kTwoPi * RingHz1 * inCycle / RingSampleRate) * 0.2 * 32767.0 * fade
+                         + qSin(kTwoPi * RingHz2 * inCycle / RingSampleRate) * 0.2 * 32767.0 * fade;
             out[i] = qint16(v);
         } else {
             out[i] = 0;
@@ -121,17 +128,30 @@ void IncomingCallDialog::startRing()
 {
     if (_ringSink) return;
     QAudioFormat format;
-    format.setSampleRate(48000);
+    format.setSampleRate(RingSampleRate);
     format.setChannelCount(1);
     format.setSampleFormat(QAudioFormat::Int16);
-    _ringSink = new QAudioSink(QMediaDevices::defaultAudioOutput(), format, this);
+    // Honor the output device the user picked in Audio & Video settings.
+    QAudioDevice device = QMediaDevices::defaultAudioOutput();
+    QSettings settings;
+    const auto storedId = settings.value(QStringLiteral("audioOutputId")).toString();
+    if (!storedId.isEmpty()) {
+        const auto devices = QMediaDevices::audioOutputs();
+        for (const auto &d : devices) {
+            if (d.id() == storedId.toUtf8()) {
+                device = d;
+                break;
+            }
+        }
+    }
+    _ringSink = new QAudioSink(device, format, this);
     _ringIo = _ringSink->start();
     if (!_ringIo) return;
-    _ringIo->write(makeIncomingRingCycle());
+    // Feed small chunks on a short timer so writes never block the UI thread.
     _ringTimer = new QTimer(this);
-    _ringTimer->setInterval(RingCycleMs);
+    _ringTimer->setInterval(RingChunkMs);
     connect(_ringTimer, &QTimer::timeout, this, [this]() {
-        if (_ringIo) _ringIo->write(makeIncomingRingCycle());
+        if (_ringIo) _ringIo->write(makeIncomingRingChunk(_ringPhase));
     });
     _ringTimer->start();
 }

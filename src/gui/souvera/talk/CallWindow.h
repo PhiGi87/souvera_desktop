@@ -55,6 +55,7 @@ private:
     void updateTileRendering();
     void startRingTone();
     void stopRingTone();
+    void leaveCallAndCleanup();
     void closeEvent(QCloseEvent *event) override;
 
     TalkOcsApi *_api = nullptr;
@@ -72,6 +73,7 @@ private:
     QList<QPair<QString, bool>> _tiles; // ordered (name, inCall) snapshot
 
     QLabel *_titleLabel = nullptr;
+    QLabel *_videoLabel = nullptr;
     QLabel *_durationLabel = nullptr;
     QLabel *_stateLabel = nullptr;
     QLabel *_stateDot = nullptr;
@@ -86,6 +88,7 @@ private:
     QAudioSink *_ringSink = nullptr;
     QIODevice *_ringIo = nullptr;
     QTimer *_ringTimer = nullptr;
+    qint64 _ringPhase = 0;
 };
 
 } // namespace OCC

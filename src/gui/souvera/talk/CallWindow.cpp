@@ -24,8 +24,10 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
+#include <QAudioDevice>
 #include <QAudioSink>
 #include <QLoggingCategory>
+#include <QSettings>
 
 Q_LOGGING_CATEGORY(lcCallWindow, "souvera.talk.callwindow")
 
@@ -35,22 +37,28 @@ namespace {
 
 constexpr int RingCycleMs = 5000;   // 1 s tone + 4 s silence (German ring)
 constexpr int RingToneMs = 1000;
+constexpr int RingChunkMs = 100;    // small write chunks to keep the UI thread free
 constexpr int RingHz = 425;
+constexpr int RingSampleRate = 48000;
 
 constexpr double kTwoPi = 6.28318530717958647692;
 
-QByteArray makeRingCycle()
+// Generates the next RingChunkMs slice of the endless ring pattern
+// (1 s tone with fade-in + 4 s silence) continuing at phase.
+QByteArray makeRingChunk(qint64 &phase)
 {
-    const int sampleRate = 48000;
-    const int total = sampleRate * RingCycleMs / 1000;
-    const int toneSamples = sampleRate * RingToneMs / 1000;
+    const int samples = RingSampleRate * RingChunkMs / 1000;
+    const qint64 cycleSamples = qint64(RingSampleRate) * RingCycleMs / 1000;
+    const qint64 toneSamples = qint64(RingSampleRate) * RingToneMs / 1000;
     QByteArray data;
-    data.resize(total * 2);
+    data.resize(samples * 2);
     auto *out = reinterpret_cast<qint16 *>(data.data());
-    for (int i = 0; i < total; ++i) {
-        if (i < toneSamples) {
-            const double fade = qMin(1.0, double(i) / (sampleRate / 100));
-            out[i] = qint16(qSin(kTwoPi * RingHz * i / sampleRate) * 0.22 * 32767.0 * fade);
+    for (int i = 0; i < samples; ++i, ++phase) {
+        const qint64 inCycle = phase % cycleSamples;
+        if (inCycle < toneSamples) {
+            const double fade = qMin(1.0, double(inCycle) / (RingSampleRate / 100));
+            out[i] = qint16(qSin(kTwoPi * RingHz * inCycle / RingSampleRate)
+                            * 0.22 * 32767.0 * fade);
         } else {
             out[i] = 0;
         }
@@ -123,7 +131,9 @@ CallWindow::CallWindow(TalkOcsApi *api, TalkSignalingClient *signaling,
 
 CallWindow::~CallWindow()
 {
-    stopRingTone();
+    // Direct destruction (logout, account switch) bypasses closeEvent;
+    // release the call and media here so the server state stays clean.
+    leaveCallAndCleanup();
 }
 
 void CallWindow::buildUi(const QString &displayName)
@@ -163,6 +173,15 @@ void CallWindow::buildUi(const QString &displayName)
 
     layout->addWidget(header);
 
+    // -- Remote video viewport --
+    _videoLabel = new QLabel(this);
+    _videoLabel->setObjectName(QStringLiteral("CallVideoView"));
+    _videoLabel->setMinimumHeight(200);
+    _videoLabel->setAlignment(Qt::AlignCenter);
+    _videoLabel->setScaledContents(true);
+    _videoLabel->hide();
+    layout->addWidget(_videoLabel, 1);
+
     // -- Participant tiles area --
     _tilesArea = new QWidget(this);
     _tilesArea->setObjectName(QStringLiteral("CallTilesArea"));
@@ -192,6 +211,16 @@ void CallWindow::buildUi(const QString &displayName)
     _micButton->setIconSize(QSize(24, 24));
     _micButton->setToolTip(QStringLiteral("Mikrofon"));
     _micButton->setCheckable(true);
+#ifdef HAVE_GSTREAMER
+    connect(_micButton, &QPushButton::toggled, this, [this](bool checked) {
+        if (_mediaEngine) {
+            _mediaEngine->setMicrophoneEnabled(!checked);
+            _micButton->setIcon(SouveraTheme::instance()->icon(
+                checked ? QStringLiteral("mic-off") : QStringLiteral("mic"),
+                SouveraTheme::Color::TextPrimary));
+        }
+    });
+#endif
     footerLayout->addWidget(_micButton);
     footerLayout->addStretch();
 
@@ -277,6 +306,10 @@ void CallWindow::setState(State state, const QString &error)
                     [this](const QString &msg) {
                 qCWarning(lcCallWindow) << "Media engine error:" << msg;
             });
+            connect(_mediaEngine, &TalkMediaEngine::remoteVideoFrame, this, [this](const QImage &frame) {
+                _videoLabel->setPixmap(QPixmap::fromImage(frame));
+                _videoLabel->show();
+            });
             _mediaEngine->start(_token, _roomSessionId);
         }
 #endif
@@ -357,10 +390,23 @@ void CallWindow::startRingTone()
 {
     if (_ringSink) return;
     QAudioFormat format;
-    format.setSampleRate(48000);
+    format.setSampleRate(RingSampleRate);
     format.setChannelCount(1);
     format.setSampleFormat(QAudioFormat::Int16);
-    _ringSink = new QAudioSink(QMediaDevices::defaultAudioOutput(), format, this);
+    // Honor the output device the user picked in Audio & Video settings.
+    QAudioDevice device = QMediaDevices::defaultAudioOutput();
+    QSettings settings;
+    const auto storedId = settings.value(QStringLiteral("audioOutputId")).toString();
+    if (!storedId.isEmpty()) {
+        const auto devices = QMediaDevices::audioOutputs();
+        for (const auto &d : devices) {
+            if (d.id() == storedId.toUtf8()) {
+                device = d;
+                break;
+            }
+        }
+    }
+    _ringSink = new QAudioSink(device, format, this);
     _ringIo = _ringSink->start();
     if (!_ringIo) {
         qCWarning(lcCallWindow) << "Ring tone failed to start";
@@ -368,12 +414,11 @@ void CallWindow::startRingTone()
         _ringSink = nullptr;
         return;
     }
-    _ringIo->write(makeRingCycle());
-    // Keep the buffer topped up so the ring cycle loops seamlessly.
+    // Feed small chunks on a short timer so writes never block the UI thread.
     _ringTimer = new QTimer(this);
-    _ringTimer->setInterval(RingCycleMs);
+    _ringTimer->setInterval(RingChunkMs);
     connect(_ringTimer, &QTimer::timeout, this, [this]() {
-        if (_ringIo) _ringIo->write(makeRingCycle());
+        if (_ringIo) _ringIo->write(makeRingChunk(_ringPhase));
     });
     _ringTimer->start();
 }
@@ -396,7 +441,7 @@ void CallWindow::stopRingTone()
     }
 }
 
-void CallWindow::closeEvent(QCloseEvent *event)
+void CallWindow::leaveCallAndCleanup()
 {
     if (!_callLeft && _api && _state != State::Ended) {
         _api->leaveCall(_token);
@@ -411,6 +456,11 @@ void CallWindow::closeEvent(QCloseEvent *event)
     }
 #endif
     stopRingTone();
+}
+
+void CallWindow::closeEvent(QCloseEvent *event)
+{
+    leaveCallAndCleanup();
     QWidget::closeEvent(event);
 }
 

@@ -142,12 +142,23 @@ void SouveraMainWindow::connectAccount(AccountState *accountState)
     connect(_notificationService, &NotificationService::incomingCall, this,
             [this](const QString &roomToken, const QString &callerName) {
         auto *dialog = new IncomingCallDialog(roomToken, callerName, this);
+        _incomingCallDialogs.insert(roomToken, dialog);
+        connect(dialog, &IncomingCallDialog::destroyed, this, [this, roomToken]() {
+            _incomingCallDialogs.remove(roomToken);
+        });
         connect(dialog, &IncomingCallDialog::accepted, this,
                 [this](const QString &token) {
             switchToTab(1); // Talk panel
             _talkPanel->joinCallForRoom(token);
         });
         dialog->show();
+    });
+    connect(_notificationService, &NotificationService::incomingCallGone, this,
+            [this](const QString &roomToken) {
+        // The caller hung up or the call was answered elsewhere: stop ringing.
+        if (auto dialog = _incomingCallDialogs.take(roomToken)) {
+            dialog->deleteLater();
+        }
     });
 }
 

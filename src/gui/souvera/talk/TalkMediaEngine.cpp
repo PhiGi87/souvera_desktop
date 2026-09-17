@@ -11,6 +11,7 @@
 
 #include <QImage>
 #include <QLoggingCategory>
+#include <QSettings>
 
 #include <gst/app/app.h>
 #include <gst/gst.h>
@@ -93,7 +94,8 @@ void TalkMediaEngine::buildPipeline()
     gst_bin_add(GST_BIN(_pipeline), _webrtcbin);
 
     // Audio send
-    auto *audiosrc = gst_element_factory_make("autoaudiosrc", "audio-src");
+    auto *audiosrc = createSourceElement(true);
+    if (audiosrc) gst_object_ref_sink(audiosrc);
     if (audiosrc) {
         auto *conv = gst_element_factory_make("audioconvert", nullptr);
         auto *resample = gst_element_factory_make("audioresample", nullptr);
@@ -111,7 +113,8 @@ void TalkMediaEngine::buildPipeline()
     }
 
     // Video send
-    auto *videosrc = gst_element_factory_make("autovideosrc", "video-src");
+    auto *videosrc = createSourceElement(false);
+    if (videosrc) gst_object_ref_sink(videosrc);
     if (videosrc) {
         auto *conv = gst_element_factory_make("videoconvert", nullptr);
         auto *scale = gst_element_factory_make("videoscale", nullptr);
@@ -136,21 +139,7 @@ void TalkMediaEngine::buildPipeline()
 
     // Remote media: handle pad-added on webrtcbin for incoming streams.
     g_signal_connect(_webrtcbin, "pad-added",
-        G_CALLBACK(+[](GstElement *wb, GstPad *newPad, gpointer) {
-            auto *caps = gst_pad_get_current_caps(newPad);
-            if (!caps) caps = gst_pad_query_caps(newPad, nullptr);
-            auto *st = gst_caps_get_structure(caps, 0);
-            const gchar *media = gst_structure_get_string(st, "media");
-            if (media && g_strcmp0(media, "audio") == 0) {
-                auto *sink = gst_element_factory_make("autoaudiosink", nullptr);
-                gst_bin_add(GST_BIN(gst_element_get_parent(wb)), sink);
-                auto *sp = gst_element_get_static_pad(sink, "sink");
-                gst_pad_link(newPad, sp);
-                gst_object_unref(sp);
-                gst_element_sync_state_with_parent(sink);
-            }
-            gst_caps_unref(caps);
-        }), this);
+        G_CALLBACK(&TalkMediaEngine::onWebrtcPadAddedCb), this);
 
     // Video receive: appsink → QImage
     auto *videosink = gst_element_factory_make("appsink", kVideoAppsinkName);
@@ -191,6 +180,111 @@ void TalkMediaEngine::destroyPipeline()
 // ---------------------------------------------------------------------------
 // webrtcbin callbacks
 // ---------------------------------------------------------------------------
+
+void TalkMediaEngine::onWebrtcPadAddedCb(GstElement *wb, GstPad *newPad, gpointer user_data)
+{
+    auto *self = static_cast<TalkMediaEngine *>(user_data);
+    auto *parent = gst_element_get_parent(wb); // transfer full
+    if (!parent) return;
+    auto *bin = GST_BIN(parent);
+
+    auto *caps = gst_pad_get_current_caps(newPad);
+    if (!caps) caps = gst_pad_query_caps(newPad, nullptr);
+    auto *st = gst_caps_get_structure(caps, 0);
+    const gchar *media = gst_structure_get_string(st, "media");
+    const bool isAudio = media && g_strcmp0(media, "audio") == 0;
+    const bool isVideo = media && g_strcmp0(media, "video") == 0;
+    gst_caps_unref(caps);
+
+    if (isAudio) {
+        auto *depay = gst_element_factory_make("rtpopusdepay", nullptr);
+        auto *dec = gst_element_factory_make("opusdec", nullptr);
+        auto *conv = gst_element_factory_make("audioconvert", nullptr);
+        auto *resample = gst_element_factory_make("audioresample", nullptr);
+        auto *sink = gst_element_factory_make("autoaudiosink", nullptr);
+        if (depay && dec && conv && resample && sink) {
+            gst_bin_add_many(bin, depay, dec, conv, resample, sink, nullptr);
+            gst_element_link_many(depay, dec, conv, resample, sink, nullptr);
+            auto *sp = gst_element_get_static_pad(depay, "sink");
+            gst_pad_link(newPad, sp);
+            gst_object_unref(sp);
+            gst_element_sync_state_with_parent(depay);
+            gst_element_sync_state_with_parent(dec);
+            gst_element_sync_state_with_parent(conv);
+            gst_element_sync_state_with_parent(resample);
+            gst_element_sync_state_with_parent(sink);
+            qCInfo(lcTalkMediaEngine) << "Remote audio pad linked via opus decode chain";
+        } else {
+            qCWarning(lcTalkMediaEngine) << "Audio decode chain unavailable, dropping remote audio";
+            if (depay) gst_object_unref(depay);
+            if (dec) gst_object_unref(dec);
+            if (conv) gst_object_unref(conv);
+            if (resample) gst_object_unref(resample);
+            if (sink) gst_object_unref(sink);
+        }
+    } else if (isVideo) {
+        auto *depay = gst_element_factory_make("rtpvp8depay", nullptr);
+        auto *dec = gst_element_factory_make("vp8dec", nullptr);
+        auto *conv = gst_element_factory_make("videoconvert", nullptr);
+        auto *sink = gst_bin_get_by_name(bin, kVideoAppsinkName);
+        if (depay && dec && conv && sink) {
+            gst_bin_add_many(bin, depay, dec, conv, nullptr);
+            gst_element_link_many(depay, dec, conv, sink, nullptr);
+            auto *sp = gst_element_get_static_pad(depay, "sink");
+            gst_pad_link(newPad, sp);
+            gst_object_unref(sp);
+            gst_element_sync_state_with_parent(depay);
+            gst_element_sync_state_with_parent(dec);
+            gst_element_sync_state_with_parent(conv);
+            qCInfo(lcTalkMediaEngine) << "Remote video pad linked via vp8 decode chain";
+        } else {
+            qCWarning(lcTalkMediaEngine) << "Video decode chain unavailable, dropping remote video";
+            if (depay) gst_object_unref(depay);
+            if (dec) gst_object_unref(dec);
+            if (conv) gst_object_unref(conv);
+        }
+        if (sink) gst_object_unref(sink);
+    }
+    gst_object_unref(parent);
+}
+
+// Returns a GStreamer source element matching the device description the
+// user picked in Audio & Video settings (matched against GStreamer device
+// display names). Falls back to the auto source when nothing matches or the
+// monitor yields no devices.
+GstElement *TalkMediaEngine::createSourceElement(bool audio)
+{
+    const QString settingsKey = audio ? QStringLiteral("audioInputDescription")
+                                      : QStringLiteral("cameraDescription");
+    QSettings settings;
+    const QString wanted = settings.value(settingsKey).toString();
+    if (wanted.isEmpty()) {
+        return gst_element_factory_make(audio ? "autoaudiosrc" : "autovideosrc", nullptr);
+    }
+
+    auto *monitor = gst_device_monitor_new();
+    gst_device_monitor_add_filter(monitor,
+        audio ? "Audio/Source" : "Video/Source", nullptr);
+    gst_device_monitor_start(monitor);
+    GstElement *element = nullptr;
+    const GList *devices = gst_device_monitor_get_devices(monitor);
+    for (const GList *l = devices; l; l = l->next) {
+        auto *device = GST_DEVICE(l->data);
+        const QString display = QString::fromUtf8(gst_device_get_display_name(device));
+        if (display == wanted) {
+            element = gst_device_create_element(device, nullptr);
+            break;
+        }
+    }
+    gst_device_monitor_stop(monitor);
+    gst_object_unref(monitor);
+    if (element) {
+        qCInfo(lcTalkMediaEngine) << "Using configured device" << wanted;
+        return element;
+    }
+    qCWarning(lcTalkMediaEngine) << "Configured device not found, falling back to auto source";
+    return gst_element_factory_make(audio ? "autoaudiosrc" : "autovideosrc", nullptr);
+}
 
 void TalkMediaEngine::onNegotiationNeededCb(GstElement *, gpointer user_data)
 {
@@ -254,6 +348,7 @@ void TalkMediaEngine::onAnswerCreatedCb(GstPromise *promise, gpointer user_data)
     gst_promise_unref(promise);
     if (!answer || !answer->sdp) {
         qCWarning(lcTalkMediaEngine) << "Answer creation failed";
+        if (answer) gst_webrtc_session_description_free(answer);
         return;
     }
 
@@ -267,6 +362,7 @@ void TalkMediaEngine::onAnswerCreatedCb(GstPromise *promise, gpointer user_data)
         gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_ANSWER, sdpMsg);
     GstPromise *localPromise = gst_promise_new();
     g_signal_emit_by_name(wb, "set-local-description", localDesc, localPromise);
+    gst_promise_unref(localPromise);
 
     // Send the answer via signaling.
     QJsonObject payload;
@@ -283,7 +379,10 @@ void TalkMediaEngine::onAnswerCreatedCb(GstPromise *promise, gpointer user_data)
     gst_webrtc_session_description_free(answer);
 
     self->_mediaConnected = true;
-    QMetaObject::invokeMethod(self, [self]() { emit self->mediaConnected(); }, Qt::QueuedConnection);
+    QPointer<TalkMediaEngine> selfPtr(self);
+    QMetaObject::invokeMethod(self, [selfPtr]() {
+        if (selfPtr) emit selfPtr->mediaConnected();
+    }, Qt::QueuedConnection);
 }
 
 GstFlowReturn TalkMediaEngine::onVideoAppsinkCb(GstAppSink *appsink, gpointer user_data)
@@ -300,16 +399,19 @@ GstFlowReturn TalkMediaEngine::onVideoAppsinkCb(GstAppSink *appsink, gpointer us
 
     GstBuffer *buffer = gst_sample_get_buffer(sample);
     GstMapInfo map;
-    if (gst_buffer_map(buffer, &map, GST_MAP_READ) && w > 0 && h > 0) {
-        QImage frame(map.data, w, h, map.size / h, QImage::Format_RGB888);
-        if (!frame.isNull()) {
-            QImage copy = frame.copy();
-            QMetaObject::invokeMethod(self, [self, copy]() {
-                emit self->remoteVideoFrame(copy);
-            }, Qt::QueuedConnection);
+    if (gst_buffer_map(buffer, &map, GST_MAP_READ)) {
+        if (w > 0 && h > 0 && map.size >= gsize(w * h * 3)) {
+            QImage frame(map.data, w, h, w * 3, QImage::Format_RGB888);
+            if (!frame.isNull()) {
+                QImage copy = frame.copy();
+                QPointer<TalkMediaEngine> selfPtr(self);
+                QMetaObject::invokeMethod(self, [selfPtr, copy]() {
+                    if (selfPtr) emit selfPtr->remoteVideoFrame(copy);
+                }, Qt::QueuedConnection);
+            }
         }
+        gst_buffer_unmap(buffer, &map);
     }
-    gst_buffer_unmap(buffer, &map);
     gst_sample_unref(sample);
     return GST_FLOW_OK;
 }
@@ -342,7 +444,10 @@ void TalkMediaEngine::handleOffer(const QString &sdp)
     if (!_webrtcbin) return;
     qCInfo(lcTalkMediaEngine) << "Setting remote offer SDP (" << sdp.size() << "chars)";
     GstSDPMessage *sdpMsg = nullptr;
-    gst_sdp_message_new_from_text(sdp.toUtf8().constData(), &sdpMsg);
+    if (gst_sdp_message_new_from_text(sdp.toUtf8().constData(), &sdpMsg) != GST_SDP_OK) {
+        qCWarning(lcTalkMediaEngine) << "Malformed remote SDP, ignoring offer";
+        return;
+    }
     GstWebRTCSessionDescription *remoteDesc =
         gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdpMsg);
     GstPromise *promise = gst_promise_new_with_change_func(

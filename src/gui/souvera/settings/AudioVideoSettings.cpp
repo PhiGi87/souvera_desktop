@@ -183,14 +183,6 @@ AudioVideoSettings::AudioVideoSettings(QWidget *parent)
     connect(_cameraTestButton, &QPushButton::toggled, this, [this](bool checked) {
         if (checked) startCameraPreview(); else stopCameraPreview();
     });
-    connect(_cameraCombo, &QComboBox::activated, this, [this](int) {
-        storeSelection();
-        if (_camera && _camera->isActive()) {
-            stopCameraPreview();
-            startCameraPreview();
-        }
-    });
-
     connect(_micTestButton, &QPushButton::toggled, this, [this](bool checked) {
         if (checked) startMicTest(); else stopMicTest();
     });
@@ -270,8 +262,10 @@ void AudioVideoSettings::storeSelection()
     QSettings settings;
     settings.beginGroup(settingsGroup());
     settings.setValue(QStringLiteral("audioInputId"), _inputCombo->currentData().toString());
+    settings.setValue(QStringLiteral("audioInputDescription"), _inputCombo->currentText());
     settings.setValue(QStringLiteral("audioOutputId"), _outputCombo->currentData().toString());
     settings.setValue(QStringLiteral("cameraId"), _cameraCombo->currentData().toString());
+    settings.setValue(QStringLiteral("cameraDescription"), _cameraCombo->currentText());
     settings.endGroup();
 }
 
@@ -341,6 +335,9 @@ void AudioVideoSettings::stopCameraPreview()
         _camera = nullptr;
     }
     _cameraPreview->hide();
+    if (_cameraTestButton->isChecked()) {
+        _cameraTestButton->setChecked(false);
+    }
 }
 
 void AudioVideoSettings::startMicTest()
@@ -384,6 +381,9 @@ void AudioVideoSettings::stopMicTest()
     _levelSmoothed = 0;
     _levelBar->setValue(0);
     _micTestButton->setText(QStringLiteral("Mikrofon testen"));
+    if (_micTestButton->isChecked()) {
+        _micTestButton->setChecked(false);
+    }
 }
 
 void AudioVideoSettings::playTestTone()

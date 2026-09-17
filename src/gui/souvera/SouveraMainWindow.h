@@ -6,7 +6,9 @@
 #ifndef SOUVERAMAINWINDOW_H
 #define SOUVERAMAINWINDOW_H
 
+#include <QHash>
 #include <QMainWindow>
+#include <QPointer>
 #include <QStackedWidget>
 
 class QHBoxLayout;
@@ -67,6 +69,7 @@ private:
     NotesPanel *_notesPanel = nullptr;
     SettingsPanel *_settingsPanel = nullptr;
     bool _setupPending = false;
+    QHash<QString, QPointer<class IncomingCallDialog>> _incomingCallDialogs;
 };
 
 } // namespace OCC

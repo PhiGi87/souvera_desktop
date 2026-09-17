@@ -12,6 +12,7 @@
 #include "accountstate.h"
 
 #include <QLoggingCategory>
+#include <QSet>
 #include <QSettings>
 #include <QSystemTrayIcon>
 
@@ -119,6 +120,7 @@ void NotificationService::pollNextcloud()
                     const auto roomToken = obj[QStringLiteral("object_id")].toString();
                     const auto callerName = obj[QStringLiteral("subject")].toString();
                     if (!roomToken.isEmpty()) {
+                        _activeCallTokens.insert(roomToken);
                         emit incomingCall(roomToken, callerName);
                     }
                     continue;
@@ -128,6 +130,23 @@ void NotificationService::pollNextcloud()
             }
             _seenNcIds = freshIds + _seenNcIds;
             trimSeenIds();
+
+            // Calls that are no longer in the fresh list were cancelled or
+            // answered elsewhere: tell the UI to dismiss their dialogs.
+            QSet<QString> stillActive;
+            for (const auto &item : data) {
+                const auto obj = item.toObject();
+                if (obj[QStringLiteral("app")].toString() == QStringLiteral("spreed")
+                    && obj[QStringLiteral("object_type")].toString() == QStringLiteral("call")) {
+                    stillActive.insert(obj[QStringLiteral("object_id")].toString());
+                }
+            }
+            for (const auto &token : qAsConst(_activeCallTokens)) {
+                if (!stillActive.contains(token)) {
+                    _activeCallTokens.remove(token);
+                    emit incomingCallGone(token);
+                }
+            }
         },
         [this](int status, const QString &message) {
             // 404 = notifications app not installed: stop polling silently.

@@ -10,6 +10,7 @@
 #include <QEvent>
 #include <QJsonArray>
 #include <QLabel>
+#include <QMetaObject>
 #include <QPointer>
 #include <QSplitter>
 #include <QListView>
@@ -67,6 +68,8 @@ private:
     TalkSignalingClient *_signaling = nullptr;
     QPointer<AccountState> _accountState;
     QPointer<class CallWindow> _callWindow;
+    QMetaObject::Connection _callJoinedConn;  // single-shot join chain step 1
+    QMetaObject::Connection _roomJoinedConn;  // single-shot join chain step 2
 
     QString _currentToken;
     qint64 _lastKnownId = 0;

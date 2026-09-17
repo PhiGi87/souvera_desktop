@@ -463,38 +463,27 @@ void TalkPanel::startCall()
         if (answer != QMessageBox::Yes) return;
     }
 
-    const auto callJoinedConn = new QMetaObject::Connection;
-    *callJoinedConn = connect(_ocsApi, &TalkOcsApi::callJoined, this,
-            [this, token, callJoinedConn](const QString &joinedToken, const QString &sessionId) {
+    // Single-shot join chain: REST join -> signaling room -> startCall.
+    // The connections are tracked as members so the lambdas can disconnect
+    // on the first emission matching this token without heap bookkeeping.
+    _callJoinedConn = connect(_ocsApi, &TalkOcsApi::callJoined, this,
+            [this, token](const QString &joinedToken, const QString &sessionId) {
         if (joinedToken != token) return;
-        QObject::disconnect(*callJoinedConn);
-        delete callJoinedConn;
+        QObject::disconnect(_callJoinedConn);
         _signaling->setAccountState(_accountState);
         _signaling->joinRoom(token, sessionId);
     });
-    const auto roomJoinedConn = new QMetaObject::Connection;
-    *roomJoinedConn = connect(_signaling, &TalkSignalingClient::roomJoined, this,
-            [this, token, recordingConsent, roomJoinedConn](const QString &joinedToken) {
+    _roomJoinedConn = connect(_signaling, &TalkSignalingClient::roomJoined, this,
+            [this, token, recordingConsent](const QString &joinedToken) {
         if (joinedToken != token) return;
         // Web-app order: once the signaling room join is confirmed, the
         // POST call/{token} starts the call and sets the in-call state.
-        QObject::disconnect(*roomJoinedConn);
-        delete roomJoinedConn;
+        QObject::disconnect(_roomJoinedConn);
         _ocsApi->startCall(token, 1, recordingConsent);
-    });
-    const auto callStartedConn = new QMetaObject::Connection;
-    *callStartedConn = connect(_ocsApi, &TalkOcsApi::callStarted, this,
-            [this, token, callStartedConn](const QString &startedToken) {
-        if (startedToken != token) return;
-        QObject::disconnect(*callStartedConn);
-        delete callStartedConn;
     });
     // Open the call window immediately (connecting state + ringback);
     // the join chain runs in the background.
     _callWindow = new CallWindow(_ocsApi, _signaling, token, name, url, this);
-    connect(_callWindow, &QObject::destroyed, this, [this]() {
-        _callWindow.clear();
-    });
     _callWindow->show();
     // Pass the room session id to the call window when the REST join responds.
     connect(_ocsApi, &TalkOcsApi::callJoined, this,
