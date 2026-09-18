@@ -59,10 +59,8 @@ private:
     void destroyPipeline();
     void requestOffer();
     void handleSignalingMessage(const QJsonObject &data);
-    void handleOffer(const QString &sdp);
-    void handleCandidate(const QJsonObject &candidate);
-    void sendAnswer(const QString &sdp);
-    void sendIceCandidate(const QString &candidate, guint mlineIndex);
+    void handleOffer(GstElement *webrtcbin, const QString &sdp);
+    void startSubscriberSession(const QString &sid, const QString &sdp);
 
     static void onNegotiationNeededCb(GstElement *webrtcbin, gpointer user_data);
     static void onWebrtcPadAddedCb(GstElement *webrtcbin, GstPad *newPad, gpointer user_data);
@@ -83,6 +81,8 @@ private:
     GstElement *_webrtcbin = nullptr;
     bool _mediaConnected = false;
     bool _micEnabled = true;
+    bool _awaitingPublisherOffer = false; // requestoffer sent, publisher offer pending
+    QHash<QString, GstElement *> _subscribers; // remote sid -> recvonly webrtcbin
     gulong _negotiationHandlerId = 0;
     gulong _iceCandidateHandlerId = 0;
 };

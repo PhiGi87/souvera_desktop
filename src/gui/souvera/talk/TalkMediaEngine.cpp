@@ -26,6 +26,15 @@ namespace {
 constexpr auto kWebrtcbinName = "talk-sendrecv";
 constexpr auto kVideoAppsinkName = "remote-video-sink";
 constexpr double kTwoPi = 6.28318530717958647692;
+
+// Per-session context threaded through the promise callbacks: the MCU uses
+// one WebRTC session per stream (publisher + one subscriber per remote
+// participant), so every callback must know WHICH webrtcbin it serves.
+struct WbCtx
+{
+    TalkMediaEngine *self = nullptr;
+    GstElement *wb = nullptr;
+};
 } // namespace
 
 TalkMediaEngine::TalkMediaEngine(TalkSignalingClient *signaling, QObject *parent)
@@ -173,6 +182,8 @@ void TalkMediaEngine::destroyPipeline()
         _pipeline = nullptr;
         _webrtcbin = nullptr;
     }
+    _subscribers.clear();
+    _awaitingPublisherOffer = false;
     _negotiationHandlerId = 0;
     _iceCandidateHandlerId = 0;
 }
@@ -295,6 +306,7 @@ void TalkMediaEngine::requestOffer()
 {
     // signaling.js sendRequestOffer: sid is null — the MCU assigns the
     // publisher session id and echoes it in the offer.
+    _awaitingPublisherOffer = true;
     QJsonObject data;
     data.insert(QStringLiteral("type"), QStringLiteral("requestoffer"));
     data.insert(QStringLiteral("roomType"), _roomType);
@@ -302,15 +314,17 @@ void TalkMediaEngine::requestOffer()
     emit sendSignalingMessage(data);
 }
 
-void TalkMediaEngine::onIceCandidateCb(GstElement *, guint mlineIndex,
+void TalkMediaEngine::onIceCandidateCb(GstElement *wb, guint mlineIndex,
                                        gchararray candidate, gpointer user_data)
 {
     auto *self = static_cast<TalkMediaEngine *>(user_data);
     qCInfo(lcTalkMediaEngine) << "Local ICE candidate:" << candidate;
+    const auto sid = static_cast<const gchar *>(
+        g_object_get_data(G_OBJECT(wb), "talk-sid"));
     QJsonObject data;
     data.insert(QStringLiteral("type"), QStringLiteral("candidate"));
     data.insert(QStringLiteral("roomType"), self->_roomType);
-    data.insert(QStringLiteral("sid"), self->_offerSid);
+    data.insert(QStringLiteral("sid"), QString::fromUtf8(sid ? sid : ""));
     QJsonObject cobj;
     cobj.insert(QStringLiteral("candidate"), QString::fromUtf8(candidate));
     cobj.insert(QStringLiteral("sdpMLineIndex"), int(mlineIndex));
@@ -327,22 +341,24 @@ void TalkMediaEngine::onIceGatheringStateNotifyCb(GstElement *webrtcbin, gpointe
 
 void TalkMediaEngine::onRemoteDescriptionSetCb(GstPromise *promise, gpointer user_data)
 {
-    auto *self = static_cast<TalkMediaEngine *>(user_data);
+    auto *ctx = static_cast<WbCtx *>(user_data);
     gst_promise_unref(promise);
-    auto *wb = self->_webrtcbin;
-    if (!wb) return;
+    auto *self = ctx->self;
+    auto *wb = ctx->wb;
+    if (!self || !wb || !self->_pipeline) { delete ctx; return; }
 
     GstPromise *answerPromise = gst_promise_new_with_change_func(
         reinterpret_cast<GstPromiseChangeFunc>(&TalkMediaEngine::onAnswerCreatedCb),
-        self, nullptr);
+        ctx, nullptr);
     g_signal_emit_by_name(wb, "create-answer", nullptr, nullptr, answerPromise);
 }
 
 void TalkMediaEngine::onAnswerCreatedCb(GstPromise *promise, gpointer user_data)
 {
-    auto *self = static_cast<TalkMediaEngine *>(user_data);
-    auto *wb = self->_webrtcbin;
-    if (!wb) { gst_promise_unref(promise); return; }
+    auto *ctx = static_cast<WbCtx *>(user_data);
+    auto *self = ctx->self;
+    auto *wb = ctx->wb;
+    if (!self || !wb || !self->_pipeline) { gst_promise_unref(promise); delete ctx; return; }
 
     const GstStructure *reply = gst_promise_get_reply(promise);
     GstWebRTCSessionDescription *answer = nullptr;
@@ -351,6 +367,7 @@ void TalkMediaEngine::onAnswerCreatedCb(GstPromise *promise, gpointer user_data)
     if (!answer || !answer->sdp) {
         qCWarning(lcTalkMediaEngine) << "Answer creation failed";
         if (answer) gst_webrtc_session_description_free(answer);
+        delete ctx;
         return;
     }
 
@@ -366,15 +383,18 @@ void TalkMediaEngine::onAnswerCreatedCb(GstPromise *promise, gpointer user_data)
     g_signal_emit_by_name(wb, "set-local-description", localDesc, localPromise);
     gst_promise_unref(localPromise);
 
-    // Send the answer via signaling, echoing the offer's sid and roomType
-    // so the MCU routes it to the publisher session (signaling.js flow).
+    // Send the answer via signaling, echoing THIS session's sid and the
+    // roomType so the MCU routes it to the right session (signaling.js
+    // keeps one peer connection per sid — same here).
+    const auto sid = static_cast<const gchar *>(
+        g_object_get_data(G_OBJECT(wb), "talk-sid"));
     QJsonObject payload;
     payload.insert(QStringLiteral("type"), QStringLiteral("answer"));
     payload.insert(QStringLiteral("sdp"), QString::fromUtf8(sdpText));
     QJsonObject data;
     data.insert(QStringLiteral("type"), QStringLiteral("answer"));
     data.insert(QStringLiteral("roomType"), self->_roomType);
-    data.insert(QStringLiteral("sid"), self->_offerSid);
+    data.insert(QStringLiteral("sid"), QString::fromUtf8(sid ? sid : ""));
     data.insert(QStringLiteral("payload"), payload);
     emit self->sendSignalingMessage(data);
 
@@ -382,11 +402,14 @@ void TalkMediaEngine::onAnswerCreatedCb(GstPromise *promise, gpointer user_data)
     gst_webrtc_session_description_free(localDesc);
     gst_webrtc_session_description_free(answer);
 
-    self->_mediaConnected = true;
-    QPointer<TalkMediaEngine> selfPtr(self);
-    QMetaObject::invokeMethod(self, [selfPtr]() {
-        if (selfPtr) emit selfPtr->mediaConnected();
-    }, Qt::QueuedConnection);
+    if (wb == self->_webrtcbin) {
+        self->_mediaConnected = true;
+        QPointer<TalkMediaEngine> selfPtr(self);
+        QMetaObject::invokeMethod(self, [selfPtr]() {
+            if (selfPtr) emit selfPtr->mediaConnected();
+        }, Qt::QueuedConnection);
+    }
+    delete ctx;
 }
 
 GstFlowReturn TalkMediaEngine::onVideoAppsinkCb(GstAppSink *appsink, gpointer user_data)
@@ -433,29 +456,70 @@ void TalkMediaEngine::handleSignalingMessage(const QJsonObject &data)
         const auto payload = data.value(QStringLiteral("payload")).toObject();
         const auto sdp = payload.value(QStringLiteral("sdp")).toString();
         if (sdp.isEmpty()) return;
-        // The MCU's offer carries the publisher session id; the answer and
-        // all ICE candidates must echo it back.
-        _offerSid = data.value(QStringLiteral("sid")).toString();
+        const auto sid = data.value(QStringLiteral("sid")).toString();
         const auto offerRoomType = data.value(QStringLiteral("roomType")).toString();
         if (!offerRoomType.isEmpty()) {
             _roomType = offerRoomType;
         }
-        qCInfo(lcTalkMediaEngine) << "Offer received, sid present:"
-                                  << !_offerSid.isEmpty();
-        handleOffer(sdp);
+        if (_awaitingPublisherOffer || sid == _offerSid) {
+            // Response to our requestoffer (or its renegotiation): the
+            // publisher session on the sendrecv webrtcbin.
+            _awaitingPublisherOffer = false;
+            _offerSid = sid;
+            g_object_set_data_full(G_OBJECT(_webrtcbin), "talk-sid",
+                g_strdup(_offerSid.toUtf8().constData()), g_free);
+            qCInfo(lcTalkMediaEngine) << "Publisher offer, sid present:"
+                                      << !_offerSid.isEmpty();
+            handleOffer(_webrtcbin, sdp);
+        } else if (_subscribers.contains(sid)) {
+            // Renegotiation of an existing subscriber session.
+            handleOffer(_subscribers.value(sid), sdp);
+        } else {
+            // A remote participant publishes: the MCU offers their stream
+            // as a separate session. One recvonly webrtcbin per sid, like
+            // signaling.js PeerConnection_v2 per sid.
+            startSubscriberSession(sid, sdp);
+        }
     } else if (type == QStringLiteral("candidate")) {
         const auto candidate = data.value(QStringLiteral("payload")).toObject();
         const auto cstr = candidate.value(QStringLiteral("candidate")).toString();
         const auto mline = guint(candidate.value(QStringLiteral("sdpMLineIndex")).toInt());
-        if (!cstr.isEmpty() && _webrtcbin) {
-            g_signal_emit_by_name(_webrtcbin, "add-ice-candidate", mline, cstr.toUtf8().constData());
+        const auto sid = data.value(QStringLiteral("sid")).toString();
+        GstElement *target = nullptr;
+        if (sid == _offerSid) {
+            target = _webrtcbin;
+        } else if (_subscribers.contains(sid)) {
+            target = _subscribers.value(sid);
+        }
+        if (!cstr.isEmpty() && target) {
+            g_signal_emit_by_name(target, "add-ice-candidate", mline, cstr.toUtf8().constData());
         }
     }
 }
 
-void TalkMediaEngine::handleOffer(const QString &sdp)
+void TalkMediaEngine::startSubscriberSession(const QString &sid, const QString &sdp)
 {
-    if (!_webrtcbin) return;
+    if (!_pipeline || sid.isEmpty()) return;
+    qCInfo(lcTalkMediaEngine) << "Subscriber offer: new recvonly session";
+    auto *wb = gst_element_factory_make("webrtcbin", nullptr);
+    if (!wb) return;
+    g_object_set(wb, "bundle-policy", GST_WEBRTC_BUNDLE_POLICY_MAX_BUNDLE, nullptr);
+    g_object_set_data_full(G_OBJECT(wb), "talk-sid",
+        g_strdup(sid.toUtf8().constData()), g_free);
+    gst_bin_add(GST_BIN(_pipeline), wb);
+    _subscribers.insert(sid, wb);
+    // Recv-only: no sources are linked, so the answer carries no senders.
+    g_signal_connect(wb, "pad-added",
+        G_CALLBACK(&TalkMediaEngine::onWebrtcPadAddedCb), this);
+    g_signal_connect(wb, "on-ice-candidate",
+        G_CALLBACK(&TalkMediaEngine::onIceCandidateCb), this);
+    gst_element_sync_state_with_parent(wb);
+    handleOffer(wb, sdp);
+}
+
+void TalkMediaEngine::handleOffer(GstElement *wb, const QString &sdp)
+{
+    if (!wb || !_pipeline) return;
     qCInfo(lcTalkMediaEngine) << "Setting remote offer SDP (" << sdp.size() << "chars)";
     GstSDPMessage *sdpMsg = nullptr;
     if (gst_sdp_message_new_from_text(sdp.toUtf8().constData(), &sdpMsg) != GST_SDP_OK) {
@@ -464,34 +528,12 @@ void TalkMediaEngine::handleOffer(const QString &sdp)
     }
     GstWebRTCSessionDescription *remoteDesc =
         gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdpMsg);
+    auto *ctx = new WbCtx{this, wb};
     GstPromise *promise = gst_promise_new_with_change_func(
         reinterpret_cast<GstPromiseChangeFunc>(&TalkMediaEngine::onRemoteDescriptionSetCb),
-        this, nullptr);
-    g_signal_emit_by_name(_webrtcbin, "set-remote-description", remoteDesc, promise);
+        ctx, nullptr);
+    g_signal_emit_by_name(wb, "set-remote-description", remoteDesc, promise);
     gst_webrtc_session_description_free(remoteDesc);
-}
-
-void TalkMediaEngine::sendAnswer(const QString &sdp)
-{
-    QJsonObject payload;
-    payload.insert(QStringLiteral("type"), QStringLiteral("answer"));
-    payload.insert(QStringLiteral("sdp"), sdp);
-    QJsonObject data;
-    data.insert(QStringLiteral("type"), QStringLiteral("answer"));
-    data.insert(QStringLiteral("roomType"), QStringLiteral("video"));
-    data.insert(QStringLiteral("payload"), payload);
-    emit sendSignalingMessage(data);
-}
-
-void TalkMediaEngine::sendIceCandidate(const QString &candidate, guint mlineIndex)
-{
-    QJsonObject cobj;
-    cobj.insert(QStringLiteral("candidate"), candidate);
-    cobj.insert(QStringLiteral("sdpMLineIndex"), int(mlineIndex));
-    QJsonObject data;
-    data.insert(QStringLiteral("type"), QStringLiteral("candidate"));
-    data.insert(QStringLiteral("payload"), cobj);
-    emit sendSignalingMessage(data);
 }
 
 } // namespace OCC
