@@ -12,6 +12,7 @@
 
 #include <QImage>
 #include <QLoggingCategory>
+#include <QTimer>
 
 #include <gst/app/app.h>
 #include <gst/gst.h>
@@ -34,6 +35,9 @@ struct WbCtx
 {
     TalkMediaEngine *self = nullptr;
     GstElement *wb = nullptr;
+    // set-remote-description processes the description asynchronously;
+    // it must stay alive until the promise fires.
+    GstWebRTCSessionDescription *remoteDesc = nullptr;
 };
 } // namespace
 
@@ -84,6 +88,41 @@ void TalkMediaEngine::setMicrophoneEnabled(bool enabled)
     }
 }
 
+gboolean TalkMediaEngine::onBusMessageCb(GstBus *, GstMessage *msg, gpointer user_data)
+{
+    auto *self = static_cast<TalkMediaEngine *>(user_data);
+    switch (GST_MESSAGE_TYPE(msg)) {
+    case GST_MESSAGE_ERROR: {
+        GError *err = nullptr;
+        gchar *debug = nullptr;
+        gst_message_parse_error(msg, &err, &debug);
+        qCCritical(lcTalkMediaEngine) << "Pipeline error from"
+            << GST_OBJECT_NAME(msg->src) << ":" << (err ? err->message : "unknown")
+            << (debug ? debug : "");
+        if (err) g_error_free(err);
+        if (debug) g_free(debug);
+        QMetaObject::invokeMethod(self, [self]() {
+            if (self) emit self->errorOccurred(QStringLiteral("Medien-Pipeline-Fehler"));
+        }, Qt::QueuedConnection);
+        break;
+    }
+    case GST_MESSAGE_WARNING: {
+        GError *err = nullptr;
+        gchar *debug = nullptr;
+        gst_message_parse_warning(msg, &err, &debug);
+        qCWarning(lcTalkMediaEngine) << "Pipeline warning from"
+            << GST_OBJECT_NAME(msg->src) << ":" << (err ? err->message : "unknown")
+            << (debug ? debug : "");
+        if (err) g_error_free(err);
+        if (debug) g_free(debug);
+        break;
+    }
+    default:
+        break;
+    }
+    return TRUE;
+}
+
 void TalkMediaEngine::buildPipeline()
 {
     if (_pipeline) return;
@@ -115,6 +154,12 @@ void TalkMediaEngine::buildPipeline()
     g_object_set_data_full(G_OBJECT(_webrtcbin), "engine-ptr", this, nullptr);
     g_object_set(_webrtcbin, "bundle-policy", GST_WEBRTC_BUNDLE_POLICY_MAX_BUNDLE, nullptr);
     gst_bin_add(GST_BIN(_pipeline), _webrtcbin);
+
+    // Surface GStreamer errors/warnings — without a watch a pipeline error
+    // (e.g. a missing audio device) dies silently and stalls all SDP ops.
+    auto *bus = gst_element_get_bus(_pipeline);
+    _busWatchId = gst_bus_add_watch(bus, &TalkMediaEngine::onBusMessageCb, this);
+    gst_object_unref(bus);
 
     // Audio send
     auto *audiosrc = createSourceElement(true);
@@ -195,6 +240,10 @@ void TalkMediaEngine::destroyPipeline()
         gst_object_unref(_pipeline);
         _pipeline = nullptr;
         _webrtcbin = nullptr;
+    }
+    if (_busWatchId) {
+        g_source_remove(_busWatchId);
+        _busWatchId = 0;
     }
     _subscribers.clear();
     _awaitingPublisherOffer = false;
@@ -359,8 +408,14 @@ void TalkMediaEngine::onRemoteDescriptionSetCb(GstPromise *promise, gpointer use
     gst_promise_unref(promise);
     auto *self = ctx->self;
     auto *wb = ctx->wb;
+    if (ctx->remoteDesc) {
+        // The set-remote op completed: the description can go now.
+        gst_webrtc_session_description_free(ctx->remoteDesc);
+        ctx->remoteDesc = nullptr;
+    }
     if (!self || !wb || !self->_pipeline) { delete ctx; return; }
 
+    qCInfo(lcTalkMediaEngine) << "Remote description applied, creating answer";
     GstPromise *answerPromise = gst_promise_new_with_change_func(
         reinterpret_cast<GstPromiseChangeFunc>(&TalkMediaEngine::onAnswerCreatedCb),
         ctx, nullptr);
@@ -388,14 +443,21 @@ void TalkMediaEngine::onAnswerCreatedCb(GstPromise *promise, gpointer user_data)
     gchar *sdpText = gst_sdp_message_as_text(answer->sdp);
     qCInfo(lcTalkMediaEngine) << "Answer created:" << strlen(sdpText) << "chars";
 
-    // Set local description with the answer.
+    // Set local description with the answer; the description is freed
+    // when the set-local op completed (promise change func).
     GstSDPMessage *sdpMsg = nullptr;
     gst_sdp_message_new_from_text(sdpText, &sdpMsg);
     GstWebRTCSessionDescription *localDesc =
         gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_ANSWER, sdpMsg);
-    GstPromise *localPromise = gst_promise_new();
+    auto *localCtx = new WbCtx{self, wb, localDesc};
+    GstPromise *localPromise = gst_promise_new_with_change_func(
+        +[](GstPromise *promise, gpointer user_data) {
+            auto *c = static_cast<WbCtx *>(user_data);
+            gst_promise_unref(promise);
+            gst_webrtc_session_description_free(c->remoteDesc);
+            delete c;
+        }, localCtx, nullptr);
     g_signal_emit_by_name(wb, "set-local-description", localDesc, localPromise);
-    gst_promise_unref(localPromise);
 
     // Send the answer via signaling, echoing THIS session's sid and the
     // roomType so the MCU routes it to the right session (signaling.js
@@ -534,6 +596,22 @@ void TalkMediaEngine::startSubscriberSession(const QString &sid, const QString &
 void TalkMediaEngine::handleOffer(GstElement *wb, const QString &sdp)
 {
     if (!wb || !_pipeline) return;
+
+    // The webrtcbin task that processes SDP ops runs from PAUSED on;
+    // sync_state_with_parent is async, so retry until it has settled.
+    GstState state = GST_STATE_NULL, pending = GST_STATE_NULL;
+    gst_element_get_state(wb, &state, &pending, 0);
+    if (state < GST_STATE_PAUSED && pending < GST_STATE_PAUSED) {
+        QPointer<TalkMediaEngine> selfPtr(this);
+        QTimer::singleShot(100, this, [selfPtr, wb, sdp]() {
+            if (!selfPtr || !selfPtr->_pipeline) return;
+            if (wb != selfPtr->_webrtcbin
+                && !selfPtr->_subscribers.values().contains(wb)) return;
+            selfPtr->handleOffer(wb, sdp);
+        });
+        return;
+    }
+
     qCInfo(lcTalkMediaEngine) << "Setting remote offer SDP (" << sdp.size() << "chars)";
     GstSDPMessage *sdpMsg = nullptr;
     if (gst_sdp_message_new_from_text(sdp.toUtf8().constData(), &sdpMsg) != GST_SDP_OK) {
@@ -542,12 +620,12 @@ void TalkMediaEngine::handleOffer(GstElement *wb, const QString &sdp)
     }
     GstWebRTCSessionDescription *remoteDesc =
         gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdpMsg);
-    auto *ctx = new WbCtx{this, wb};
+    auto *ctx = new WbCtx{this, wb, remoteDesc};
     GstPromise *promise = gst_promise_new_with_change_func(
         reinterpret_cast<GstPromiseChangeFunc>(&TalkMediaEngine::onRemoteDescriptionSetCb),
         ctx, nullptr);
     g_signal_emit_by_name(wb, "set-remote-description", remoteDesc, promise);
-    gst_webrtc_session_description_free(remoteDesc);
+    // ctx owns remoteDesc — freed when the promise fired (callback).
 }
 
 } // namespace OCC

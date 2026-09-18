@@ -244,6 +244,13 @@ int main(int argc, char **argv)
 
     OCC::Application app(argc, argv);
 
+    // The libsync Logger installs its own message handler when first used
+    // inside Application, silently replacing the startup logger. Re-install
+    // it so EVERY log line (call flow, signaling, media engine) lands in
+    // the persistent per-session startup.log for field diagnostics.
+    qInstallMessageHandler(startupMessageHandler);
+    qDebug() << "Startup logger re-installed over libsync Logger handler";
+
     if (!widgetsStyle.isEmpty()) {
         QApplication::setStyle(QStyleFactory::create(widgetsStyle));
     }

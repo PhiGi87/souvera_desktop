@@ -62,6 +62,7 @@ private:
     void handleOffer(GstElement *webrtcbin, const QString &sdp);
     void startSubscriberSession(const QString &sid, const QString &sdp);
 
+    static gboolean onBusMessageCb(GstBus *bus, GstMessage *msg, gpointer user_data);
     static void onNegotiationNeededCb(GstElement *webrtcbin, gpointer user_data);
     static void onWebrtcPadAddedCb(GstElement *webrtcbin, GstPad *newPad, gpointer user_data);
     static GstElement *createSourceElement(bool audio);
@@ -85,6 +86,7 @@ private:
     QHash<QString, GstElement *> _subscribers; // remote sid -> recvonly webrtcbin
     gulong _negotiationHandlerId = 0;
     gulong _iceCandidateHandlerId = 0;
+    guint _busWatchId = 0;
 };
 
 } // namespace OCC
