@@ -100,13 +100,19 @@ CallWindow::CallWindow(TalkOcsApi *api, TalkSignalingClient *signaling,
                 [this](const QString &token, const QVector<TalkParticipant> &participants) {
             if (token != _token) return;
             _names.clear();
+            QStringList flagDump;
             for (const auto &p : participants) {
                 if (p.actorId.isEmpty()) continue;
                 _names.insert(p.actorId, p.displayName);
                 // The REST response carries live in-call flags — poll-based,
                 // reliable even when signaling events use different casing.
                 _inCallFlags.insert(p.actorId, p.inCall);
+                flagDump.append(QStringLiteral("%1=%2").arg(p.actorId).arg(p.inCall));
             }
+            qCInfo(lcCallWindow) << "Participants fetched:" << participants.size()
+                                 << "flags:" << flagDump.join(QLatin1Char(','))
+                                 << "self:" << _ownActorId
+                                 << "state:" << int(_state);
             updateTileRendering();
             applyInCallState();
         });

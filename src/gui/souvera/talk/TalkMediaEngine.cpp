@@ -88,6 +88,20 @@ void TalkMediaEngine::buildPipeline()
 {
     if (_pipeline) return;
 
+    // GStreamer must be initialized before any factory call — without this
+    // every gst_element_factory_make fails its gst_is_initialized assertion
+    // and the engine silently produces no media at all.
+    if (!gst_is_initialized()) {
+        GError *err = nullptr;
+        if (!gst_init_check(nullptr, nullptr, &err)) {
+            qCCritical(lcTalkMediaEngine) << "gst_init failed:"
+                                          << (err ? err->message : "unknown error");
+            if (err) g_error_free(err);
+            emit errorOccurred(QStringLiteral("GStreamer konnte nicht initialisiert werden."));
+            return;
+        }
+    }
+
     _pipeline = gst_pipeline_new(nullptr);
     _webrtcbin = gst_element_factory_make("webrtcbin", kWebrtcbinName);
     if (!_webrtcbin || !_pipeline) {
