@@ -303,9 +303,15 @@ void CallWindow::buildUi(const QString &displayName)
     });
 
     _pollTimer = new QTimer(this);
-    _pollTimer->setInterval(5000);
+    _pollTimer->setInterval(2000);
     connect(_pollTimer, &QTimer::timeout, this, [this]() {
-        if (_api && _state == State::InCall) _api->fetchParticipants(_token);
+        // Poll in every active state: the ring-to-connected switch depends
+        // on the REST inCall flags — during Ringing nobody has picked up
+        // yet, so signaling-only detection would leave us ringing forever.
+        if (_api && (_state == State::Connecting || _state == State::Ringing
+                     || _state == State::InCall)) {
+            _api->fetchParticipants(_token);
+        }
     });
     _pollTimer->start();
 }
@@ -317,6 +323,10 @@ void CallWindow::setState(State state, const QString &error)
         _durationTimer->stop();
     }
     _state = state;
+    if (_pollTimer) {
+        // Fast pickup detection while connecting/ringing, relaxed once in.
+        _pollTimer->setInterval(state == State::InCall ? 5000 : 2000);
+    }
     const auto *theme = SouveraTheme::instance();
 
     switch (state) {
@@ -332,6 +342,10 @@ void CallWindow::setState(State state, const QString &error)
             .arg(theme->color(SouveraTheme::Color::Warning).name()));
         _stateLabel->setText(QStringLiteral("Klingelt\u2026"));
         startRingTone();
+        // The call was created — a remote participant may already be in
+        // (accepting side): check flags right away instead of waiting for
+        // the next poll.
+        applyInCallState();
         break;
     case State::InCall:
         stopRingTone();

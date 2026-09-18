@@ -218,6 +218,12 @@ void TalkSignalingClient::handleEvent(const QVariantMap &message)
             p.displayName = display.isValid() ? display.toString() : p.actorId;
             participants.append(p);
         }
+        int inCallCount = 0;
+        for (const auto &p : participants) {
+            if (p.inCall != 0) ++inCallCount;
+        }
+        qCInfo(lcTalkSignaling) << "Participants update:" << participants.size()
+                                << "users," << inCallCount << "in call";
         if (!_roomToken.isEmpty()) {
             emit participantsChanged(_roomToken, participants);
         }

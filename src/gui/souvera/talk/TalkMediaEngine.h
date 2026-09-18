@@ -77,6 +77,8 @@ private:
     TalkSignalingClient *_signaling = nullptr;
     QString _roomToken;
     QString _roomSessionId;
+    QString _offerSid;   // publisher session id from the MCU offer (echoed back)
+    QString _roomType = QStringLiteral("video");
     GstElement *_pipeline = nullptr;
     GstElement *_webrtcbin = nullptr;
     bool _mediaConnected = false;

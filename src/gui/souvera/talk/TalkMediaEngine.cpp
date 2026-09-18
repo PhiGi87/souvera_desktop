@@ -293,10 +293,12 @@ void TalkMediaEngine::onNegotiationNeededCb(GstElement *, gpointer user_data)
 
 void TalkMediaEngine::requestOffer()
 {
+    // signaling.js sendRequestOffer: sid is null — the MCU assigns the
+    // publisher session id and echoes it in the offer.
     QJsonObject data;
     data.insert(QStringLiteral("type"), QStringLiteral("requestoffer"));
-    data.insert(QStringLiteral("roomType"), QStringLiteral("video"));
-    data.insert(QStringLiteral("sid"), _roomSessionId);
+    data.insert(QStringLiteral("roomType"), _roomType);
+    data.insert(QStringLiteral("sid"), QJsonValue::Null);
     emit sendSignalingMessage(data);
 }
 
@@ -307,6 +309,8 @@ void TalkMediaEngine::onIceCandidateCb(GstElement *, guint mlineIndex,
     qCInfo(lcTalkMediaEngine) << "Local ICE candidate:" << candidate;
     QJsonObject data;
     data.insert(QStringLiteral("type"), QStringLiteral("candidate"));
+    data.insert(QStringLiteral("roomType"), self->_roomType);
+    data.insert(QStringLiteral("sid"), self->_offerSid);
     QJsonObject cobj;
     cobj.insert(QStringLiteral("candidate"), QString::fromUtf8(candidate));
     cobj.insert(QStringLiteral("sdpMLineIndex"), int(mlineIndex));
@@ -362,13 +366,15 @@ void TalkMediaEngine::onAnswerCreatedCb(GstPromise *promise, gpointer user_data)
     g_signal_emit_by_name(wb, "set-local-description", localDesc, localPromise);
     gst_promise_unref(localPromise);
 
-    // Send the answer via signaling.
+    // Send the answer via signaling, echoing the offer's sid and roomType
+    // so the MCU routes it to the publisher session (signaling.js flow).
     QJsonObject payload;
     payload.insert(QStringLiteral("type"), QStringLiteral("answer"));
     payload.insert(QStringLiteral("sdp"), QString::fromUtf8(sdpText));
     QJsonObject data;
     data.insert(QStringLiteral("type"), QStringLiteral("answer"));
-    data.insert(QStringLiteral("roomType"), QStringLiteral("video"));
+    data.insert(QStringLiteral("roomType"), self->_roomType);
+    data.insert(QStringLiteral("sid"), self->_offerSid);
     data.insert(QStringLiteral("payload"), payload);
     emit self->sendSignalingMessage(data);
 
@@ -426,7 +432,17 @@ void TalkMediaEngine::handleSignalingMessage(const QJsonObject &data)
     if (type == QStringLiteral("offer")) {
         const auto payload = data.value(QStringLiteral("payload")).toObject();
         const auto sdp = payload.value(QStringLiteral("sdp")).toString();
-        if (!sdp.isEmpty()) handleOffer(sdp);
+        if (sdp.isEmpty()) return;
+        // The MCU's offer carries the publisher session id; the answer and
+        // all ICE candidates must echo it back.
+        _offerSid = data.value(QStringLiteral("sid")).toString();
+        const auto offerRoomType = data.value(QStringLiteral("roomType")).toString();
+        if (!offerRoomType.isEmpty()) {
+            _roomType = offerRoomType;
+        }
+        qCInfo(lcTalkMediaEngine) << "Offer received, sid present:"
+                                  << !_offerSid.isEmpty();
+        handleOffer(sdp);
     } else if (type == QStringLiteral("candidate")) {
         const auto candidate = data.value(QStringLiteral("payload")).toObject();
         const auto cstr = candidate.value(QStringLiteral("candidate")).toString();
