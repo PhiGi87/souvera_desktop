@@ -70,11 +70,13 @@ QByteArray makeRingChunk(qint64 &phase)
 
 CallWindow::CallWindow(TalkOcsApi *api, TalkSignalingClient *signaling,
                        const QString &token, const QString &displayName,
-                       const QUrl &roomUrl, QWidget *parent)
+                       const QUrl &roomUrl, const QString &ownActorId,
+                       QWidget *parent)
     : QWidget(parent, Qt::Window)
     , _api(api)
     , _signaling(signaling)
     , _token(token)
+    , _ownActorId(ownActorId)
     , _roomUrl(roomUrl)
 {
     setWindowTitle(QStringLiteral("Anruf \u2014 %1").arg(displayName));
@@ -87,24 +89,36 @@ CallWindow::CallWindow(TalkOcsApi *api, TalkSignalingClient *signaling,
     // Observe the join chain from TalkPanel (REST join -> signaling -> call).
     if (_api) {
         connect(_api, &TalkOcsApi::callStarted, this, [this](const QString &startedToken) {
-            if (startedToken == _token) setState(State::InCall);
+            if (startedToken != _token) return;
+            // The call object now exists: the far end is ringing. Ring until
+            // someone actually picks up (remote inCall flag), not just until
+            // the call is created.
+            setState(State::Ringing);
         });
         connect(_api, &TalkOcsApi::participantsReceived, this,
                 [this](const QString &token, const QVector<TalkParticipant> &participants) {
             if (token != _token) return;
             _names.clear();
             for (const auto &p : participants) {
-                if (!p.actorId.isEmpty()) {
-                    _names.insert(p.actorId, p.displayName);
-                }
+                if (p.actorId.isEmpty()) continue;
+                _names.insert(p.actorId, p.displayName);
+                // The REST response carries live in-call flags — poll-based,
+                // reliable even when signaling events use different casing.
+                _inCallFlags.insert(p.actorId, p.inCall);
             }
             updateTileRendering();
+            applyInCallState();
         });
         connect(_api, &TalkOcsApi::callLeft, this, [this](const QString &token) {
-            if (token == _token) _callLeft = true;
+            if (token != _token) return;
+            _callLeft = true;
+            // The call leave is confirmed server-side: now it is safe to
+            // release the room session and signaling without generating a
+            // second "left call" system message.
+            releaseRoomSession();
         });
         connect(_api, &TalkOcsApi::apiError, this, [this](const QString &error) {
-            if (_state == State::Connecting) {
+            if (_state == State::Connecting || _state == State::Ringing) {
                 setState(State::Ended, error);
             }
         });
@@ -122,11 +136,11 @@ CallWindow::CallWindow(TalkOcsApi *api, TalkSignalingClient *signaling,
                 }
             }
             updateTileRendering();
+            applyInCallState();
         });
     }
 
     setState(State::Connecting);
-    startRingTone();
 }
 
 CallWindow::~CallWindow()
@@ -231,11 +245,12 @@ void CallWindow::buildUi(const QString &displayName)
     _hangupButton->setIconSize(QSize(28, 28));
     _hangupButton->setToolTip(QStringLiteral("Anruf beenden"));
     connect(_hangupButton, &QPushButton::clicked, this, [this]() {
-        if (_state == State::InCall && _api) {
+        // Works in every state: cancels a still-ringing call too.
+        if (_api && !_callLeft && _state != State::Ended) {
             _api->leaveCall(_token);
+            _callLeft = true;
         }
-        _callLeft = true;
-        close();
+        setState(State::Ended);
     });
     footerLayout->addWidget(_hangupButton);
     footerLayout->addStretch();
@@ -287,6 +302,13 @@ void CallWindow::setState(State state, const QString &error)
             .arg(theme->color(SouveraTheme::Color::Warning).name()));
         _stateLabel->setText(QStringLiteral("Verbinde\u2026"));
         break;
+    case State::Ringing:
+        _stateDot->setStyleSheet(
+            QStringLiteral("background: %1; border-radius: 5px;")
+            .arg(theme->color(SouveraTheme::Color::Warning).name()));
+        _stateLabel->setText(QStringLiteral("Klingelt\u2026"));
+        startRingTone();
+        break;
     case State::InCall:
         stopRingTone();
         _elapsed.start();
@@ -322,7 +344,30 @@ void CallWindow::setState(State state, const QString &error)
             .arg(theme->color(SouveraTheme::Color::Danger).name()));
         _stateLabel->setText(error.isEmpty()
             ? QStringLiteral("Anruf beendet") : error);
+        // Brief feedback, then close the window on its own.
+        QTimer::singleShot(2500, this, [this]() {
+            if (_state == State::Ended) close();
+        });
         break;
+    }
+}
+
+void CallWindow::applyInCallState()
+{
+    // Connected means: at least one participant other than ourselves is
+    // in the call (inCall bitmask != 0). Self is excluded by actor id.
+    int remoteCount = 0;
+    for (auto it = _inCallFlags.cbegin(); it != _inCallFlags.cend(); ++it) {
+        if (it.value() == 0) continue;
+        if (!_ownActorId.isEmpty() && it.key() == _ownActorId) continue;
+        ++remoteCount;
+    }
+    if (remoteCount > 0 && (_state == State::Connecting || _state == State::Ringing)) {
+        qCInfo(lcCallWindow) << "Remote participant picked up, switching to in-call";
+        setState(State::InCall);
+    } else if (_state == State::InCall) {
+        _stateLabel->setText(QStringLiteral("Verbunden \u2014 %1 im Gespr\u00E4ch")
+                                 .arg(remoteCount + 1));
     }
 }
 
@@ -340,9 +385,21 @@ void CallWindow::updateTileRendering()
     const auto surfaceColor = theme->color(SouveraTheme::Color::Surface).name();
     const auto borderColor = theme->color(SouveraTheme::Color::Border).name();
 
+    // Render in-call participants first, then the rest, matching the
+    // order the caller sees in the official clients.
+    QList<QString> inCallActors;
+    QList<QString> otherActors;
     for (auto it = _names.cbegin(); it != _names.cend(); ++it) {
-        const auto inCall = _inCallFlags.value(it.key()) != 0;
-        const auto name = it.value();
+        if (_inCallFlags.value(it.key()) != 0) {
+            inCallActors.append(it.key());
+        } else {
+            otherActors.append(it.key());
+        }
+    }
+
+    for (const auto &actorId : inCallActors + otherActors) {
+        const auto inCall = _inCallFlags.value(actorId) != 0;
+        const auto name = _names.value(actorId);
         const auto initial = name.left(1).toUpper();
 
         auto *tile = new QFrame(_tilesArea);
@@ -414,6 +471,7 @@ void CallWindow::startRingTone()
         _ringSink = nullptr;
         return;
     }
+    qCInfo(lcCallWindow) << "Ring tone playing on device:" << device.description();
     // Feed small chunks on a short timer so writes never block the UI thread.
     _ringTimer = new QTimer(this);
     _ringTimer->setInterval(RingChunkMs);
@@ -443,12 +501,13 @@ void CallWindow::stopRingTone()
 
 void CallWindow::leaveCallAndCleanup()
 {
+    // Web-app hangup flow (signaling.js): leaving the call is ONLY the
+    // DELETE call/{token}. The room session release and the signaling
+    // bye follow once the server confirms via callLeft — releasing them
+    // earlier makes the server emit a second "left call" chat message.
     if (!_callLeft && _api && _state != State::Ended) {
         _api->leaveCall(_token);
         _callLeft = true;
-    }
-    if (_signaling) {
-        _signaling->leaveRoom();
     }
 #ifdef HAVE_GSTREAMER
     if (_mediaEngine) {
@@ -456,6 +515,20 @@ void CallWindow::leaveCallAndCleanup()
     }
 #endif
     stopRingTone();
+}
+
+void CallWindow::releaseRoomSession()
+{
+    // Runs after the call leave is confirmed (callLeft signal): the
+    // participant is no longer in the call, so releasing the room
+    // session and disconnecting signaling cannot generate another
+    // "left call" system message.
+    if (_api) {
+        _api->leaveRoomSession(_token);
+    }
+    if (_signaling) {
+        _signaling->leaveRoom();
+    }
 }
 
 void CallWindow::closeEvent(QCloseEvent *event)

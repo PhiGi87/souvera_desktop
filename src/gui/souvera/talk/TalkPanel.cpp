@@ -483,7 +483,8 @@ void TalkPanel::startCall()
     });
     // Open the call window immediately (connecting state + ringback);
     // the join chain runs in the background.
-    _callWindow = new CallWindow(_ocsApi, _signaling, token, name, url, this);
+    _callWindow = new CallWindow(_ocsApi, _signaling, token, name, url,
+                                 _currentUserId, this);
     _callWindow->show();
     // Pass the room session id to the call window when the REST join responds.
     connect(_ocsApi, &TalkOcsApi::callJoined, this,

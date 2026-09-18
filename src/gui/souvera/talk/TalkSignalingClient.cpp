@@ -204,8 +204,16 @@ void TalkSignalingClient::handleEvent(const QVariantMap &message)
         for (const auto &u : users) {
             const auto obj = u.toMap();
             TalkParticipant p;
-            p.actorId = obj.value(QStringLiteral("userid")).toString();
-            p.inCall = obj.value(QStringLiteral("incall")).toInt();
+            // The HPB sends camelCase keys (userId/inCall); accept the
+            // lowercase variants too so protocol revisions cannot break us.
+            p.actorId = obj.value(QStringLiteral("userId")).toString();
+            if (p.actorId.isEmpty()) {
+                p.actorId = obj.value(QStringLiteral("userid")).toString();
+            }
+            p.inCall = obj.value(QStringLiteral("inCall")).toInt();
+            if (p.inCall == 0 && obj.contains(QStringLiteral("incall"))) {
+                p.inCall = obj.value(QStringLiteral("incall")).toInt();
+            }
             const auto display = obj.value(QStringLiteral("displayName"));
             p.displayName = display.isValid() ? display.toString() : p.actorId;
             participants.append(p);

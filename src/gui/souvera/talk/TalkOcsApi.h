@@ -39,6 +39,13 @@ public:
     // Native call layer (the mobile-app flow: join/leave over the REST API).
     void joinCall(const QString &token, int flags = 0);
     void leaveCall(const QString &token);
+    /**
+     * @brief Releases the participant session (DELETE participants/active).
+     *        Only call after leaveCall confirmed via callLeft — releasing
+     *        while still in-call makes the server log a second
+     *        "left call" message.
+     */
+    void leaveRoomSession(const QString &token);
     void fetchParticipants(const QString &token);
 
     /**

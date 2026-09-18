@@ -31,8 +31,10 @@ class TalkMediaEngine;
  *        lifecycle (connecting, ringing, in-call, ended).
  *
  * Opens immediately when the user taps "Anrufen" (showing a connecting
- * state with ringback tone), transitions to the in-call view when the
- * server confirms, and shows call-ended feedback before closing.
+ * state), starts the ringback tone once the call object exists on the
+ * server, and switches to the connected view only when a remote
+ * participant has actually joined the call. Ended calls show feedback
+ * briefly and close themselves.
  */
 class CallWindow : public QWidget
 {
@@ -40,22 +42,25 @@ class CallWindow : public QWidget
 public:
     explicit CallWindow(TalkOcsApi *api, TalkSignalingClient *signaling,
                         const QString &token, const QString &displayName,
-                        const QUrl &roomUrl, QWidget *parent = nullptr);
+                        const QUrl &roomUrl, const QString &ownActorId = {},
+                        QWidget *parent = nullptr);
     ~CallWindow() override;
 
     /** Sets the room session id (from the REST join response). */
     void setRoomSessionId(const QString &sessionId) { _roomSessionId = sessionId; }
 
 private:
-    enum class State { Connecting, InCall, Ended };
+    enum class State { Connecting, Ringing, InCall, Ended };
 
     void buildUi(const QString &displayName);
     void setState(State state, const QString &error = {});
     void refreshParticipants();
     void updateTileRendering();
+    void applyInCallState();
     void startRingTone();
     void stopRingTone();
     void leaveCallAndCleanup();
+    void releaseRoomSession();
     void closeEvent(QCloseEvent *event) override;
 
     TalkOcsApi *_api = nullptr;
@@ -64,12 +69,13 @@ private:
     TalkMediaEngine *_mediaEngine = nullptr;
 #endif
     QString _token;
+    QString _ownActorId;
     QString _roomSessionId;
     QUrl _roomUrl;
     State _state = State::Connecting;
     bool _callLeft = false;
     QHash<QString, QString> _names;    // actorId -> display name (REST)
-    QHash<QString, int> _inCallFlags;  // actorId -> inCall (signaling)
+    QHash<QString, int> _inCallFlags;  // actorId -> inCall bitmask (REST/signaling)
     QList<QPair<QString, bool>> _tiles; // ordered (name, inCall) snapshot
 
     QLabel *_titleLabel = nullptr;
