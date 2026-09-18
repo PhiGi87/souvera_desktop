@@ -175,6 +175,19 @@ int main(int argc, char **argv)
 #ifdef Q_OS_WIN
     SetDllDirectory(L"");
     qputenv("QML_IMPORT_PATH", (QDir::currentPath() + QStringLiteral("/qml")).toLatin1());
+
+    // Bundled GStreamer plugins (native call media): point GStreamer at the
+    // gstreamer-plugins\ directory next to the executable. Must happen
+    // before the first pipeline is built; harmless when the directory is
+    // absent (system GStreamer or no media engine).
+    {
+        const QString appDir = QFileInfo(QString::fromLocal8Bit(argv[0])).absolutePath();
+        const QString gstPluginDir = appDir + QStringLiteral("/gstreamer-plugins");
+        if (QFileInfo::exists(gstPluginDir)) {
+            qputenv("GST_PLUGIN_SYSTEM_PATH_1_0", QDir::toNativeSeparators(gstPluginDir).toUtf8());
+            qputenv("GST_PLUGIN_PATH_1_0", QDir::toNativeSeparators(gstPluginDir).toUtf8());
+        }
+    }
 #endif
 
     Q_INIT_RESOURCE(resources);

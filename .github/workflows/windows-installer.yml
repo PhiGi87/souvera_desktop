@@ -67,6 +67,33 @@ jobs:
         run: |
           echo "${{ github.workspace }}\${{ env.CRAFT_TARGET }}\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+      - name: Install GStreamer MSVC (native call media)
+        shell: pwsh
+        run: |
+          # The native media engine (webrtcbin) needs the GStreamer MSVC
+          # development tree at configure time and its runtime DLLs + plugins
+          # bundled with the app. Download the official binary release and
+          # administratively extract the MSI (no system installation).
+          $gstVersion = "1.22.12"
+          $gstMsi = "${{ github.workspace }}\gstreamer.msi"
+          $gstExtract = "${{ github.workspace }}\gst-extract"
+          if (-not (Test-Path "$gstExtract\bin\gstreamer-1.0-0.dll")) {
+              curl.exe -fsSL -o $gstMsi "https://gstreamer.freedesktop.org/data/pkg/windows/$gstVersion/msvc/gstreamer-1.0-msvc-x86_64-$gstVersion.msi"
+              if ($LASTEXITCODE -ne 0) { throw "GStreamer download failed." }
+              Start-Process msiexec -ArgumentList "/a","`"$gstMsi`"","/qn","TARGETDIR=`"$gstExtract`"" -Wait -NoNewWindow
+              if ($LASTEXITCODE -ne 0) { throw "GStreamer extraction failed." }
+          }
+          # Administrative extraction nests the payload — locate the root
+          # that holds bin\ and lib\.
+          $gstDll = Get-ChildItem $gstExtract -Recurse -Filter "gstreamer-1.0-0.dll" | Select-Object -First 1
+          if (-not $gstDll) { throw "GStreamer layout not found after extraction." }
+          $gstRoot = $gstDll.Directory.Parent.FullName
+          if (-not (Test-Path "$gstRoot\lib\gstreamer-1.0")) {
+              throw "GStreamer MSVC lib\gstreamer-1.0 plugin dir missing at $gstRoot."
+          }
+          "GSTREAMER_ROOT=$gstRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "== GStreamer $gstVersion root: $gstRoot =="
+
       - name: Patch blueprint (Souvera branding + MSI)
         shell: pwsh
         run: |
@@ -188,6 +215,24 @@ jobs:
               Write-Host "== Multimedia plugins deployed to multimedia\ =="
           }
 
+          # GStreamer runtime: import/runtime DLLs next to the exe (default
+          # DLL search path) and plugin DLLs into gstreamer-plugins\ — the
+          # app sets GST_PLUGIN_SYSTEM_PATH_1_0 to that directory at start.
+          if ($env:GSTREAMER_ROOT) {
+              $gstBin = Join-Path $env:GSTREAMER_ROOT "bin"
+              $gstPlugins = Join-Path $env:GSTREAMER_ROOT "lib\gstreamer-1.0"
+              if (-not (Test-Path "$gstBin\gstreamer-1.0-0.dll")) {
+                  throw "GStreamer runtime DLLs missing at $gstBin."
+              }
+              Copy-Item "$gstBin\*.dll" $archive -Force
+              New-Item -ItemType Directory -Force -Path (Join-Path $archive "gstreamer-plugins") | Out-Null
+              Copy-Item "$gstPlugins\*.dll" (Join-Path $archive "gstreamer-plugins") -Force
+              Write-Host "== GStreamer runtime + plugins bundled =="
+              Get-ChildItem (Join-Path $archive "gstreamer-plugins") -Filter *.dll | Measure-Object | ForEach-Object { Write-Host "   plugins: $($_.Count)" }
+          } else {
+              Write-Host "WARNING: GSTREAMER_ROOT not set - native call media will be absent from the installer."
+          }
+
           # Fail fast: heat must have harvested the main executable AND the
           # multimedia DLL — otherwise the app fails at startup.
           if (-not (Test-Path "$archive\souvera.exe")) {
@@ -195,6 +240,15 @@ jobs:
           }
           if (-not (Test-Path "$archive\Qt6Multimedia.dll")) {
               throw "Qt6Multimedia.dll missing from archive root — qtmultimedia runtime dependency patch did not apply?"
+          }
+          if ($env:GSTREAMER_ROOT) {
+              if (-not (Test-Path "$archive\gstreamer-1.0-0.dll")) {
+                  throw "gstreamer-1.0-0.dll missing from archive root — GStreamer bundling failed."
+              }
+              $webrtcPlugin = Get-ChildItem (Join-Path $archive "gstreamer-plugins") -Filter "*webrtc*" -ErrorAction SilentlyContinue
+              if (-not $webrtcPlugin) {
+                  throw "webrtc plugin missing from gstreamer-plugins — native call media would be dead."
+              }
           }
 
           cmd /c "cd /d `"$msiDir`" && make-msi.bat `"$archive`""

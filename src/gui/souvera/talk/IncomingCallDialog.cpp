@@ -4,6 +4,7 @@
  */
 
 #include "IncomingCallDialog.h"
+#include "settings/MediaDeviceSettings.h"
 #include "theme/SouveraTheme.h"
 
 #include <QAudioDevice>
@@ -132,18 +133,7 @@ void IncomingCallDialog::startRing()
     format.setChannelCount(1);
     format.setSampleFormat(QAudioFormat::Int16);
     // Honor the output device the user picked in Audio & Video settings.
-    QAudioDevice device = QMediaDevices::defaultAudioOutput();
-    QSettings settings;
-    const auto storedId = settings.value(QStringLiteral("audioOutputId")).toString();
-    if (!storedId.isEmpty()) {
-        const auto devices = QMediaDevices::audioOutputs();
-        for (const auto &d : devices) {
-            if (d.id() == storedId.toUtf8()) {
-                device = d;
-                break;
-            }
-        }
-    }
+    const QAudioDevice device = MediaDeviceSettings::outputDevice();
     _ringSink = new QAudioSink(device, format, this);
     _ringIo = _ringSink->start();
     if (!_ringIo) return;

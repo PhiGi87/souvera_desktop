@@ -8,10 +8,10 @@
 #ifdef HAVE_GSTREAMER
 
 #include "TalkSignalingClient.h"
+#include "settings/MediaDeviceSettings.h"
 
 #include <QImage>
 #include <QLoggingCategory>
-#include <QSettings>
 
 #include <gst/app/app.h>
 #include <gst/gst.h>
@@ -254,10 +254,8 @@ void TalkMediaEngine::onWebrtcPadAddedCb(GstElement *wb, GstPad *newPad, gpointe
 // monitor yields no devices.
 GstElement *TalkMediaEngine::createSourceElement(bool audio)
 {
-    const QString settingsKey = audio ? QStringLiteral("audioInputDescription")
-                                      : QStringLiteral("cameraDescription");
-    QSettings settings;
-    const QString wanted = settings.value(settingsKey).toString();
+    const QString wanted = audio ? MediaDeviceSettings::inputDescription()
+                                 : MediaDeviceSettings::cameraDescription();
     if (wanted.isEmpty()) {
         return gst_element_factory_make(audio ? "autoaudiosrc" : "autovideosrc", nullptr);
     }

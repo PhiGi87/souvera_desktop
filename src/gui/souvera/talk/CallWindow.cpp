@@ -10,6 +10,7 @@
 #include "TalkMediaEngine.h"
 #endif
 
+#include "settings/MediaDeviceSettings.h"
 #include "theme/SouveraTheme.h"
 
 #include <QCloseEvent>
@@ -196,6 +197,29 @@ void CallWindow::buildUi(const QString &displayName)
     _videoLabel->hide();
     layout->addWidget(_videoLabel, 1);
 
+    // -- No-GStreamer fallback: honest banner + browser hand-off --
+    _mediaFallback = new QWidget(this);
+    _mediaFallback->setObjectName(QStringLiteral("CallMediaFallback"));
+    auto *fallbackLayout = new QVBoxLayout(_mediaFallback);
+    fallbackLayout->setContentsMargins(24, 16, 24, 16);
+    fallbackLayout->setSpacing(12);
+    auto *fallbackText = new QLabel(
+        QStringLiteral("Ton- und Video\u00FCbertragung sind auf diesem System nicht "
+                       "verf\u00FCgbar. Der Anruf kann im Browser fortgef\u00FChrt werden."),
+        _mediaFallback);
+    fallbackText->setObjectName(QStringLiteral("CallFallbackText"));
+    fallbackText->setWordWrap(true);
+    fallbackText->setAlignment(Qt::AlignCenter);
+    fallbackLayout->addWidget(fallbackText);
+    auto *fallbackButton = new QPushButton(QStringLiteral("Im Browser \u00F6ffnen"), _mediaFallback);
+    fallbackButton->setObjectName(QStringLiteral("CallFallbackButton"));
+    connect(fallbackButton, &QPushButton::clicked, this, [this]() {
+        QDesktopServices::openUrl(_roomUrl);
+    });
+    fallbackLayout->addWidget(fallbackButton);
+    _mediaFallback->hide();
+    layout->addWidget(_mediaFallback);
+
     // -- Participant tiles area --
     _tilesArea = new QWidget(this);
     _tilesArea->setObjectName(QStringLiteral("CallTilesArea"));
@@ -334,6 +358,10 @@ void CallWindow::setState(State state, const QString &error)
             });
             _mediaEngine->start(_token, _roomSessionId);
         }
+#else
+        // No media engine on this platform: be honest about it and offer
+        // the browser hand-off instead of a silently dead call.
+        _mediaFallback->show();
 #endif
         break;
     case State::Ended:
@@ -451,18 +479,7 @@ void CallWindow::startRingTone()
     format.setChannelCount(1);
     format.setSampleFormat(QAudioFormat::Int16);
     // Honor the output device the user picked in Audio & Video settings.
-    QAudioDevice device = QMediaDevices::defaultAudioOutput();
-    QSettings settings;
-    const auto storedId = settings.value(QStringLiteral("audioOutputId")).toString();
-    if (!storedId.isEmpty()) {
-        const auto devices = QMediaDevices::audioOutputs();
-        for (const auto &d : devices) {
-            if (d.id() == storedId.toUtf8()) {
-                device = d;
-                break;
-            }
-        }
-    }
+    const QAudioDevice device = MediaDeviceSettings::outputDevice();
     _ringSink = new QAudioSink(device, format, this);
     _ringIo = _ringSink->start();
     if (!_ringIo) {

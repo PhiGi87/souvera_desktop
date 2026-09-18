@@ -83,6 +83,7 @@ private:
     QLabel *_durationLabel = nullptr;
     QLabel *_stateLabel = nullptr;
     QLabel *_stateDot = nullptr;
+    QWidget *_mediaFallback = nullptr;
     QWidget *_tilesArea = nullptr;
     QVBoxLayout *_tilesLayout = nullptr;
     QPushButton *_micButton = nullptr;

@@ -12,9 +12,47 @@ if(PkgConfig_FOUND)
     if(GSTREAMER_FOUND)
         set(HAVE_GSTREAMER ON)
         message(STATUS "GStreamer found — native media engine enabled")
-    else()
-        message(STATUS "GStreamer not found — call media disabled, browser fallback")
     endif()
+endif()
+
+if(NOT HAVE_GSTREAMER AND MSVC AND DEFINED ENV{GSTREAMER_ROOT})
+    # Official GStreamer MSVC binaries ship no pkg-config metadata.
+    # GSTREAMER_ROOT must point at the root holding include\, lib\ and bin\.
+    set(_GSTREAMER_ROOT "$ENV{GSTREAMER_ROOT}")
+    find_path(GSTREAMER_CORE_INCLUDE gst/gst.h
+        PATHS "${_GSTREAMER_ROOT}/include/gstreamer-1.0" NO_DEFAULT_PATH)
+    find_path(GSTREAMER_GLIB_INCLUDE glib.h
+        PATHS "${_GSTREAMER_ROOT}/include/glib-2.0" NO_DEFAULT_PATH)
+    find_path(GSTREAMER_GLIBCONFIG_INCLUDE glibconfig.h
+        PATHS "${_GSTREAMER_ROOT}/lib/glib-2.0/include" NO_DEFAULT_PATH)
+    find_library(GSTREAMER_MSVC_CORE_LIB gstreamer-1.0
+        PATHS "${_GSTREAMER_ROOT}/lib" NO_DEFAULT_PATH)
+    find_library(GSTREAMER_MSVC_BASE_LIB gstbase-1.0
+        PATHS "${_GSTREAMER_ROOT}/lib" NO_DEFAULT_PATH)
+    find_library(GSTREAMER_MSVC_APP_LIB gstapp-1.0
+        PATHS "${_GSTREAMER_ROOT}/lib" NO_DEFAULT_PATH)
+    find_library(GSTREAMER_MSVC_WEBRTC_LIB gstwebrtc-1.0
+        PATHS "${_GSTREAMER_ROOT}/lib" NO_DEFAULT_PATH)
+    find_library(GSTREAMER_MSVC_SDP_LIB gstsdp-1.0
+        PATHS "${_GSTREAMER_ROOT}/lib" NO_DEFAULT_PATH)
+    find_library(GSTREAMER_MSVC_GOBJECT_LIB gobject-2.0
+        PATHS "${_GSTREAMER_ROOT}/lib" NO_DEFAULT_PATH)
+    find_library(GSTREAMER_MSVC_GLIB_LIB glib-2.0
+        PATHS "${_GSTREAMER_ROOT}/lib" NO_DEFAULT_PATH)
+    if(GSTREAMER_CORE_INCLUDE AND GSTREAMER_GLIB_INCLUDE AND GSTREAMER_GLIBCONFIG_INCLUDE
+       AND GSTREAMER_MSVC_CORE_LIB AND GSTREAMER_MSVC_BASE_LIB AND GSTREAMER_MSVC_APP_LIB
+       AND GSTREAMER_MSVC_WEBRTC_LIB AND GSTREAMER_MSVC_SDP_LIB
+       AND GSTREAMER_MSVC_GOBJECT_LIB AND GSTREAMER_MSVC_GLIB_LIB)
+        set(HAVE_GSTREAMER ON)
+        set(GSTREAMER_MSVC_ROOT "${_GSTREAMER_ROOT}")
+        message(STATUS "GStreamer (MSVC) found — native media engine enabled")
+    else()
+        message(STATUS "GStreamer (MSVC) incomplete at ${_GSTREAMER_ROOT} — call media disabled")
+    endif()
+endif()
+
+if(NOT HAVE_GSTREAMER)
+    message(STATUS "GStreamer not found — call media disabled, browser fallback")
 endif()
 
 if(BUILD_WITH_WEBENGINE)
@@ -343,6 +381,8 @@ set(client_SRCS
     souvera/notifications/NotificationService.cpp
     souvera/settings/AudioVideoSettings.h
     souvera/settings/AudioVideoSettings.cpp
+    souvera/settings/MediaDeviceSettings.h
+    souvera/settings/MediaDeviceSettings.cpp
      souvera/LeftSidebar.h
      souvera/LeftSidebar.cpp
      souvera/notes/NotesPanel.h
@@ -728,11 +768,29 @@ if(KF6GuiAddons_FOUND)
 endif()
 
 if(HAVE_GSTREAMER)
-  target_link_libraries(nextcloudCore PUBLIC
-    PkgConfig::GSTREAMER
-    ${GSTREAMER_LINK_LIBRARIES}
-    gstsdp-1.0
-  )
+  if(TARGET PkgConfig::GSTREAMER)
+    target_link_libraries(nextcloudCore PUBLIC
+      PkgConfig::GSTREAMER
+      ${GSTREAMER_LINK_LIBRARIES}
+      gstsdp-1.0
+    )
+  else()
+    # MSVC branch: explicit include dirs and import libraries.
+    target_include_directories(nextcloudCore PUBLIC
+      "${GSTREAMER_MSVC_ROOT}/include/glib-2.0"
+      "${GSTREAMER_MSVC_ROOT}/lib/glib-2.0/include"
+      "${GSTREAMER_MSVC_ROOT}/include/gstreamer-1.0"
+    )
+    target_link_libraries(nextcloudCore PUBLIC
+      ${GSTREAMER_MSVC_CORE_LIB}
+      ${GSTREAMER_MSVC_BASE_LIB}
+      ${GSTREAMER_MSVC_APP_LIB}
+      ${GSTREAMER_MSVC_WEBRTC_LIB}
+      ${GSTREAMER_MSVC_SDP_LIB}
+      ${GSTREAMER_MSVC_GOBJECT_LIB}
+      ${GSTREAMER_MSVC_GLIB_LIB}
+    )
+  endif()
   target_compile_definitions(nextcloudCore PUBLIC HAVE_GSTREAMER=1)
 endif()
 

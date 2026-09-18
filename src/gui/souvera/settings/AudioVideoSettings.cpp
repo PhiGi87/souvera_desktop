@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 #include "AudioVideoSettings.h"
+#include "MediaDeviceSettings.h"
 #include "theme/SouveraMetrics.h"
 #include "theme/SouveraTheme.h"
 
@@ -271,32 +272,12 @@ void AudioVideoSettings::storeSelection()
 
 QAudioDevice AudioVideoSettings::inputDevice()
 {
-    QSettings settings;
-    settings.beginGroup(settingsGroup());
-    const auto stored = settings.value(QStringLiteral("audioInputId")).toString();
-    settings.endGroup();
-    if (!stored.isEmpty()) {
-        const auto inputs = QMediaDevices::audioInputs();
-        for (const auto &device : inputs) {
-            if (device.id() == stored.toUtf8()) return device;
-        }
-    }
-    return QMediaDevices::defaultAudioInput();
+    return MediaDeviceSettings::inputDevice();
 }
 
 QAudioDevice AudioVideoSettings::outputDevice()
 {
-    QSettings settings;
-    settings.beginGroup(settingsGroup());
-    const auto stored = settings.value(QStringLiteral("audioOutputId")).toString();
-    settings.endGroup();
-    if (!stored.isEmpty()) {
-        const auto outputs = QMediaDevices::audioOutputs();
-        for (const auto &device : outputs) {
-            if (device.id() == stored.toUtf8()) return device;
-        }
-    }
-    return QMediaDevices::defaultAudioOutput();
+    return MediaDeviceSettings::outputDevice();
 }
 
 QCameraDevice AudioVideoSettings::cameraDevice()
