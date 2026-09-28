@@ -4,6 +4,7 @@
  */
 
 #include "FilesPanel.h"
+#include "theme/SouveraMetrics.h"
 
 #include "files/RemoteFilesModel.h"
 #include "net/SouveraAccountGate.h"
@@ -42,6 +43,8 @@ Q_LOGGING_CATEGORY(lcFilesPanel, "souvera.filespanel")
 
 namespace OCC {
 
+namespace Metrics = Sou::Metrics;
+
 namespace {
 const QStringList officeMimeExtensions{
     QStringLiteral("odt"), QStringLiteral("ods"), QStringLiteral("odp"), QStringLiteral("odg"),
@@ -58,8 +61,8 @@ FilesPanel::FilesPanel(QWidget *parent)
     setObjectName(QStringLiteral("FilesPanel"));
 
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(16, 16, 16, 16);
-    layout->setSpacing(12);
+    layout->setContentsMargins(Metrics::CardMargin, Metrics::CardMargin, Metrics::CardMargin, Metrics::CardMargin);
+    layout->setSpacing(Metrics::SpacingM);
 
     auto *headerLabel = new QLabel(QStringLiteral("Datei-Synchronisation"), this);
     headerLabel->setObjectName(QStringLiteral("FilesHeaderLabel"));

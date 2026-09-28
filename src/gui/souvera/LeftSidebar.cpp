@@ -4,6 +4,7 @@
  */
 
 #include "LeftSidebar.h"
+#include "theme/SouveraMetrics.h"
 
 #include "accountmanager.h"
 #include "accountstate.h"
@@ -17,6 +18,8 @@
 
 namespace OCC {
 
+namespace Metrics = Sou::Metrics;
+
 LeftSidebar::LeftSidebar(QWidget *parent)
     : QWidget(parent)
 {
@@ -28,15 +31,15 @@ LeftSidebar::LeftSidebar(QWidget *parent)
     mainLayout->setSpacing(0);
 
     _topLayout = new QVBoxLayout;
-    _topLayout->setContentsMargins(0, 12, 0, 0);
-    _topLayout->setSpacing(2);
+    _topLayout->setContentsMargins(0, Metrics::SpacingM, 0, 0);
+    _topLayout->setSpacing(Metrics::SpacingXS);
     mainLayout->addLayout(_topLayout);
 
     mainLayout->addStretch();
 
     _bottomLayout = new QVBoxLayout;
-    _bottomLayout->setContentsMargins(0, 0, 0, 12);
-    _bottomLayout->setSpacing(8);
+    _bottomLayout->setContentsMargins(0, 0, 0, Metrics::SpacingM);
+    _bottomLayout->setSpacing(Metrics::SpacingS);
     mainLayout->addLayout(_bottomLayout);
 
     setupThemeToggle();

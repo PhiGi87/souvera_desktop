@@ -144,11 +144,7 @@ void TalkOcsApi::messagesRequest(const QString &apiBase, const QString &token, q
             const auto data = payload.toArray();
             emit messagesReceived(data, token);
         },
-        [this, apiBase, token, lastKnownId](int status, const QString &message) {
-            if (status == 404 && apiBase.contains(QStringLiteral("v1"))) {
-                messagesRequest(baseUrlOf(_accountState) + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), token, lastKnownId);
-                return;
-            }
+        [this, token, lastKnownId](int status, const QString &message) {
             qCWarning(lcTalkOcsApi) << "fetchMessages failed:" << status << message;
             emit apiError(message);
         });
@@ -161,23 +157,19 @@ void TalkOcsApi::sendMessage(const QString &token, const QString &text)
         emit apiError(QStringLiteral("Kein Konto verbunden."));
         return;
     }
-    sendRequest(base + QStringLiteral("/ocs/v2.php/apps/spreed/api/v1"), token, text);
+    sendRequest(token, text);
 }
 
-void TalkOcsApi::sendRequest(const QString &apiBase, const QString &token, const QString &text)
+void TalkOcsApi::sendRequest(const QString &token, const QString &text)
 {
-    const auto url = apiBase + QStringLiteral("/chat/%1").arg(token);
+    const auto url = baseUrlOf(_accountState) + QStringLiteral("/ocs/v2.php/apps/spreed/api/v1/chat/%1").arg(token);
     // Talk API contract: form-urlencoded body with the "message" field.
     OcsDavClient::ocsRequest(_accountState, "POST", url, chatBody(text),
         [this, token](const QJsonValue &, int) {
             qCInfo(lcTalkOcsApi) << "Message sent to" << token;
             emit messageSent(token);
         },
-        [this, apiBase, token, text](int status, const QString &message) {
-            if (status == 404 && apiBase.contains(QStringLiteral("v1"))) {
-                sendRequest(baseUrlOf(_accountState) + QStringLiteral("/ocs/v2.php/apps/spreed/api/v4"), token, text);
-                return;
-            }
+        [this, token](int status, const QString &message) {
             qCWarning(lcTalkOcsApi) << "sendMessage failed:" << status << message;
             emit apiError(message);
         },

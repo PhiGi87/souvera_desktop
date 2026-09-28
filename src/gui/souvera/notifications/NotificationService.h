@@ -34,6 +34,9 @@ public:
 
     void setAccountState(AccountState *accountState);
 
+    /** Stops all polling timers — used during application shutdown. */
+    void stop();
+
     static bool notificationsEnabled();
     static void setNotificationsEnabled(bool enabled);
     static bool mailNotificationsEnabled();

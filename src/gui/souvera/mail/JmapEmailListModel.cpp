@@ -58,6 +58,18 @@ void JmapEmailListModel::setEmails(const QList<JmapEmail> &emails)
     endResetModel();
 }
 
+void JmapEmailListModel::removeEmail(const QString &emailId)
+{
+    for (int row = 0; row < _emails.size(); ++row) {
+        if (_emails.at(row).id == emailId) {
+            beginRemoveRows(QModelIndex(), row, row);
+            _emails.removeAt(row);
+            endRemoveRows();
+            return;
+        }
+    }
+}
+
 QString JmapEmailListModel::emailIdForRow(int row) const
 {
     if (row < 0 || row >= _emails.size()) return {};

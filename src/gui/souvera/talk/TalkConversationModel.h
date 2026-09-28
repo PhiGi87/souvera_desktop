@@ -35,6 +35,7 @@ public:
     [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
 
     void setConversations(const QJsonArray &conversations);
+    void clear();
 
     /** True when joining this room's call requires recording consent. */
     [[nodiscard]] bool recordingConsentRequired(const QString &token) const;

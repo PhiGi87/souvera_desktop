@@ -4,6 +4,7 @@
  */
 
 #include "TalkPanel.h"
+#include "theme/SouveraMetrics.h"
 #include "EmojiPicker.h"
 #include "CallWindow.h"
 #include "TalkSignalingClient.h"
@@ -32,6 +33,8 @@
 Q_LOGGING_CATEGORY(lcTalkPanel, "souvera.talk.panel")
 
 namespace OCC {
+
+namespace Metrics = Sou::Metrics;
 
 namespace {
 
@@ -191,6 +194,9 @@ TalkPanel::TalkPanel(QWidget *parent)
     connect(_ocsApi, &TalkOcsApi::messageSent,
             this, [this](const QString &token) {
         if (token == _currentToken) {
+            // Server confirmed: the draft can go now.
+            _pendingSentText.clear();
+            _messageInput->clear();
             _lastKnownId = 0;
             _ocsApi->fetchMessages(_currentToken);
         }
@@ -202,14 +208,31 @@ TalkPanel::TalkPanel(QWidget *parent)
             qCWarning(lcTalkPanel) << "Transient Talk API failure:" << message;
             return;
         }
+        // A failed send restores the draft so nothing typed is lost.
+        if (!_pendingSentText.isEmpty() && _messageInput->toPlainText().trimmed().isEmpty()) {
+            _messageInput->setPlainText(_pendingSentText);
+            _messageInput->moveCursor(QTextCursor::End);
+        }
+        _pendingSentText.clear();
         setApiStatus(message, true);
     });
 }
 
 void TalkPanel::setAccountState(AccountState *state)
 {
+    if (state == _accountState) return;
     _accountState = state;
     _ocsApi->setAccountState(state);
+    if (_pollTimer) _pollTimer->stop();
+    // Drop every trace of the previous account: pending room, pagination
+    // cursor and the rendered chat history would otherwise leak into the
+    // next account's view (and poll a foreign token against the new API).
+    _currentToken.clear();
+    _lastKnownId = 0;
+    if (_callJoinedConn) QObject::disconnect(_callJoinedConn);
+    if (_roomJoinedConn) QObject::disconnect(_roomJoinedConn);
+    _conversationModel->clear();
+    rebuildChatArea(QJsonArray());
     if (state && state->account()) {
         _currentUserId = state->account()->davUser();
         setApiStatus(QStringLiteral("Lade Chats\u2026"));
@@ -221,6 +244,7 @@ void TalkPanel::setAccountState(AccountState *state)
             _ocsApi->fetchConversations();
         });
     } else {
+        _currentUserId.clear();
         setApiStatus(QStringLiteral("Kein Konto verbunden."), true);
     }
 }
@@ -234,7 +258,7 @@ void TalkPanel::setupUi()
     auto *toolbar = new QWidget(this);
     toolbar->setObjectName(QStringLiteral("PanelToolbar"));
     auto *toolbarLayout = new QHBoxLayout(toolbar);
-    toolbarLayout->setContentsMargins(16, 8, 16, 8);
+    toolbarLayout->setContentsMargins(Metrics::CardMargin, Metrics::SpacingS, Metrics::CardMargin, Metrics::SpacingS);
 
     auto *title = new QLabel(QStringLiteral("Link"), toolbar);
     title->setObjectName(QStringLiteral("PanelTitle"));
@@ -283,7 +307,7 @@ void TalkPanel::setupUi()
     auto *chatHeader = new QWidget(chatWidget);
     chatHeader->setObjectName(QStringLiteral("MailToolbar"));
     auto *chatHeaderLayout = new QHBoxLayout(chatHeader);
-    chatHeaderLayout->setContentsMargins(16, 8, 16, 8);
+    chatHeaderLayout->setContentsMargins(Metrics::CardMargin, Metrics::SpacingS, Metrics::CardMargin, Metrics::SpacingS);
     _chatHeaderLabel = new QLabel(QStringLiteral("W\u00E4hle einen Chat"), chatHeader);
     _chatHeaderLabel->setObjectName(QStringLiteral("PanelTitle"));
     chatHeaderLayout->addWidget(_chatHeaderLabel);
@@ -466,6 +490,11 @@ void TalkPanel::startCall()
     // Single-shot join chain: REST join -> signaling room -> startCall.
     // The connections are tracked as members so the lambdas can disconnect
     // on the first emission matching this token without heap bookkeeping.
+    // Starting a new call while an older chain is still pending overwrites
+    // the member handles — disconnect the stale ones first, otherwise the
+    // old emission later tears down the NEW chain and the call stalls.
+    if (_callJoinedConn) QObject::disconnect(_callJoinedConn);
+    if (_roomJoinedConn) QObject::disconnect(_roomJoinedConn);
     _callJoinedConn = connect(_ocsApi, &TalkOcsApi::callJoined, this,
             [this, token](const QString &joinedToken, const QString &sessionId) {
         if (joinedToken != token) return;
@@ -496,6 +525,15 @@ void TalkPanel::startCall()
     _ocsApi->joinCall(token, 1);
 }
 
+void TalkPanel::stopBackgroundWork()
+{
+    if (_pollTimer) _pollTimer->stop();
+    _currentToken.clear();
+    _lastKnownId = 0;
+    _pendingSentText.clear();
+    _conversationModel->clear();
+}
+
 void TalkPanel::joinCallForRoom(const QString &roomToken)
 {
     if (roomToken.isEmpty() || !_accountState) return;
@@ -509,7 +547,9 @@ void TalkPanel::sendMessage()
     if (text.isEmpty() || _currentToken.isEmpty()) return;
 
     qCInfo(lcTalkPanel) << "Sending message to" << _currentToken;
-    _messageInput->clear();
+    // The input is only cleared when the server confirms (messageSent) —
+    // clearing before the async send would destroy the draft on failure.
+    _pendingSentText = text;
     _ocsApi->sendMessage(_currentToken, text);
 }
 

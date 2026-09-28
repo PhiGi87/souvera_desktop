@@ -60,6 +60,13 @@ private:
     QList<JmapMailbox> _mailboxes;
     QList<Node *> _roots;
     QHash<QString, Node *> _byId;
+
+private:
+    void deleteTree(Node *node);
+    void clearNodes();
+
+public:
+    ~JmapMailboxModel() override;
 };
 
 } // namespace OCC

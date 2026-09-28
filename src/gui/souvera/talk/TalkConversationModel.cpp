@@ -87,6 +87,13 @@ QHash<int, QByteArray> TalkConversationModel::roleNames() const
     };
 }
 
+void TalkConversationModel::clear()
+{
+    beginResetModel();
+    _conversations = QJsonArray();
+    endResetModel();
+}
+
 void TalkConversationModel::setConversations(const QJsonArray &conversations)
 {
     // Newest conversation always on top (like WhatsApp/Telegram).

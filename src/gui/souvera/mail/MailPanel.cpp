@@ -4,6 +4,7 @@
  */
 
 #include "MailPanel.h"
+#include "theme/SouveraMetrics.h"
 #include "MailBodyView.h"
 #include "MailComposer.h"
 #include "EmailListDelegate.h"
@@ -27,6 +28,8 @@
 Q_LOGGING_CATEGORY(lcMailPanel, "souvera.mail.panel")
 
 namespace OCC {
+
+namespace Metrics = Sou::Metrics;
 
 MailPanel::MailPanel(QWidget *parent)
     : QWidget(parent)
@@ -108,6 +111,18 @@ void MailPanel::startJmap(const QString &user, const QString &mailPassword)
     _jmapClient = new JmapClient(accountState, this);
     _jmapClient->setCredentials(user, mailPassword);
 
+    // Send results were previously swallowed — the user never learned
+    // whether a mail went out.
+    connect(_jmapClient, &JmapClient::emailSent, this, [this](bool success, const QString &error) {
+        if (success) {
+            setStatus(QStringLiteral("Nachricht gesendet."));
+        } else {
+            setStatus(QStringLiteral("Senden fehlgeschlagen."), true);
+            QMessageBox::warning(this, QStringLiteral("Senden fehlgeschlagen"),
+                                 QStringLiteral("Die Nachricht konnte nicht gesendet werden:\n%1").arg(error));
+        }
+    });
+
     connect(_jmapClient, &JmapClient::sessionResolved, this, [this](const QString &, const QString &) {
         qCInfo(lcMailPanel) << "JMAP session resolved, fetching mailboxes";
         setStatus(QStringLiteral("Angemeldet \u2014 Postf\u00E4cher werden geladen\u2026"));
@@ -138,7 +153,13 @@ void MailPanel::startJmap(const QString &user, const QString &mailPassword)
         setStatus(QStringLiteral("Bereit \u2014 %1 Ordner").arg(boxes.size()));
     });
 
-    connect(_jmapClient, &JmapClient::emailsFetched, this, [this](const QList<JmapEmail> &emails, int total) {
+    connect(_jmapClient, &JmapClient::emailsFetched, this, [this](const QList<JmapEmail> &emails, int total, const QString &mailboxId) {
+        // A stale response (user switched folders in the meantime) must not
+        // overwrite the currently shown list.
+        if (!mailboxId.isEmpty() && mailboxId != _currentMailboxId) {
+            qCInfo(lcMailPanel) << "Dropping stale email response for" << mailboxId;
+            return;
+        }
         qCInfo(lcMailPanel) << "Emails fetched:" << emails.size() << "total:" << total;
         _messageModel->setEmails(emails);
         _messageModel->setTotal(total);
@@ -147,7 +168,12 @@ void MailPanel::startJmap(const QString &user, const QString &mailPassword)
                       : QStringLiteral("%1 Nachrichten").arg(emails.size()));
     });
 
-    connect(_jmapClient, &JmapClient::emailBodyFetched, this, [this](const JmapEmailBody &body) {
+    connect(_jmapClient, &JmapClient::emailBodyFetched, this, [this](const JmapEmailBody &body, const QString &emailId) {
+        // Only render the body of the email that is still selected.
+        if (!emailId.isEmpty() && emailId != _selectedEmailId) {
+            qCInfo(lcMailPanel) << "Dropping stale body response for" << emailId;
+            return;
+        }
         const auto *theme = SouveraTheme::instance();
         const auto textPrimary = theme->color(SouveraTheme::Color::TextPrimary).name();
         const auto textMuted = theme->color(SouveraTheme::Color::TextMuted).name();
@@ -361,8 +387,8 @@ void MailPanel::setupToolbar()
     _toolbar = new QWidget(this);
     _toolbar->setObjectName(QStringLiteral("MailToolbar"));
     auto *toolbarLayout = new QHBoxLayout(_toolbar);
-    toolbarLayout->setContentsMargins(16, 8, 16, 8);
-    toolbarLayout->setSpacing(8);
+    toolbarLayout->setContentsMargins(Metrics::CardMargin, Metrics::SpacingS, Metrics::CardMargin, Metrics::SpacingS);
+    toolbarLayout->setSpacing(Metrics::SpacingS);
 
     auto *title = new QLabel(QStringLiteral("Mail"), _toolbar);
     title->setObjectName(QStringLiteral("MailToolbarTitle"));
@@ -537,6 +563,17 @@ void MailPanel::onMessageDoubleClicked(const QModelIndex &index)
     email.receivedAt = index.data(JmapEmailListModel::ReceivedAtRole).toDateTime();
 
     auto *reader = new MailReaderWindow(_accountState, email, this);
+    connect(reader, &MailReaderWindow::emailDeleted, this, [this](const QString &emailId) {
+        if (emailId == _selectedEmailId) {
+            _selectedEmailId.clear();
+        }
+        _messageModel->removeEmail(emailId);
+        // Server state changed — pull the authoritative list in the background.
+        if (_jmapClient && !_currentMailboxId.isEmpty()) {
+            _jmapClient->queryEmails(_currentMailboxId, 50, 0,
+                                     _searchEdit ? _searchEdit->text() : QString());
+        }
+    });
     reader->show();
     reader->raise();
     reader->activateWindow();

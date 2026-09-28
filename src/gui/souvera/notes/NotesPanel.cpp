@@ -4,6 +4,7 @@
  */
 
 #include "NotesPanel.h"
+#include "theme/SouveraMetrics.h"
 #include "accountstate.h"
 #include "account.h"
 #include "creds/abstractcredentials.h"
@@ -23,6 +24,8 @@
 
 namespace OCC {
 
+namespace Metrics = Sou::Metrics;
+
 NotesPanel::NotesPanel(AccountState *accountState, QWidget *parent)
     : QWidget(parent)
     , _accountState(accountState)
@@ -33,18 +36,34 @@ NotesPanel::NotesPanel(AccountState *accountState, QWidget *parent)
 {
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(0);
 
-    auto *toolbar = new QHBoxLayout;
-    auto *newBtn = new QPushButton(QStringLiteral("+ Neue Notiz"));
-    auto *saveBtn = new QPushButton(QStringLiteral("Speichern"));
-    auto *delBtn = new QPushButton(QStringLiteral("L\u00F6schen"));
+    // Standard panel header — the buttons previously sat flush against the
+    // window edge with zero padding.
+    auto *toolbarWidget = new QWidget(this);
+    toolbarWidget->setObjectName(QStringLiteral("PanelToolbar"));
+    auto *toolbar = new QHBoxLayout(toolbarWidget);
+    toolbar->setContentsMargins(Metrics::CardMargin, Metrics::SpacingS, Metrics::CardMargin, Metrics::SpacingS);
+    toolbar->setSpacing(Metrics::SpacingS);
+    auto *title = new QLabel(QStringLiteral("Notizen"), toolbarWidget);
+    title->setObjectName(QStringLiteral("PanelTitle"));
+    toolbar->addWidget(title);
+    toolbar->addSpacing(Metrics::SpacingM);
+    auto *newBtn = new QPushButton(QStringLiteral("+ Neue Notiz"), toolbarWidget);
+    newBtn->setObjectName(QStringLiteral("PanelPrimaryBtn"));
+    auto *saveBtn = new QPushButton(QStringLiteral("Speichern"), toolbarWidget);
+    saveBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+    auto *delBtn = new QPushButton(QStringLiteral("L\u00F6schen"), toolbarWidget);
+    delBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
     toolbar->addWidget(newBtn);
     toolbar->addWidget(saveBtn);
     toolbar->addWidget(delBtn);
     toolbar->addStretch();
-    mainLayout->addLayout(toolbar);
+    mainLayout->addWidget(toolbarWidget);
 
     auto *splitter = new QSplitter(Qt::Horizontal, this);
+    splitter->setContentsMargins(Metrics::CardMargin, Metrics::SpacingM, Metrics::CardMargin, Metrics::CardMargin);
+    splitter->setHandleWidth(Metrics::SpacingS);
     _noteList->setMaximumWidth(280);
     _editor->setPlaceholderText(QStringLiteral("Notiz in Markdown schreiben…"));
     _preview->setOpenExternalLinks(true);

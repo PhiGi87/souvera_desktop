@@ -4,6 +4,7 @@
  */
 
 #include "CalendarPanel.h"
+#include "theme/SouveraMetrics.h"
 #include "CalendarMonthView.h"
 #include "CalDavSync.h"
 #include "CalendarEventDialog.h"
@@ -22,6 +23,8 @@
 Q_LOGGING_CATEGORY(lcCalendarPanel, "souvera.calendar.panel")
 
 namespace OCC {
+
+namespace Metrics = Sou::Metrics;
 
 CalendarPanel::CalendarPanel(QWidget *parent)
     : QWidget(parent)
@@ -57,7 +60,7 @@ void CalendarPanel::setupUi()
     auto *toolbar = new QWidget(this);
     toolbar->setObjectName(QStringLiteral("PanelToolbar"));
     auto *toolbarLayout = new QHBoxLayout(toolbar);
-    toolbarLayout->setContentsMargins(16, 8, 16, 8);
+    toolbarLayout->setContentsMargins(Metrics::CardMargin, Metrics::SpacingS, Metrics::CardMargin, Metrics::SpacingS);
 
     auto *title = new QLabel(QStringLiteral("Kalender"), toolbar);
     title->setObjectName(QStringLiteral("PanelTitle"));

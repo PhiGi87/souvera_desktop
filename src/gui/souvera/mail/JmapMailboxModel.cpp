@@ -14,6 +14,11 @@ JmapMailboxModel::JmapMailboxModel(QObject *parent)
 {
 }
 
+JmapMailboxModel::~JmapMailboxModel()
+{
+    clearNodes();
+}
+
 int JmapMailboxModel::sortWeight(const JmapMailbox &mailbox)
 {
     const auto role = mailbox.role.toLower();
@@ -26,13 +31,29 @@ int JmapMailboxModel::sortWeight(const JmapMailbox &mailbox)
     return 9;
 }
 
+void JmapMailboxModel::deleteTree(Node *node)
+{
+    if (!node) return;
+    for (auto *child : std::as_const(node->children)) {
+        deleteTree(child);
+    }
+    delete node;
+}
+
+void JmapMailboxModel::clearNodes()
+{
+    for (auto *root : std::as_const(_roots)) {
+        deleteTree(root);
+    }
+    _roots.clear();
+    _byId.clear();
+}
+
 void JmapMailboxModel::rebuild()
 {
     beginResetModel();
 
-    qDeleteAll(_roots);
-    _roots.clear();
-    _byId.clear();
+    clearNodes();
 
     // Create nodes.
     for (const auto &mailbox : std::as_const(_mailboxes)) {

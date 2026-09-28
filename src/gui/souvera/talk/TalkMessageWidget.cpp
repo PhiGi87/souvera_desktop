@@ -12,6 +12,7 @@
 #include <QVBoxLayout>
 #include <QDateTime>
 #include <QPainter>
+#include <QRegularExpression>
 #include <QPixmap>
 #include <QLoggingCategory>
 
@@ -92,10 +93,19 @@ void TalkMessageWidget::setMessage(const QJsonObject &msg)
     if (messageType == QLatin1String("system")) {
         const auto keys = messageParameters.keys();
         for (const auto &key : keys) {
-            const auto displayName = messageParameters.value(key).toObject()
-                                         .value(QStringLiteral("name")).toString();
-            if (!displayName.isEmpty()) {
-                renderText.replace(QLatin1Char('{') + key + QLatin1Char('}'), displayName);
+            const auto param = messageParameters.value(key);
+            if (param.isObject()) {
+                const auto displayName = param.toObject().value(QStringLiteral("name")).toString();
+                if (!displayName.isEmpty()) {
+                    renderText.replace(QLatin1Char('{') + key + QLatin1Char('}'), displayName);
+                }
+            } else {
+                // Plain values (e.g. {call-duration}, {timestamp}) substitute
+                // directly instead of rendering as raw {braces}.
+                const auto plain = param.toVariant().toString();
+                if (!plain.isEmpty()) {
+                    renderText.replace(QLatin1Char('{') + key + QLatin1Char('}'), plain);
+                }
             }
         }
     }
@@ -136,10 +146,27 @@ void TalkMessageWidget::setMessage(const QJsonObject &msg)
 void TalkMessageWidget::setMessageText(const QString &text)
 {
     _textLabel->setVisible(true);
-    // QLabel renders HTML when the text looks like markup — enforce plain text
-    // so malicious or accidental tags can never distort the chat layout.
-    _textLabel->setTextFormat(Qt::PlainText);
-    _textLabel->setText(text);
+    // Escape first so message content can never become markup, then wrap
+    // URLs in anchors — plain text mode would render them unclickable.
+    const auto escaped = text.toHtmlEscaped();
+    static const QRegularExpression urlRe(QStringLiteral("(https?://[^\\s<>\"']+)"));
+    QString html;
+    qsizetype pos = 0;
+    auto it = urlRe.globalMatch(escaped);
+    while (it.hasNext()) {
+        const auto m = it.next();
+        html += escaped.mid(pos, m.capturedStart() - pos);
+        const auto url = m.captured(1);
+        html += QStringLiteral("<a href=\"%1\">%1</a>").arg(url);
+        pos = m.capturedEnd();
+    }
+    html += escaped.mid(pos);
+
+    _textLabel->setTextFormat(Qt::RichText);
+    _textLabel->setText(html);
+    _textLabel->setOpenExternalLinks(true);
+    _textLabel->setTextInteractionFlags(Qt::TextBrowserInteraction
+                                        | Qt::TextSelectableByKeyboard);
 }
 
 void TalkMessageWidget::renderAttachment(const QJsonObject &fileParam)
@@ -148,7 +175,11 @@ void TalkMessageWidget::renderAttachment(const QJsonObject &fileParam)
         _attachmentCard->deleteLater();
         _attachmentCard = nullptr;
     }
-    _textLabel->setVisible(false);
+    // Keep the accompanying message text visible above the file card;
+    // only a genuinely empty text is hidden.
+    if (_textLabel->text().trimmed().isEmpty()) {
+        _textLabel->setVisible(false);
+    }
 
     auto *bubbleLayout = qobject_cast<QVBoxLayout *>(_bubble->layout());
     if (!bubbleLayout) return;

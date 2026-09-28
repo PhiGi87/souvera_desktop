@@ -71,7 +71,7 @@ signals:
 private:
     void conversationsRequest(const QString &apiBase, bool isV1Retry);
     void messagesRequest(const QString &apiBase, const QString &token, qint64 lastKnownId);
-    void sendRequest(const QString &apiBase, const QString &token, const QString &text);
+    void sendRequest(const QString &token, const QString &text);
     void participantsRequest(const QString &apiBase, const QString &token);
 
     AccountState *_accountState = nullptr;

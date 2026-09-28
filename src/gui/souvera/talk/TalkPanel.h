@@ -36,6 +36,8 @@ public:
 
     void setAccountState(AccountState *state);
     void joinCallForRoom(const QString &roomToken);
+    /** Stops polling and drops chat state — used during app shutdown. */
+    void stopBackgroundWork();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -73,6 +75,7 @@ private:
 
     QString _currentToken;
     qint64 _lastKnownId = 0;
+    QString _pendingSentText; // draft restored when the async send fails
     QString _currentUserId;
 };
 

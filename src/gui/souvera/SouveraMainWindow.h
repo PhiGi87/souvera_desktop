@@ -41,6 +41,12 @@ public:
 
     void switchToTab(int index);
 
+    /** Opens the main window and shows the integrated settings page. */
+    void showSettingsPage();
+
+    /** Stops all background activity (polling, dialogs) before quit. */
+    void prepareShutdown();
+
 signals:
     void settingsRequested();
 

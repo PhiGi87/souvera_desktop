@@ -211,6 +211,7 @@ void JmapClient::fetchMailboxes()
 void JmapClient::queryEmails(const QString &mailboxId, int limit, int offset,
                               const QString &searchQuery, const QString &filterType)
 {
+    _pendingMailboxId = mailboxId;
     QJsonObject filter;
     if (!mailboxId.isEmpty()) filter[QLatin1String("inMailbox")] = mailboxId;
     if (!searchQuery.isEmpty()) filter[QLatin1String("text")] = searchQuery;
@@ -232,7 +233,7 @@ void JmapClient::queryEmails(const QString &mailboxId, int limit, int offset,
         const auto ids = data.value(QLatin1String("ids")).toArray();
         const int total = data.value(QLatin1String("total")).toInt(ids.size());
 
-        if (ids.isEmpty()) { emit emailsFetched({}, 0); return; }
+        if (ids.isEmpty()) { emit emailsFetched({}, 0, _pendingMailboxId); return; }
 
         QJsonObject gArgs;
         gArgs[QLatin1String("accountId")] = _accountId;
@@ -263,13 +264,14 @@ void JmapClient::queryEmails(const QString &mailboxId, int limit, int offset,
                 m.size = static_cast<qint64>(e.value(QLatin1String("size")).toDouble());
                 emails.append(m);
             }
-            emit emailsFetched(emails, total);
+            emit emailsFetched(emails, total, _pendingMailboxId);
         });
     });
 }
 
 void JmapClient::fetchEmailBody(const QString &emailId)
 {
+    _pendingBodyEmailId = emailId;
     QJsonObject args;
     args[QLatin1String("accountId")] = _accountId;
     args[QLatin1String("ids")] = QJsonArray{emailId};
@@ -281,7 +283,7 @@ void JmapClient::fetchEmailBody(const QString &emailId)
 
     jmapCall(QLatin1String("Email/get"), args, [this](const QJsonObject &resp) {
         const auto list = resp.value(QLatin1String("data")).toObject().value(QLatin1String("list")).toArray();
-        if (list.isEmpty()) { emit emailBodyFetched({}); return; }
+        if (list.isEmpty()) { emit emailBodyFetched({}, _pendingBodyEmailId); return; }
         const auto e = list.first().toObject();
         const auto bodyVals = e.value(QLatin1String("bodyValues")).toObject();
 
@@ -313,7 +315,7 @@ void JmapClient::fetchEmailBody(const QString &emailId)
                 body.attachments.append(att);
             }
         }
-        emit emailBodyFetched(body);
+        emit emailBodyFetched(body, _pendingBodyEmailId);
     });
 }
 
@@ -427,9 +429,14 @@ void JmapClient::deleteEmail(const QString &emailId)
 }
 
 void JmapClient::sendEmail(const QString &to, const QString &cc, const QString &bcc,
-                            const QString &subject, const QString &bodyHtml,
+                            const QString &subject, const QString &bodyText,
                             const QString &inReplyTo)
 {
+    // All callers pass plain editor text: escape it for HTML transport and
+    // preserve line breaks — otherwise recipients lose formatting and
+    // unescaped '<' can swallow parts of the message.
+    const auto bodyHtml = bodyText.toHtmlEscaped()
+                              .replace(QLatin1Char('\n'), QStringLiteral("<br>"));
     QJsonObject email;
     email[QLatin1String("subject")] = subject;
     email[QLatin1String("keywords")] = QJsonObject{{QLatin1String("$draft"), true}, {QLatin1String("$seen"), true}};

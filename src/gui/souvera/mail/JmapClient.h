@@ -52,6 +52,7 @@ public:
     void markRead(const QString &emailId, bool read);
     void moveEmail(const QString &emailId, const QString &targetMailboxId);
     void deleteEmail(const QString &emailId);
+
     void sendEmail(const QString &to, const QString &cc, const QString &bcc,
                    const QString &subject, const QString &bodyHtml, const QString &inReplyTo);
 
@@ -61,8 +62,8 @@ signals:
     void needsBearerToken();
 
     void mailboxesFetched(const QList<JmapMailbox> &mailboxes);
-    void emailsFetched(const QList<JmapEmail> &emails, int total);
-    void emailBodyFetched(const JmapEmailBody &body);
+    void emailsFetched(const QList<JmapEmail> &emails, int total, const QString &mailboxId);
+    void emailBodyFetched(const JmapEmailBody &body, const QString &emailId);
     void attachmentDownloaded(const QString &fileName, const QString &localPath);
     void attachmentDownloadFailed(const QString &fileName, const QString &error);
     void emailSent(bool success, const QString &error);
@@ -70,6 +71,9 @@ signals:
     void networkError(const QString &error);
 
 private:
+    QString _pendingMailboxId;   // correlates queryEmails with its response
+    QString _pendingBodyEmailId; // correlates fetchEmailBody with its response
+
     void jmapCall(const QString &method, const QJsonObject &args,
                   std::function<void(const QJsonObject &)> callback);
     void jmapBatch(const QList<QPair<QString, QJsonObject>> &calls,

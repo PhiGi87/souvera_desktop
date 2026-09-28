@@ -266,6 +266,33 @@ void SouveraMainWindow::switchToTab(int index)
     _sidebar->setCurrentIndex(index);
 }
 
+void SouveraMainWindow::showSettingsPage()
+{
+    // Settings live at the end of the content stack (after mail, talk,
+    // files, deck, calendar, notes).
+    switchToTab(_contentStack->count() - 1);
+    showNormal();
+    raise();
+    activateWindow();
+}
+
+void SouveraMainWindow::prepareShutdown()
+{
+    if (_notificationService) {
+        _notificationService->stop();
+    }
+    if (_talkPanel) {
+        _talkPanel->stopBackgroundWork();
+    }
+    // Dismiss any ringing incoming-call dialogs so nothing holds audio.
+    for (auto it = _incomingCallDialogs.begin(); it != _incomingCallDialogs.end(); ++it) {
+        if (auto dialog = it.value()) {
+            dialog->close();
+        }
+    }
+    _incomingCallDialogs.clear();
+}
+
 void SouveraMainWindow::closeEvent(QCloseEvent *event)
 {
     QSettings settings;

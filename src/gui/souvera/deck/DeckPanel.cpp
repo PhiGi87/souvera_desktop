@@ -4,6 +4,7 @@
  */
 
 #include "DeckPanel.h"
+#include "theme/SouveraMetrics.h"
 #include "DeckCardDetailDialog.h"
 #include "DeckCardWidget.h"
 #include "DeckManager.h"
@@ -42,6 +43,8 @@
 
 namespace OCC {
 
+namespace Metrics = Sou::Metrics;
+
 Q_LOGGING_CATEGORY(lcDeckPanel, "souvera.deck.panel")
 
 namespace {
@@ -67,8 +70,8 @@ DeckColumnWidget::DeckColumnWidget(const QString &title, QWidget *parent)
     });
 
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(8, 8, 8, 8);
-    layout->setSpacing(6);
+    layout->setContentsMargins(Metrics::SpacingS, Metrics::SpacingS, Metrics::SpacingS, Metrics::SpacingS);
+    layout->setSpacing(Metrics::SpacingS);
 
     auto *headerWidget = new QWidget(this);
     headerWidget->setObjectName(QStringLiteral("DeckColumnHeader"));
@@ -76,7 +79,7 @@ DeckColumnWidget::DeckColumnWidget(const QString &title, QWidget *parent)
     // without it the header renders as an unstyled white bar.
     headerWidget->setAttribute(Qt::WA_StyledBackground, true);
     auto *headerLayout = new QHBoxLayout(headerWidget);
-    headerLayout->setContentsMargins(4, 0, 4, 0);
+    headerLayout->setContentsMargins(Metrics::SpacingXS, 0, Metrics::SpacingXS, 0);
 
     _headerLabel = new QLabel(title, headerWidget);
     _headerLabel->setObjectName(QStringLiteral("DeckColumnTitle"));
@@ -110,8 +113,8 @@ DeckColumnWidget::DeckColumnWidget(const QString &title, QWidget *parent)
     _scrollContainer = new QWidget(scroll);
     _scrollContainer->setStyleSheet(QStringLiteral("background: transparent;"));
     _cardsLayout = new QVBoxLayout(_scrollContainer);
-    _cardsLayout->setContentsMargins(0, 0, 0, 0);
-    _cardsLayout->setSpacing(6);
+    _cardsLayout->setContentsMargins(Metrics::SpacingS, 0, Metrics::SpacingS, 0);
+    _cardsLayout->setSpacing(Metrics::SpacingS);
     _cardsLayout->addStretch();
 
     scroll->setWidget(_scrollContainer);
@@ -412,7 +415,7 @@ void DeckPanel::setupUi()
     auto *toolbar = new QWidget(this);
     toolbar->setObjectName(QStringLiteral("PanelToolbar"));
     auto *toolbarLayout = new QHBoxLayout(toolbar);
-    toolbarLayout->setContentsMargins(16, 8, 16, 8);
+    toolbarLayout->setContentsMargins(Metrics::CardMargin, Metrics::SpacingS, Metrics::CardMargin, Metrics::SpacingS);
 
     auto *title = new QLabel(QStringLiteral("Deck"), toolbar);
     title->setObjectName(QStringLiteral("PanelTitle"));
@@ -519,12 +522,12 @@ void DeckPanel::setupUi()
     _columnsContainer->setObjectName(QStringLiteral("DeckColumnsArea"));
     _columnsContainer->setAttribute(Qt::WA_StyledBackground, true);
     _columnsLayout = new QHBoxLayout(_columnsContainer);
-    _columnsLayout->setContentsMargins(16, 12, 16, 12);
-    _columnsLayout->setSpacing(12);
+    _columnsLayout->setContentsMargins(Metrics::CardMargin, Metrics::SpacingM, Metrics::CardMargin, Metrics::SpacingM);
+    _columnsLayout->setSpacing(Metrics::SpacingM);
 
     _addStackButton = new QPushButton(QStringLiteral("+ Liste hinzuf\u00FCgen"), _columnsContainer);
     _addStackButton->setObjectName(QStringLiteral("PanelSecondaryBtn"));
-    _addStackButton->setFixedWidth(160);
+    _addStackButton->setFixedWidth(4 * Metrics::SpacingXL);
     connect(_addStackButton, &QPushButton::clicked, this, &DeckPanel::onAddStack);
     _columnsLayout->addWidget(_addStackButton);
 

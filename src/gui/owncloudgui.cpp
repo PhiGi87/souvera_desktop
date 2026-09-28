@@ -681,21 +681,13 @@ void ownCloudGui::slotShowGuiMessage(const QString &title, const QString &messag
 
 void ownCloudGui::slotShowSettings()
 {
-    if (_settingsDialog.isNull()) {
-        _settingsDialog = new SettingsDialog(this);
-        _settingsDialog->setAttribute(Qt::WA_DeleteOnClose, true);
-
-#ifdef Q_OS_MACOS
-        auto *fgbg = new ForegroundBackground();
-        _settingsDialog->installEventFilter(fgbg);
-#endif
-
-        connect(_tray.data(), &Systray::hideSettingsDialog,
-                _settingsDialog.data(), &SettingsDialog::close);
-
-        _settingsDialog->show();
+    // The tray menu and every in-app settings request lead to the ONE
+    // Souvera settings page — a second, legacy settings dialog confuses
+    // users and splits configuration across two places.
+    slotOpenMainDialog();
+    if (_mainWindow) {
+        _mainWindow->showSettingsPage();
     }
-    raiseDialog(_settingsDialog.data());
 }
 
 void ownCloudGui::slotSettingsDialogActivated()
@@ -747,6 +739,15 @@ void ownCloudGui::slotShutdown()
         _settingsDialog->close();
     if (!_logBrowser.isNull())
         _logBrowser->deleteLater();
+
+    // Stop every Souvera background worker and drop the tray icon NOW —
+    // an icon that survives the click makes users think quit failed.
+    if (_mainWindow) {
+        _mainWindow->prepareShutdown();
+    }
+    if (_tray) {
+        _tray->hide();
+    }
 }
 
 void ownCloudGui::slotToggleLogBrowser()

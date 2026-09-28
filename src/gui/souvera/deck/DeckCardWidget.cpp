@@ -4,6 +4,7 @@
  */
 
 #include "DeckCardWidget.h"
+#include "theme/SouveraMetrics.h"
 #include "theme/SouveraTheme.h"
 
 #include <QContextMenuEvent>
@@ -23,6 +24,8 @@
 
 namespace OCC {
 
+namespace Metrics = Sou::Metrics;
+
 namespace {
 constexpr auto DeckCardMimeType = "application/x-souvera-deck-card";
 }
@@ -36,8 +39,8 @@ DeckCardWidget::DeckCardWidget(const QJsonObject &cardData, int stackId, QWidget
     setCursor(Qt::PointingHandCursor);
 
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(10, 8, 10, 8);
-    layout->setSpacing(5);
+    layout->setContentsMargins(Metrics::SpacingM, Metrics::SpacingS, Metrics::SpacingM, Metrics::SpacingS);
+    layout->setSpacing(Metrics::SpacingS);
 
     _labelsContainer = new QWidget(this);
     _labelsLayout = new QHBoxLayout(_labelsContainer);
@@ -62,7 +65,7 @@ DeckCardWidget::DeckCardWidget(const QJsonObject &cardData, int stackId, QWidget
     _metaContainer = new QWidget(this);
     _metaLayout = new QHBoxLayout(_metaContainer);
     _metaLayout->setContentsMargins(0, 0, 0, 0);
-    _metaLayout->setSpacing(6);
+    _metaLayout->setSpacing(Metrics::SpacingS);
     _metaLayout->setAlignment(Qt::AlignLeft);
     layout->addWidget(_metaContainer);
 
@@ -72,7 +75,7 @@ DeckCardWidget::DeckCardWidget(const QJsonObject &cardData, int stackId, QWidget
     _hoverActions = new QWidget(this);
     auto *hoverLayout = new QHBoxLayout(_hoverActions);
     hoverLayout->setContentsMargins(0, 0, 0, 0);
-    hoverLayout->setSpacing(2);
+    hoverLayout->setSpacing(Metrics::SpacingXS);
     auto *editBtn = new QToolButton(_hoverActions);
     editBtn->setText(QStringLiteral("\u270F\uFE0F"));
     editBtn->setToolTip(QStringLiteral("Bearbeiten"));
@@ -274,12 +277,13 @@ void DeckCardWidget::applyTheme()
 {
     const auto *theme = SouveraTheme::instance();
     setStyleSheet(QStringLiteral(
-        "DeckCardWidget { background-color: %1; border-radius: 10px; border: 1px solid %2; }"
+        "DeckCardWidget { background-color: %1; border-radius: %5px; border: 1px solid %2; }"
         "DeckCardWidget:hover { border-color: %3; background-color: %4; }")
         .arg(theme->color(SouveraTheme::Color::Surface).name(),
              theme->color(SouveraTheme::Color::Border).name(),
              theme->color(SouveraTheme::Color::Accent).name(),
-             theme->color(SouveraTheme::Color::SurfaceHover).name()));
+             theme->color(SouveraTheme::Color::SurfaceHover).name(),
+             QString::number(Metrics::CardRadius)));
 
     _titleLabel->setStyleSheet(QStringLiteral(
         "font-weight: 600; font-size: 13px; color: %1; background: transparent;")

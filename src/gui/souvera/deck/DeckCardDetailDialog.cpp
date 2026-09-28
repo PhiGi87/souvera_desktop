@@ -4,6 +4,7 @@
  */
 
 #include "DeckCardDetailDialog.h"
+#include "theme/SouveraMetrics.h"
 #include "DeckCommentsWidget.h"
 #include "DeckManager.h"
 #include "DeckOcsApi.h"
@@ -28,6 +29,8 @@
 #include <QVBoxLayout>
 
 namespace OCC {
+
+namespace Metrics = Sou::Metrics;
 
 namespace {
 constexpr const char *kDeckPalette[] = {
@@ -81,8 +84,8 @@ DeckCardDetailDialog::DeckCardDetailDialog(DeckOcsApi *api, int boardId,
 void DeckCardDetailDialog::buildUi()
 {
     auto *rootLayout = new QVBoxLayout(this);
-    rootLayout->setContentsMargins(16, 16, 16, 16);
-    rootLayout->setSpacing(10);
+    rootLayout->setContentsMargins(Metrics::CardMargin, Metrics::CardMargin, Metrics::CardMargin, Metrics::CardMargin);
+    rootLayout->setSpacing(Metrics::SpacingM);
 
     // Title row
     _titleEdit = new QLineEdit(_card.title, this);
@@ -91,7 +94,7 @@ void DeckCardDetailDialog::buildUi()
     rootLayout->addWidget(_titleEdit);
 
     auto *columns = new QHBoxLayout;
-    columns->setSpacing(16);
+    columns->setSpacing(Metrics::SpacingL);
 
     // ---- Left: description + comments (60%) ----
     auto *leftLayout = new QVBoxLayout;
@@ -135,7 +138,7 @@ void DeckCardDetailDialog::buildUi()
     auto *rightWidget = new QWidget(rightScroll);
     auto *rightLayout = new QVBoxLayout(rightWidget);
     rightLayout->setContentsMargins(0, 0, 0, 0);
-    rightLayout->setSpacing(10);
+    rightLayout->setSpacing(Metrics::SpacingM);
 
     // Farbe
     if (_supportsCardColor) {
@@ -167,15 +170,19 @@ void DeckCardDetailDialog::buildUi()
     _dueEdit->setSpecialValueText(QStringLiteral("—"));
     _dueEdit->setDate(_card.dueDate.isValid() ? _card.dueDate.date() : _dueEdit->minimumDate());
     connect(_dueEdit, &QDateEdit::dateChanged, this, [this]() { markDirty(); });
-    rightLayout->addWidget(_dueEdit);
     {
+        auto *dueRow = new QHBoxLayout;
+        dueRow->setContentsMargins(0, 0, 0, 0);
+        dueRow->setSpacing(Metrics::SpacingS);
+        dueRow->addWidget(_dueEdit, 1);
         auto *clearBtn = new QToolButton(rightWidget);
         clearBtn->setText(QStringLiteral("\u2715"));
         clearBtn->setToolTip(QStringLiteral("F\u00E4lligkeit entfernen"));
         connect(clearBtn, &QToolButton::clicked, this, [this]() {
             _dueEdit->setDate(_dueEdit->minimumDate());
         });
-        rightLayout->addWidget(clearBtn);
+        dueRow->addWidget(clearBtn);
+        rightLayout->addLayout(dueRow);
     }
 
     if (_supportsStartDate) {
@@ -186,15 +193,19 @@ void DeckCardDetailDialog::buildUi()
         _startEdit->setSpecialValueText(QStringLiteral("—"));
         _startEdit->setDate(_card.startDate.isValid() ? _card.startDate.date() : _startEdit->minimumDate());
         connect(_startEdit, &QDateEdit::dateChanged, this, [this]() { markDirty(); });
-        rightLayout->addWidget(_startEdit);
         {
+            auto *startRow = new QHBoxLayout;
+            startRow->setContentsMargins(0, 0, 0, 0);
+            startRow->setSpacing(Metrics::SpacingS);
+            startRow->addWidget(_startEdit, 1);
             auto *clearBtn = new QToolButton(rightWidget);
             clearBtn->setText(QStringLiteral("\u2715"));
             clearBtn->setToolTip(QStringLiteral("Startdatum entfernen"));
             connect(clearBtn, &QToolButton::clicked, this, [this]() {
                 _startEdit->setDate(_startEdit->minimumDate());
             });
-            rightLayout->addWidget(clearBtn);
+            startRow->addWidget(clearBtn);
+            rightLayout->addLayout(startRow);
         }
     }
 

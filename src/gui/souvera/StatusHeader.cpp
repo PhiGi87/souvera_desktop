@@ -4,6 +4,7 @@
  */
 
 #include "StatusHeader.h"
+#include "theme/SouveraMetrics.h"
 
 #include "accountmanager.h"
 #include "accountstate.h"
@@ -20,6 +21,8 @@
 Q_LOGGING_CATEGORY(lcStatusHeader, "souvera.statusheader")
 
 namespace OCC {
+
+namespace Metrics = Sou::Metrics;
 
 StatusHeader::StatusHeader(QWidget *parent)
     : QWidget(parent)
@@ -71,7 +74,7 @@ StatusHeader::StatusHeader(QWidget *parent)
     _syncTextLabel->setObjectName(QStringLiteral("SyncTextLabel"));
     layout->addWidget(_syncTextLabel);
 
-    layout->addSpacing(24);
+    layout->addSpacing(Metrics::SpacingXL);
 
     _settingsButton = new QPushButton(this);
     _settingsButton->setObjectName(QStringLiteral("SettingsButton"));

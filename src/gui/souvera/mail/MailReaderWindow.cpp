@@ -215,6 +215,16 @@ void MailReaderWindow::onReply()
                     [sender, to, cc, bcc, subject, body](const QString &, const QString &) {
                 sender->sendEmail(to, cc, bcc, subject, body, QString());
             });
+            // Send failures were previously invisible; also release the
+            // client once its single send is done.
+            connect(sender, &JmapClient::emailSent, sender,
+                    [this, sender](bool success, const QString &error) {
+                if (!success) {
+                    QMessageBox::warning(this, QStringLiteral("Senden fehlgeschlagen"),
+                        QStringLiteral("Die Antwort konnte nicht gesendet werden:\n%1").arg(error));
+                }
+                sender->deleteLater();
+            });
             sender->resolveSession();
         }
     });
@@ -258,10 +268,17 @@ void MailReaderWindow::onDelete()
     if (ret != QMessageBox::Yes) return;
 
     if (_client) {
+        // The delete is async (trash lookup + move): closing now would
+        // destroy the client mid-request and abort the deletion. Close
+        // once the client reports completion instead.
+        connect(_client, &JmapClient::operationCompleted, this,
+                &MailReaderWindow::close, Qt::SingleShotConnection);
         _client->deleteEmail(_email.id);
     }
     emit emailDeleted(_email.id);
-    close();
+    if (!_client) {
+        close();
+    }
 }
 
 } // namespace OCC

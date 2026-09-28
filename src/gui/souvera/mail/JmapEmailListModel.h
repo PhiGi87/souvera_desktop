@@ -34,6 +34,7 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     void setEmails(const QList<JmapEmail> &emails);
+    void removeEmail(const QString &emailId);
     void setTotal(int total) { _total = total; }
     int total() const { return _total; }
 

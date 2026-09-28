@@ -8,6 +8,8 @@
 
 #include <cmath>
 #include <csignal>
+#include <chrono>
+#include <thread>
 
 #ifdef Q_OS_UNIX
 #include <sys/time.h>
@@ -354,5 +356,15 @@ int main(int argc, char **argv)
         }
     }
 
-    return app.exec();
+    const auto exitCode = app.exec();
+
+    // Quit watchdog: some third-party teardown (WebEngine, media backends,
+    // sync threads) can hang after the event loop returned, leaving the
+    // process — and with it the tray icon — alive. Guarantee termination.
+    std::thread([] {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        ::_exit(0);
+    }).detach();
+
+    return exitCode;
 }

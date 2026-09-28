@@ -66,6 +66,13 @@ void NotificationService::setAccountState(AccountState *accountState)
     }
 }
 
+void NotificationService::stop()
+{
+    _ncTimer.stop();
+    _mailTimer.stop();
+    _activeCallTokens.clear();
+}
+
 bool NotificationService::notificationsEnabled()
 {
     QSettings settings;
@@ -133,6 +140,8 @@ void NotificationService::pollNextcloud()
 
             // Calls that are no longer in the fresh list were cancelled or
             // answered elsewhere: tell the UI to dismiss their dialogs.
+            // Collect first, mutate after — iterating while removing from
+            // the set is undefined behavior.
             QSet<QString> stillActive;
             for (const auto &item : data) {
                 const auto obj = item.toObject();
@@ -141,11 +150,15 @@ void NotificationService::pollNextcloud()
                     stillActive.insert(obj[QStringLiteral("object_id")].toString());
                 }
             }
+            QStringList goneTokens;
             for (const auto &token : qAsConst(_activeCallTokens)) {
                 if (!stillActive.contains(token)) {
-                    _activeCallTokens.remove(token);
-                    emit incomingCallGone(token);
+                    goneTokens.append(token);
                 }
+            }
+            for (const auto &token : goneTokens) {
+                _activeCallTokens.remove(token);
+                emit incomingCallGone(token);
             }
         },
         [this](int status, const QString &message) {
