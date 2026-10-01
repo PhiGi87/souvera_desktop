@@ -401,12 +401,14 @@ void OfficeWindow::setupView(const QString &localPath, const QUrl &collaboraUrl)
     }
 #endif
 
+#if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
     // Fallback 1: launch the bundled desktop LibreOffice with the document —
     // a complete Word replacement even when tile embedding is unavailable.
     if (LokOffice::isSupported() && !loPath.isEmpty()) {
         launchExternalLibreOffice(loPath);
         return;
     }
+#endif
 
     // Fallback 2: open in the system browser (macOS always, Win/Linux when
     // neither the embedded engine nor a desktop LibreOffice is available).
