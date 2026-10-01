@@ -8,7 +8,9 @@
 
 #include <QWidget>
 
+class QAction;
 class QComboBox;
+class QToolBar;
 class QLabel;
 class QPushButton;
 class QScrollArea;
@@ -47,10 +49,11 @@ protected:
 
 private:
     void setupToolbar(const QString &displayName);
-    void setupFormatToolbar();
     void setupView(const QString &localPath, const QUrl &collaboraUrl);
     void launchExternalLibreOffice(const QString &loProgram);
     void connectViewState();
+    QAction *makeColorButton(const QString &iconUno, const QString &tooltip,
+                             const char *uno, QToolBar *toolbar);
 
     QString _localPath;
     bool _loaded = false;
@@ -63,6 +66,9 @@ private:
     QComboBox *_styleCombo = nullptr;
     QComboBox *_fontCombo = nullptr;
     QComboBox *_sizeCombo = nullptr;
+    QAction *_boldAction = nullptr;
+    QAction *_italicAction = nullptr;
+    QAction *_underlineAction = nullptr;
     bool _syncingState = false;
 };
 

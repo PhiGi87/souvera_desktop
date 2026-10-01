@@ -25,5 +25,29 @@
         <file>icons/phone-outgoing.svg</file>
         <file>icons/mic-off.svg</file>
         <file>icons/volume-2.svg</file>
+        <file>office/icons/lc_alignblock.png</file>
+        <file>office/icons/lc_aligncenter.png</file>
+        <file>office/icons/lc_alignleft.png</file>
+        <file>office/icons/lc_alignright.png</file>
+        <file>office/icons/lc_backcolor.png</file>
+        <file>office/icons/lc_bold.png</file>
+        <file>office/icons/lc_copy.png</file>
+        <file>office/icons/lc_cut.png</file>
+        <file>office/icons/lc_decrementindent.png</file>
+        <file>office/icons/lc_defaultbullet.png</file>
+        <file>office/icons/lc_defaultnumbering.png</file>
+        <file>office/icons/lc_exportdirecttopdf.png</file>
+        <file>office/icons/lc_fontcolor.png</file>
+        <file>office/icons/lc_incrementindent.png</file>
+        <file>office/icons/lc_insertgraphic.png</file>
+        <file>office/icons/lc_inserttable.png</file>
+        <file>office/icons/lc_italic.png</file>
+        <file>office/icons/lc_paste.png</file>
+        <file>office/icons/lc_print.png</file>
+        <file>office/icons/lc_redo.png</file>
+        <file>office/icons/lc_save.png</file>
+        <file>office/icons/lc_searchdialog.png</file>
+        <file>office/icons/lc_underline.png</file>
+        <file>office/icons/lc_undo.png</file>
     </qresource>
 </RCC>

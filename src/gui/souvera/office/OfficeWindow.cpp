@@ -23,6 +23,13 @@
 #include <QTimer>
 #include <QFileSystemWatcher>
 #include <QProcess>
+#include <QToolBar>
+#include <QToolButton>
+#include <QMenu>
+#include <QWidgetAction>
+#include <QColorDialog>
+#include <QGridLayout>
+#include <QVector>
 #include <QShortcut>
 #include <QLoggingCategory>
 #include <QVBoxLayout>
@@ -53,250 +60,295 @@ OfficeWindow::OfficeWindow(const QString &localPath, const QString &displayName,
     layout->setSpacing(0);
 
     setupToolbar(displayName);
-    setupFormatToolbar();
     setupView(localPath, collaboraUrl);
+}
+
+namespace {
+// Writer ships its Colibre icons named after the UNO command; the app
+// bundles the needed subset so the toolbar looks native without depending
+// on the LibreOffice installation at runtime.
+QIcon iconFromUno(const QString &unoSuffix)
+{
+    const auto path = QStringLiteral(":/souvera/office/icons/lc_%1.png").arg(unoSuffix);
+    if (QFile::exists(path)) return QIcon(path);
+    return QIcon();
+}
+
+// Standard Writer-like color grid (name -> RGB hex without #).
+const QVector<QPair<QString, QString>> &writerColors()
+{
+    static const QVector<QPair<QString, QString>> colors = {
+        {"Schwarz", "000000"}, {"Dunkelgrau 4", "111111"}, {"Dunkelgrau 3", "1C1C1C"},
+        {"Dunkelgrau 2", "333333"}, {"Dunkelgrau 1", "666666"}, {"Grau", "808080"},
+        {"Hellgrau 1", "999999"}, {"Hellgrau 2", "B2B2B2"}, {"Hellgrau 3", "CCCCCC"},
+        {"Wei\u00DF", "FFFFFF"},
+        {"Gelb", "FFFF00"}, {"Gold", "FFBF00"}, {"Orange", "FF8000"}, {"Ziegel", "FF4000"},
+        {"Rot", "FF0000"}, {"Magenta", "BF0041"}, {"Purpur", "800080"}, {"Indigo", "55308D"},
+        {"Blau", "2A6099"}, {"Petrol", "158466"}, {"Gr\u00FCn", "00A933"},
+        {"Hellgelb", "FFFFBF"}, {"Hellorange", "FFF0BF"}, {"Hellrot", "FFC0C0"},
+        {"Hellmagenta", "E8B2CE"}, {"Hellpurpur", "D1BBFF"}, {"Hellblau", "B8CEE4"},
+        {"Hellpetrol", "B5E0D0"}, {"Hellgr\u00FCn", "B5E6B8"}, {"Grau 2", "E6E6E6"},
+    };
+    return colors;
+}
+} // namespace
+
+QAction *OfficeWindow::makeColorButton(const QString &iconUno, const QString &tooltip,
+                                       const char *uno, QToolBar *toolbar)
+{
+    // MenuButtonPopup: the button applies the last color, the arrow opens
+    // the Writer-style color grid.
+    auto *button = new QToolButton(toolbar);
+    button->setIcon(iconFromUno(iconUno));
+    button->setToolTip(tooltip);
+    button->setPopupMode(QToolButton::MenuButtonPopup);
+    button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+
+    auto apply = [this, uno](const QString &hex) {
+        if (!_view) return;
+        bool ok = false;
+        const auto rgb = hex.toUInt(&ok, 16);
+        if (!ok) return;
+        // LOK typed JSON argument form for UNO long properties.
+        _view->unoCommandArgs(uno,
+            {{QByteArray(uno + 5), QJsonObject{{"type", "long"}, {"value", double(rgb)}}}});
+    };
+
+    auto *menu = new QMenu(button);
+    auto *grid = new QWidget(menu);
+    auto *gridLayout = new QGridLayout(grid);
+    gridLayout->setContentsMargins(6, 6, 6, 6);
+    gridLayout->setSpacing(2);
+    const auto &colors = writerColors();
+    const int columns = 10;
+    for (int i = 0; i < colors.size(); ++i) {
+        auto *swatch = new QToolButton(grid);
+        swatch->setFixedSize(22, 22);
+        swatch->setToolTip(colors[i].first);
+        swatch->setStyleSheet(QStringLiteral(
+            "background-color: #%1; border: 1px solid rgba(128,128,128,120);")
+            .arg(colors[i].second));
+        connect(swatch, &QToolButton::clicked, menu, [menu, apply, color = colors[i].second]() {
+            apply(color);
+            menu->close();
+        });
+        gridLayout->addWidget(swatch, i / columns, i % columns);
+    }
+    auto *dialogAction = menu->addAction(QStringLiteral("Eigene Farbe\u2026"));
+    connect(dialogAction, &QAction::triggered, button, [this, apply]() {
+        const auto color = QColorDialog::getColor(Qt::black, this, QStringLiteral("Farbe w\u00E4hlen"));
+        if (color.isValid()) apply(QString::number(color.rgb() & 0xFFFFFF, 16).rightJustified(6, QLatin1Char('0')));
+    });
+    auto *container = new QWidget(menu);
+    auto *containerLayout = new QVBoxLayout(container);
+    containerLayout->setContentsMargins(2, 2, 2, 2);
+    containerLayout->addWidget(grid);
+    auto *wrap = new QWidgetAction(menu);
+    wrap->setDefaultWidget(container);
+    menu->addAction(wrap);
+    menu->addAction(dialogAction);
+
+    button->setMenu(menu);
+    connect(button, &QToolButton::clicked, button, [apply]() {
+        apply(QStringLiteral("FF0000")); // default Writer font color red
+    });
+    return toolbar->addWidget(button);
 }
 
 void OfficeWindow::setupToolbar(const QString &displayName)
 {
-    auto *toolbar = new QWidget(this);
-    toolbar->setObjectName(QStringLiteral("PanelToolbar"));
-    auto *toolbarLayout = new QHBoxLayout(toolbar);
-    toolbarLayout->setContentsMargins(16, 8, 16, 8);
-    toolbarLayout->setSpacing(6);
+    // A single Writer-style toolbar with the original LibreOffice Colibre
+    // icons, grouped exactly like the desktop Writer default toolbar.
+    auto *toolbar = new QToolBar(this);
+    toolbar->setObjectName(QStringLiteral("OfficeToolBar"));
+    toolbar->setMovable(false);
+    toolbar->setIconSize(QSize(24, 24));
+    toolbar->setToolButtonStyle(Qt::ToolButtonIconOnly);
 
-    auto *titleLabel = new QLabel(QStringLiteral("\U0001F4C4 %1").arg(displayName), toolbar);
+    auto *titleLabel = new QLabel(QStringLiteral("\U0001F4C4 %1").arg(displayName), this);
     titleLabel->setObjectName(QStringLiteral("PanelTitle"));
-    toolbarLayout->addWidget(titleLabel);
+    titleLabel->setContentsMargins(Metrics::CardMargin, 0, Metrics::SpacingM, 0);
+    toolbar->addWidget(titleLabel);
 
-    toolbarLayout->addSpacing(10);
+    auto addCmd = [this, toolbar](const char *iconUno, const QString &tooltip,
+                                  const char *uno) -> QAction * {
+        auto *action = new QAction(
+            iconFromUno(QLatin1String(iconUno)), tooltip, toolbar);
+        connect(action, &QAction::triggered, this, [this, uno]() {
+            if (_view) _view->unoCommand(uno);
+        });
+        toolbar->addAction(action);
+        return action;
+    };
 
+    // Document group
     _saveBtn = new QPushButton(QStringLiteral("Speichern"), toolbar);
     _saveBtn->setObjectName(QStringLiteral("PanelPrimaryBtn"));
-    connect(_saveBtn, &QPushButton::clicked, this, [this]() {
-        save();
-    });
-    toolbarLayout->addWidget(_saveBtn);
+    connect(_saveBtn, &QPushButton::clicked, this, [this]() { save(); });
+    toolbar->addWidget(_saveBtn);
+    toolbar->addSeparator();
 
-    auto *undoBtn = new QPushButton(QStringLiteral("R\u00FCckg\u00E4ngig"), toolbar);
-    undoBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
-    connect(undoBtn, &QPushButton::clicked, this, [this]() {
-        if (_view) _view->unoCommand(".uno:Undo");
-    });
-    toolbarLayout->addWidget(undoBtn);
+    addCmd("undo", QStringLiteral("R\u00FCckg\u00E4ngig"), ".uno:Undo");
+    addCmd("redo", QStringLiteral("Wiederholen"), ".uno:Redo");
+    toolbar->addSeparator();
 
-    auto *redoBtn = new QPushButton(QStringLiteral("Wiederholen"), toolbar);
-    redoBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
-    connect(redoBtn, &QPushButton::clicked, this, [this]() {
-        if (_view) _view->unoCommand(".uno:Redo");
-    });
-    toolbarLayout->addWidget(redoBtn);
+    // Clipboard group
+    addCmd("cut", QStringLiteral("Ausschneiden"), ".uno:Cut");
+    addCmd("copy", QStringLiteral("Kopieren"), ".uno:Copy");
+    addCmd("paste", QStringLiteral("Einf\u00FCgen"), ".uno:Paste");
+    toolbar->addSeparator();
 
-    toolbarLayout->addSpacing(6);
-
-    auto *boldBtn = new QPushButton(QStringLiteral("B"), toolbar);
-    boldBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
-    QFont boldFont = boldBtn->font();
-    boldFont.setBold(true);
-    boldBtn->setFont(boldFont);
-    connect(boldBtn, &QPushButton::clicked, this, [this]() {
-        if (_view) _view->unoCommand(".uno:Bold");
-    });
-    toolbarLayout->addWidget(boldBtn);
-
-    auto *italicBtn = new QPushButton(QStringLiteral("I"), toolbar);
-    italicBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
-    QFont italicFont = italicBtn->font();
-    italicFont.setItalic(true);
-    italicBtn->setFont(italicFont);
-    connect(italicBtn, &QPushButton::clicked, this, [this]() {
-        if (_view) _view->unoCommand(".uno:Italic");
-    });
-    toolbarLayout->addWidget(italicBtn);
-
-    auto *underlineBtn = new QPushButton(QStringLiteral("U"), toolbar);
-    underlineBtn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
-    QFont underlineFont = underlineBtn->font();
-    underlineFont.setUnderline(true);
-    underlineBtn->setFont(underlineFont);
-    connect(underlineBtn, &QPushButton::clicked, this, [this]() {
-        if (_view) _view->unoCommand(".uno:Underline");
-    });
-    toolbarLayout->addWidget(underlineBtn);
-
-    toolbarLayout->addStretch();
-
-    auto *zoomOut = new QPushButton(QStringLiteral("\u2212"), toolbar);
-    zoomOut->setObjectName(QStringLiteral("PanelSecondaryBtn"));
-    connect(zoomOut, &QPushButton::clicked, this, [this]() {
-        if (_view) _view->setZoom(_view->zoom() - 0.1);
-    });
-    toolbarLayout->addWidget(zoomOut);
-
-    _zoomLabel = new QLabel(QStringLiteral("100 %"), toolbar);
-    _zoomLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
-    toolbarLayout->addWidget(_zoomLabel);
-
-    auto *zoomIn = new QPushButton(QStringLiteral("+"), toolbar);
-    zoomIn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
-    connect(zoomIn, &QPushButton::clicked, this, [this]() {
-        if (_view) _view->setZoom(_view->zoom() + 0.1);
-    });
-    toolbarLayout->addWidget(zoomIn);
-
-    auto *layout2 = qobject_cast<QVBoxLayout *>(this->layout());
-    layout2->addWidget(toolbar);
-}
-
-void OfficeWindow::setupFormatToolbar()
-{
-    // Second toolbar row: the full word-processing command set. Everything
-    // runs through LibreOfficeKit UNO commands, exactly like the desktop
-    // Writer menus do.
-    auto *formatBar = new QWidget(this);
-    formatBar->setObjectName(QStringLiteral("PanelToolbar"));
-    auto *formatLayout = new QHBoxLayout(formatBar);
-    formatLayout->setContentsMargins(Metrics::CardMargin, Metrics::SpacingXS, Metrics::CardMargin, Metrics::SpacingXS);
-    formatLayout->setSpacing(Metrics::SpacingS);
-
-    // Paragraph styles
-    _styleCombo = new QComboBox(formatBar);
+    // Styles (Writer dropdown with the common paragraph styles)
+    _styleCombo = new QComboBox(toolbar);
     _styleCombo->setObjectName(QStringLiteral("AudioDeviceCombo"));
+    _styleCombo->setMinimumWidth(130);
     _styleCombo->addItem(QStringLiteral("Standard"));
-    _styleCombo->addItem(QStringLiteral("Überschrift 1"));
-    _styleCombo->addItem(QStringLiteral("Überschrift 2"));
-    _styleCombo->addItem(QStringLiteral("Überschrift 3"));
-    _styleCombo->addItem(QStringLiteral("Liste Aufzählung"));
-    _styleCombo->addItem(QStringLiteral("Liste Nummerierung"));
+    _styleCombo->addItem(QStringLiteral("Titel"));
+    _styleCombo->addItem(QStringLiteral("\u00DCberschrift 1"));
+    _styleCombo->addItem(QStringLiteral("\u00DCberschrift 2"));
+    _styleCombo->addItem(QStringLiteral("\u00DCberschrift 3"));
+    _styleCombo->addItem(QStringLiteral("Aufz\u00E4hlungszeichen"));
+    _styleCombo->addItem(QStringLiteral("Nummerierung"));
     _styleCombo->setToolTip(QStringLiteral("Absatzformat"));
     connect(_styleCombo, &QComboBox::activated, this, [this](int index) {
         if (!_view) return;
-        static const char *styles[] = {"Standard", "Heading 1", "Heading 2",
-                                       "Heading 3", "List Bullet", "List Number"};
+        static const char *styles[] = {"Standard", "Title", "Heading 1",
+                                       "Heading 2", "Heading 3",
+                                       "List Bullet", "List Number"};
         _view->unoCommandArgs(".uno:StyleApply",
                               {{"Style", styles[index]}, {"Family", "ParagraphStyles"}});
     });
-    formatLayout->addWidget(_styleCombo);
+    toolbar->addWidget(_styleCombo);
 
     // Font family + size
-    _fontCombo = new QComboBox(formatBar);
+    _fontCombo = new QComboBox(toolbar);
     _fontCombo->setObjectName(QStringLiteral("AudioDeviceCombo"));
     _fontCombo->setEditable(true);
     for (const auto *f : {"Liberation Serif", "Liberation Sans", "Liberation Mono",
-                          "Arial", "Times New Roman", "Calibri", "Verdana", "Georgia"}) {
+                          "Arial", "Times New Roman", "Calibri", "Verdana", "Georgia",
+                          "Open Sans"}) {
         _fontCombo->addItem(QString::fromUtf8(f));
     }
     _fontCombo->setToolTip(QStringLiteral("Schriftart"));
+    _fontCombo->setMinimumWidth(150);
     connect(_fontCombo, &QComboBox::activated, this, [this](int index) {
         if (_view) {
             _view->unoCommandArgs(".uno:CharFontName",
                                   {{"CharFontName", _fontCombo->itemText(index)}});
         }
     });
-    formatLayout->addWidget(_fontCombo, 1);
+    toolbar->addWidget(_fontCombo);
 
-    _sizeCombo = new QComboBox(formatBar);
+    _sizeCombo = new QComboBox(toolbar);
     _sizeCombo->setObjectName(QStringLiteral("AudioDeviceCombo"));
     _sizeCombo->setEditable(true);
+    _sizeCombo->setMinimumWidth(60);
     for (int size : {8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 48, 72}) {
         _sizeCombo->addItem(QString::number(size));
     }
-    _sizeCombo->setToolTip(QStringLiteral("Schriftgröße"));
+    _sizeCombo->setToolTip(QStringLiteral("Schriftgr\u00F6\u00DFe"));
     connect(_sizeCombo, &QComboBox::activated, this, [this](int index) {
         if (_view) {
             _view->unoCommandArgs(".uno:FontHeight",
                                   {{"FontHeight", _sizeCombo->itemText(index).toDouble()}});
         }
     });
-    formatLayout->addWidget(_sizeCombo);
+    toolbar->addWidget(_sizeCombo);
+    toolbar->addSeparator();
 
-    const auto addButton = [this, formatLayout, formatBar](const QString &text, const QString &tooltip,
-                                                const char *uno) {
-        auto *btn = new QPushButton(text, formatBar);
-        btn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
-        btn->setToolTip(tooltip);
-        if (strlen(tooltip.toUtf8().constData()) < 40) {
-            btn->setFixedWidth(qMax(32, btn->sizeHint().width()));
-        }
-        connect(btn, &QPushButton::clicked, this, [this, uno]() {
-            if (_view) _view->unoCommand(uno);
-        });
-        formatLayout->addWidget(btn);
-        return btn;
-    };
+    // Character emphasis — the B/I/U buttons keep the Writer toggle look
+    // via checkable actions synced from the document state.
+    _boldAction = addCmd("bold", QStringLiteral("Fett"), ".uno:Bold");
+    _boldAction->setCheckable(true);
+    _italicAction = addCmd("italic", QStringLiteral("Kursiv"), ".uno:Italic");
+    _italicAction->setCheckable(true);
+    _underlineAction = addCmd("underline", QStringLiteral("Unterstrichen"), ".uno:Underline");
+    _underlineAction->setCheckable(true);
+
+    // Font color + highlight with Writer-style color grid dropdowns.
+    toolbar->addAction(makeColorButton(QStringLiteral("fontcolor"),
+        QStringLiteral("Schriftfarbe"), ".uno:FontColor", toolbar));
+    toolbar->addAction(makeColorButton(QStringLiteral("backcolor"),
+        QStringLiteral("Hervorhebung"), ".uno:BackColor", toolbar));
+    toolbar->addSeparator();
 
     // Alignments
-    addButton(QStringLiteral("⯇"), QStringLiteral("Linksbündig"), ".uno:AlignLeft");
-    addButton(QStringLiteral("≡"), QStringLiteral("Zentriert"), ".uno:AlignHorizontalCenter");
-    addButton(QStringLiteral("⯈"), QStringLiteral("Rechtsbündig"), ".uno:AlignRight");
-    addButton(QStringLiteral("☰"), QStringLiteral("Blocksatz"), ".uno:AlignJustified");
+    addCmd("alignleft", QStringLiteral("Linksb\u00FCndig"), ".uno:AlignLeft");
+    addCmd("aligncenter", QStringLiteral("Zentriert"), ".uno:AlignHorizontalCenter");
+    addCmd("alignright", QStringLiteral("Rechtsb\u00FCndig"), ".uno:AlignRight");
+    addCmd("alignblock", QStringLiteral("Blocksatz"), ".uno:AlignJustified");
+    toolbar->addSeparator();
 
-    // Lists
-    addButton(QStringLiteral("•Liste"), QStringLiteral("Aufzählung"), ".uno:DefaultBullet");
-    addButton(QStringLiteral("1.Liste"), QStringLiteral("Nummerierung"), ".uno:DefaultNumbering");
+    // Lists + indent
+    addCmd("defaultbullet", QStringLiteral("Aufz\u00E4hlung"), ".uno:DefaultBullet");
+    addCmd("defaultnumbering", QStringLiteral("Nummerierung"), ".uno:DefaultNumbering");
+    addCmd("incrementindent", QStringLiteral("Einzug vergr\u00F6\u00DFern"), ".uno:IncrementIndent");
+    addCmd("decrementindent", QStringLiteral("Einzug verkleinern"), ".uno:DecrementIndent");
+    toolbar->addSeparator();
 
-    // Indent
-    addButton(QStringLiteral("→|"), QStringLiteral("Einzug vergrößern"), ".uno:IncrementIndent");
-    addButton(QStringLiteral("|←"), QStringLiteral("Einzug verkleinern"), ".uno:DecrementIndent");
+    // Insert group
+    addCmd("inserttable", QStringLiteral("Tabelle einf\u00FCgen"), ".uno:InsertTable");
+    addCmd("insertgraphic", QStringLiteral("Bild einf\u00FCgen"), ".uno:InsertGraphic");
+    toolbar->addSeparator();
 
-    // Insert
-    addButton(QStringLiteral("Tabelle"), QStringLiteral("Tabelle einfügen"), ".uno:InsertTable");
-    addButton(QStringLiteral("Bild"), QStringLiteral("Bild einfügen"), ".uno:InsertGraphic");
+    addCmd("searchdialog", QStringLiteral("Suchen und ersetzen"), ".uno:SearchDialog");
+    addCmd("print", QStringLiteral("Drucken"), ".uno:Print");
+    addCmd("exportdirecttopdf", QStringLiteral("Als PDF exportieren"), ".uno:ExportDirectToPDF");
 
-    // Color buttons open the UNO dialogs directly (simpler + complete)
-    addButton(QStringLiteral("A█"), QStringLiteral("Schriftfarbe"), ".uno:FontColor");
-    addButton(QStringLiteral("A▓"), QStringLiteral("Hervorhebung"), ".uno:BackColor");
-
-    // Find & replace, print, export
-    addButton(QStringLiteral("Suchen"), QStringLiteral("Suchen und ersetzen"), ".uno:SearchDialog");
-    addButton(QStringLiteral("Drucken"), QStringLiteral("Drucken"), ".uno:Print");
-    addButton(QStringLiteral("PDF"), QStringLiteral("Als PDF exportieren"), ".uno:ExportDirectToPDF");
-
-    formatLayout->addStretch();
+    toolbar->addSeparator();
+    _zoomLabel = new QLabel(QStringLiteral("100 %"), toolbar);
+    _zoomLabel->setObjectName(QStringLiteral("FolderStatusLabel"));
+    toolbar->addWidget(_zoomLabel);
+    auto *zoomOut = new QToolButton(toolbar);
+    zoomOut->setText(QStringLiteral("\u2212"));
+    connect(zoomOut, &QToolButton::clicked, this, [this]() {
+        if (_view) _view->setZoom(_view->zoom() - 0.1);
+    });
+    toolbar->addWidget(zoomOut);
+    auto *zoomIn = new QToolButton(toolbar);
+    zoomIn->setText(QStringLiteral("+"));
+    connect(zoomIn, &QToolButton::clicked, this, [this]() {
+        if (_view) _view->setZoom(_view->zoom() + 0.1);
+    });
+    toolbar->addWidget(zoomIn);
 
     auto *layout2 = qobject_cast<QVBoxLayout *>(this->layout());
-    layout2->addWidget(formatBar);
+    layout2->addWidget(toolbar);
 }
 
 void OfficeWindow::connectViewState()
 {
     if (!_view) return;
-    // Keep the style/font/size combos in sync with the cursor position.
+    // Keep the style/font/size combos and the B/I/U toggles in sync with
+    // the cursor position, driven by LOK state callbacks.
     connect(_view, &OfficeDocumentView::unoStateChanged, this,
             [this](const QString &command, const QString &value) {
-        if (_syncingState || value.isEmpty()) return;
+        if (_syncingState) return;
         _syncingState = true;
         if (command == QLatin1String(".uno:CharFontName")) {
             const auto idx = _fontCombo->findText(value);
             if (idx < 0) _fontCombo->setCurrentText(value);
             else _fontCombo->setCurrentIndex(idx);
         } else if (command == QLatin1String(".uno:FontHeight")) {
-            const auto ok = [&] {
-                bool convOk = false; const double d = value.toDouble(&convOk); return convOk ? d : 0.0;
-            }();
-            if (ok > 0) _sizeCombo->setCurrentText(QString::number(qRound(ok)));
-        } else if (command == QLatin1String(".uno:StyleApply")
-                   || command == QLatin1String(".uno:TemplateFamily")) {
+            bool ok = false;
+            const auto size = value.toDouble(&ok);
+            if (ok && size > 0) {
+                _sizeCombo->setCurrentText(QString::number(qRound(size)));
+            }
+        } else if (command == QLatin1String(".uno:StyleApply")) {
             static const QHash<QString, int> styleIndex = {
-                {QStringLiteral("Standard"), 0}, {QStringLiteral("Heading 1"), 1},
-                {QStringLiteral("Heading 2"), 2}, {QStringLiteral("Heading 3"), 3},
-                {QStringLiteral("List Bullet"), 4}, {QStringLiteral("List Number"), 5}};
+                {QStringLiteral("Standard"), 0}, {QStringLiteral("Title"), 1},
+                {QStringLiteral("Heading 1"), 2}, {QStringLiteral("Heading 2"), 3},
+                {QStringLiteral("Heading 3"), 4}, {QStringLiteral("List Bullet"), 5},
+                {QStringLiteral("List Number"), 6}};
             const auto idx = styleIndex.value(value, -1);
             if (idx >= 0) _styleCombo->setCurrentIndex(idx);
-        } else if (command == QLatin1String(".uno:Bold")
-                   || command == QLatin1String(".uno:Italic")
-                   || command == QLatin1String(".uno:Underline")) {
-            const auto on = value == QLatin1String("true");
-            for (auto *btn : findChildren<QPushButton *>()) {
-                const auto tip = btn->toolTip();
-                if ((command == QLatin1String(".uno:Bold") && tip == QLatin1String("Fett"))
-                    || (command == QLatin1String(".uno:Italic") && tip == QLatin1String("Kursiv"))
-                    || (command == QLatin1String(".uno:Underline") && tip == QLatin1String("Unterstrichen"))) {
-                    QFont f = btn->font();
-                    f.setBold(on);
-                    btn->setFont(f);
-                }
-            }
+        } else if (command == QLatin1String(".uno:Bold")) {
+            _boldAction->setChecked(value == QLatin1String("true"));
+        } else if (command == QLatin1String(".uno:Italic")) {
+            _italicAction->setChecked(value == QLatin1String("true"));
+        } else if (command == QLatin1String(".uno:Underline")) {
+            _underlineAction->setChecked(value == QLatin1String("true"));
         }
         _syncingState = false;
     });
