@@ -4,19 +4,27 @@
  */
 
 #include "OfficeWindow.h"
+#include "theme/SouveraMetrics.h"
 #include "OfficeDocumentView.h"
 #include "LokOffice.h"
 
 #include "config.h"
 
 #include <QCloseEvent>
+#include <QComboBox>
+#include <QDir>
+#include <QFile>
 #include <QDesktopServices>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QTimer>
+#include <QFileSystemWatcher>
+#include <QProcess>
 #include <QShortcut>
+#include <QLoggingCategory>
 #include <QVBoxLayout>
 
 #ifdef BUILD_WITH_WEBENGINE
@@ -26,6 +34,9 @@
 #endif
 
 namespace OCC {
+
+namespace Metrics = Sou::Metrics;
+Q_LOGGING_CATEGORY(lcOfficeWindow, "souvera.office.window")
 
 OfficeWindow::OfficeWindow(const QString &localPath, const QString &displayName,
                            const QUrl &collaboraUrl, QWidget *parent)
@@ -42,6 +53,7 @@ OfficeWindow::OfficeWindow(const QString &localPath, const QString &displayName,
     layout->setSpacing(0);
 
     setupToolbar(displayName);
+    setupFormatToolbar();
     setupView(localPath, collaboraUrl);
 }
 
@@ -136,6 +148,160 @@ void OfficeWindow::setupToolbar(const QString &displayName)
     layout2->addWidget(toolbar);
 }
 
+void OfficeWindow::setupFormatToolbar()
+{
+    // Second toolbar row: the full word-processing command set. Everything
+    // runs through LibreOfficeKit UNO commands, exactly like the desktop
+    // Writer menus do.
+    auto *formatBar = new QWidget(this);
+    formatBar->setObjectName(QStringLiteral("PanelToolbar"));
+    auto *formatLayout = new QHBoxLayout(formatBar);
+    formatLayout->setContentsMargins(Metrics::CardMargin, Metrics::SpacingXS, Metrics::CardMargin, Metrics::SpacingXS);
+    formatLayout->setSpacing(Metrics::SpacingS);
+
+    // Paragraph styles
+    _styleCombo = new QComboBox(formatBar);
+    _styleCombo->setObjectName(QStringLiteral("AudioDeviceCombo"));
+    _styleCombo->addItem(QStringLiteral("Standard"));
+    _styleCombo->addItem(QStringLiteral("Überschrift 1"));
+    _styleCombo->addItem(QStringLiteral("Überschrift 2"));
+    _styleCombo->addItem(QStringLiteral("Überschrift 3"));
+    _styleCombo->addItem(QStringLiteral("Liste Aufzählung"));
+    _styleCombo->addItem(QStringLiteral("Liste Nummerierung"));
+    _styleCombo->setToolTip(QStringLiteral("Absatzformat"));
+    connect(_styleCombo, &QComboBox::activated, this, [this](int index) {
+        if (!_view) return;
+        static const char *styles[] = {"Standard", "Heading 1", "Heading 2",
+                                       "Heading 3", "List Bullet", "List Number"};
+        _view->unoCommandArgs(".uno:StyleApply",
+                              {{"Style", styles[index]}, {"Family", "ParagraphStyles"}});
+    });
+    formatLayout->addWidget(_styleCombo);
+
+    // Font family + size
+    _fontCombo = new QComboBox(formatBar);
+    _fontCombo->setObjectName(QStringLiteral("AudioDeviceCombo"));
+    _fontCombo->setEditable(true);
+    for (const auto *f : {"Liberation Serif", "Liberation Sans", "Liberation Mono",
+                          "Arial", "Times New Roman", "Calibri", "Verdana", "Georgia"}) {
+        _fontCombo->addItem(QString::fromUtf8(f));
+    }
+    _fontCombo->setToolTip(QStringLiteral("Schriftart"));
+    connect(_fontCombo, &QComboBox::activated, this, [this](int index) {
+        if (_view) {
+            _view->unoCommandArgs(".uno:CharFontName",
+                                  {{"CharFontName", _fontCombo->itemText(index)}});
+        }
+    });
+    formatLayout->addWidget(_fontCombo, 1);
+
+    _sizeCombo = new QComboBox(formatBar);
+    _sizeCombo->setObjectName(QStringLiteral("AudioDeviceCombo"));
+    _sizeCombo->setEditable(true);
+    for (int size : {8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 48, 72}) {
+        _sizeCombo->addItem(QString::number(size));
+    }
+    _sizeCombo->setToolTip(QStringLiteral("Schriftgröße"));
+    connect(_sizeCombo, &QComboBox::activated, this, [this](int index) {
+        if (_view) {
+            _view->unoCommandArgs(".uno:FontHeight",
+                                  {{"FontHeight", _sizeCombo->itemText(index).toDouble()}});
+        }
+    });
+    formatLayout->addWidget(_sizeCombo);
+
+    const auto addButton = [this, formatLayout, formatBar](const QString &text, const QString &tooltip,
+                                                const char *uno) {
+        auto *btn = new QPushButton(text, formatBar);
+        btn->setObjectName(QStringLiteral("PanelSecondaryBtn"));
+        btn->setToolTip(tooltip);
+        if (strlen(tooltip.toUtf8().constData()) < 40) {
+            btn->setFixedWidth(qMax(32, btn->sizeHint().width()));
+        }
+        connect(btn, &QPushButton::clicked, this, [this, uno]() {
+            if (_view) _view->unoCommand(uno);
+        });
+        formatLayout->addWidget(btn);
+        return btn;
+    };
+
+    // Alignments
+    addButton(QStringLiteral("⯇"), QStringLiteral("Linksbündig"), ".uno:AlignLeft");
+    addButton(QStringLiteral("≡"), QStringLiteral("Zentriert"), ".uno:AlignHorizontalCenter");
+    addButton(QStringLiteral("⯈"), QStringLiteral("Rechtsbündig"), ".uno:AlignRight");
+    addButton(QStringLiteral("☰"), QStringLiteral("Blocksatz"), ".uno:AlignJustified");
+
+    // Lists
+    addButton(QStringLiteral("•Liste"), QStringLiteral("Aufzählung"), ".uno:DefaultBullet");
+    addButton(QStringLiteral("1.Liste"), QStringLiteral("Nummerierung"), ".uno:DefaultNumbering");
+
+    // Indent
+    addButton(QStringLiteral("→|"), QStringLiteral("Einzug vergrößern"), ".uno:IncrementIndent");
+    addButton(QStringLiteral("|←"), QStringLiteral("Einzug verkleinern"), ".uno:DecrementIndent");
+
+    // Insert
+    addButton(QStringLiteral("Tabelle"), QStringLiteral("Tabelle einfügen"), ".uno:InsertTable");
+    addButton(QStringLiteral("Bild"), QStringLiteral("Bild einfügen"), ".uno:InsertGraphic");
+
+    // Color buttons open the UNO dialogs directly (simpler + complete)
+    addButton(QStringLiteral("A█"), QStringLiteral("Schriftfarbe"), ".uno:FontColor");
+    addButton(QStringLiteral("A▓"), QStringLiteral("Hervorhebung"), ".uno:BackColor");
+
+    // Find & replace, print, export
+    addButton(QStringLiteral("Suchen"), QStringLiteral("Suchen und ersetzen"), ".uno:SearchDialog");
+    addButton(QStringLiteral("Drucken"), QStringLiteral("Drucken"), ".uno:Print");
+    addButton(QStringLiteral("PDF"), QStringLiteral("Als PDF exportieren"), ".uno:ExportDirectToPDF");
+
+    formatLayout->addStretch();
+
+    auto *layout2 = qobject_cast<QVBoxLayout *>(this->layout());
+    layout2->addWidget(formatBar);
+}
+
+void OfficeWindow::connectViewState()
+{
+    if (!_view) return;
+    // Keep the style/font/size combos in sync with the cursor position.
+    connect(_view, &OfficeDocumentView::unoStateChanged, this,
+            [this](const QString &command, const QString &value) {
+        if (_syncingState || value.isEmpty()) return;
+        _syncingState = true;
+        if (command == QLatin1String(".uno:CharFontName")) {
+            const auto idx = _fontCombo->findText(value);
+            if (idx < 0) _fontCombo->setCurrentText(value);
+            else _fontCombo->setCurrentIndex(idx);
+        } else if (command == QLatin1String(".uno:FontHeight")) {
+            const auto ok = [&] {
+                bool convOk = false; const double d = value.toDouble(&convOk); return convOk ? d : 0.0;
+            }();
+            if (ok > 0) _sizeCombo->setCurrentText(QString::number(qRound(ok)));
+        } else if (command == QLatin1String(".uno:StyleApply")
+                   || command == QLatin1String(".uno:TemplateFamily")) {
+            static const QHash<QString, int> styleIndex = {
+                {QStringLiteral("Standard"), 0}, {QStringLiteral("Heading 1"), 1},
+                {QStringLiteral("Heading 2"), 2}, {QStringLiteral("Heading 3"), 3},
+                {QStringLiteral("List Bullet"), 4}, {QStringLiteral("List Number"), 5}};
+            const auto idx = styleIndex.value(value, -1);
+            if (idx >= 0) _styleCombo->setCurrentIndex(idx);
+        } else if (command == QLatin1String(".uno:Bold")
+                   || command == QLatin1String(".uno:Italic")
+                   || command == QLatin1String(".uno:Underline")) {
+            const auto on = value == QLatin1String("true");
+            for (auto *btn : findChildren<QPushButton *>()) {
+                const auto tip = btn->toolTip();
+                if ((command == QLatin1String(".uno:Bold") && tip == QLatin1String("Fett"))
+                    || (command == QLatin1String(".uno:Italic") && tip == QLatin1String("Kursiv"))
+                    || (command == QLatin1String(".uno:Underline") && tip == QLatin1String("Unterstrichen"))) {
+                    QFont f = btn->font();
+                    f.setBold(on);
+                    btn->setFont(f);
+                }
+            }
+        }
+        _syncingState = false;
+    });
+}
+
 void OfficeWindow::setupView(const QString &localPath, const QUrl &collaboraUrl)
 {
     auto *layout = qobject_cast<QVBoxLayout *>(this->layout());
@@ -157,6 +323,8 @@ void OfficeWindow::setupView(const QString &localPath, const QUrl &collaboraUrl)
         if (_loaded) {
             scroll->setWidget(_view);
             layout->addWidget(scroll, 1);
+
+            connectViewState();
 
             connect(_view, &OfficeDocumentView::zoomChanged, this, [this](double zoom) {
                 _zoomLabel->setText(QStringLiteral("%1 %").arg(qRound(zoom * 100)));
@@ -181,8 +349,15 @@ void OfficeWindow::setupView(const QString &localPath, const QUrl &collaboraUrl)
     }
 #endif
 
-    // Fallback: open in the system browser (macOS always, Win/Linux when
-    // the embedded engine is unavailable).
+    // Fallback 1: launch the bundled desktop LibreOffice with the document —
+    // a complete Word replacement even when tile embedding is unavailable.
+    if (LokOffice::isSupported() && !loPath.isEmpty()) {
+        launchExternalLibreOffice(loPath);
+        return;
+    }
+
+    // Fallback 2: open in the system browser (macOS always, Win/Linux when
+    // neither the embedded engine nor a desktop LibreOffice is available).
     Q_UNUSED(localPath)
     if (collaboraUrl.isValid() && !collaboraUrl.isEmpty()) {
 #ifdef BUILD_WITH_WEBENGINE
@@ -210,6 +385,48 @@ void OfficeWindow::setupView(const QString &localPath, const QUrl &collaboraUrl)
         _fallbackView = hint;
         layout->addWidget(hint, 1);
     }
+}
+
+void OfficeWindow::launchExternalLibreOffice(const QString &loProgram)
+{
+    // Runs the full desktop Writer/Calc/Impress from the bundled tree —
+    // every editing feature, no browser involved. The save/upload cycle is
+    // handled by watching the file for changes.
+    const auto soffice = loProgram + QStringLiteral("/soffice.exe");
+#ifdef Q_OS_WIN
+    const auto sofficeBin = QFile::exists(soffice) ? soffice
+        : loProgram + QStringLiteral("/soffice.bin");
+#else
+    Q_UNUSED(soffice)
+    const auto sofficeBin = loProgram + QStringLiteral("/soffice");
+#endif
+    if (!QFile::exists(sofficeBin)) {
+        qCWarning(lcOfficeWindow) << "External soffice not found:" << sofficeBin;
+        return;
+    }
+
+    _externalEditing = true;
+    qCInfo(lcOfficeWindow) << "Launching external LibreOffice for" << _localPath;
+    QProcess::startDetached(sofficeBin, {QDir::toNativeSeparators(_localPath)});
+
+    auto *hint = new QLabel(QStringLiteral(
+        "Das Dokument wird in LibreOffice ge\u00F6ffnet.\n"
+        "\u00C4nderungen werden beim Speichern automatisch hochgeladen."), this);
+    hint->setObjectName(QStringLiteral("PanelPlaceholder"));
+    hint->setAlignment(Qt::AlignCenter);
+    _fallbackView = hint;
+    auto *layout = qobject_cast<QVBoxLayout *>(this->layout());
+    layout->addWidget(hint, 1);
+    _loaded = true;
+
+    // Upload on external save: watch the file, debounce, notify the manager.
+    auto *watcher = new QFileSystemWatcher(this);
+    watcher->addPath(_localPath);
+    connect(watcher, &QFileSystemWatcher::fileChanged, this, [this]() {
+        QTimer::singleShot(1500, this, [this]() {
+            emit documentSaved(_localPath);
+        });
+    });
 }
 
 bool OfficeWindow::isModified() const

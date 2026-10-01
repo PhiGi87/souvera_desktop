@@ -8,6 +8,7 @@
 
 #include <QWidget>
 
+class QComboBox;
 class QLabel;
 class QPushButton;
 class QScrollArea;
@@ -46,15 +47,23 @@ protected:
 
 private:
     void setupToolbar(const QString &displayName);
+    void setupFormatToolbar();
     void setupView(const QString &localPath, const QUrl &collaboraUrl);
+    void launchExternalLibreOffice(const QString &loProgram);
+    void connectViewState();
 
     QString _localPath;
     bool _loaded = false;
     bool _forceClosing = false;
+    bool _externalEditing = false;
     OfficeDocumentView *_view = nullptr;
     QWidget *_fallbackView = nullptr;
     QLabel *_zoomLabel = nullptr;
     QPushButton *_saveBtn = nullptr;
+    QComboBox *_styleCombo = nullptr;
+    QComboBox *_fontCombo = nullptr;
+    QComboBox *_sizeCombo = nullptr;
+    bool _syncingState = false;
 };
 
 } // namespace OCC

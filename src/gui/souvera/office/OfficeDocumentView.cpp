@@ -133,6 +133,14 @@ void OfficeDocumentView::unoCommand(const QByteArray &command)
     markModified();
 }
 
+void OfficeDocumentView::unoCommandArgs(const QByteArray &command, const QJsonObject &args)
+{
+    if (!_doc) return;
+    const auto payload = QJsonDocument(args).toJson(QJsonDocument::Compact);
+    _doc->pClass->postUnoCommand(_doc, command.constData(), payload.constData(), false);
+    markModified();
+}
+
 void OfficeDocumentView::refreshDocumentSize()
 {
     if (!_doc) return;
@@ -350,6 +358,25 @@ void OfficeDocumentView::lokCallback(int type, const char *payload, void *data)
         self->scheduleResize();
         self->update();
         break;
+    case LOK_CALLBACK_STATE_CHANGED: {
+        // Payload is ".uno:Bold=true", ".uno:CharFontName=Liberation Serif"
+        // or a JSON dict for .uno:FontColor style states — feed the toolbar.
+        const auto sep = payloadStr.indexOf(QLatin1Char('='));
+        if (sep > 0) {
+            const auto command = payloadStr.left(sep);
+            auto value = payloadStr.mid(sep + 1);
+            // Some states arrive as JSON ({".uno:X": {"type":..,"color":..}})
+            value = value.trimmed();
+            if (value.startsWith(QLatin1Char('{'))) {
+                const auto doc = QJsonDocument::fromJson(value.toUtf8());
+                value = doc.object().value(command).toString();
+            }
+            QMetaObject::invokeMethod(self, [self, command, value]() {
+                emit self->unoStateChanged(command, value);
+            }, Qt::QueuedConnection);
+        }
+        break;
+    }
     default:
         // Other callbacks (cursor, selection, ...) do not affect tiles in v1.
         break;
@@ -375,6 +402,7 @@ bool OfficeDocumentView::load(const QString &) { return false; }
 bool OfficeDocumentView::save() { return false; }
 void OfficeDocumentView::setZoom(double) {}
 void OfficeDocumentView::unoCommand(const QByteArray &) {}
+void OfficeDocumentView::unoCommandArgs(const QByteArray &, const QJsonObject &) {}
 void OfficeDocumentView::refreshDocumentSize() {}
 void OfficeDocumentView::ensureTiles(const QRect &) {}
 void OfficeDocumentView::invalidateTwipsRect(const QRectF &) { Q_UNUSED(_zoom) }

@@ -112,7 +112,10 @@ extern "C"
 #else
     static void *lok_loadlib(const char *pFN)
     {
-        return (void *) LoadLibraryA(pFN);
+        // LOAD_WITH_ALTERED_SEARCH_PATH resolves the library's own
+        // dependencies (bundled CRT, sal helpers) from its directory —
+        // a plain LoadLibraryA fails when program\ is not on PATH.
+        return (void *) LoadLibraryExA(pFN, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
     }
 
     static char *lok_dlerror(void)

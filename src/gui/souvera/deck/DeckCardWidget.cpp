@@ -58,7 +58,6 @@ DeckCardWidget::DeckCardWidget(const QJsonObject &cardData, int stackId, QWidget
     if (!description.isEmpty()) {
         _descriptionLabel = new QLabel(this);
         _descriptionLabel->setWordWrap(true);
-        _descriptionLabel->setMaximumHeight(34);
         layout->addWidget(_descriptionLabel);
     }
 
@@ -122,7 +121,12 @@ void DeckCardWidget::setTitle(const QString &title)
 void DeckCardWidget::setDescription(const QString &description)
 {
     if (_descriptionLabel) {
-        _descriptionLabel->setText(description);
+        // Qt wraps at spaces only — long slash-joined tokens (paths like
+        // "Kommune/Position/Stadtentwässerung") would overflow and get cut
+        // mid-glyph. Zero-width break opportunities make them wrap cleanly.
+        QString display = description;
+        display.replace(QLatin1Char('/'), QStringLiteral("/\u200B"));
+        _descriptionLabel->setText(display);
         _descriptionLabel->setVisible(!description.isEmpty());
     }
 }

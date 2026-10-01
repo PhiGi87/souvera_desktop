@@ -9,6 +9,7 @@
 #include <QWidget>
 #include <QImage>
 #include <QHash>
+#include <QJsonObject>
 
 struct _LibreOfficeKitDocument;
 typedef struct _LibreOfficeKitDocument LibreOfficeKitDocument;
@@ -36,6 +37,8 @@ public:
     [[nodiscard]] double zoom() const { return _zoom; }
 
     void unoCommand(const QByteArray &command);
+    /** UNO command with JSON arguments, e.g. StyleApply / FontHeight. */
+    void unoCommandArgs(const QByteArray &command, const QJsonObject &args);
 
     [[nodiscard]] bool isModified() const { return _modified; }
     [[nodiscard]] QString filePath() const { return _filePath; }
@@ -43,6 +46,10 @@ public:
 signals:
     void zoomChanged(double zoom);
     void modifiedChanged(bool modified);
+
+    /** Toolbar state sync: command like ".uno:Bold", value "true"/"false"
+     *  for toggles or the raw value (font name, size). */
+    void unoStateChanged(const QString &command, const QString &value);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
