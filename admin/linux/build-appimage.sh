@@ -144,6 +144,9 @@ rm -rf ./squashfs-root
 APPIMAGE=$(ls *.AppImage)
 ./"${APPIMAGE}" --appimage-extract
 rm ./"${APPIMAGE}"
+# The freshly extracted AppDir can carry 0700 modes (container umask),
+# which the current appimagetool refuses to package.
+chmod -R a+rX ./squashfs-root
 LD_LIBRARY_PATH="$PWD/appimagetool-squashfs-root/usr/lib":$LD_LIBRARY_PATH PATH="$PWD/appimagetool-squashfs-root/usr/bin":$PATH appimagetool -n ./squashfs-root "${APPIMAGE}"
 
 #move AppImage
