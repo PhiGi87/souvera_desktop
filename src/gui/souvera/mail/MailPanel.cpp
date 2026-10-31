@@ -21,7 +21,9 @@
 #include <QLabel>
 #include <QLoggingCategory>
 #include <QHeaderView>
+#include <QMenu>
 #include <QMessageBox>
+#include <QScrollBar>
 #include <QSettings>
 #include <QUrlQuery>
 
@@ -78,17 +80,20 @@ void MailPanel::wireAccount(AccountState *accountState)
     _mailRemintTried = false;
     setStatus(QStringLiteral("Mail-Anmeldung wird eingerichtet\u2026"));
     const auto accountGuard = QPointer<AccountState>(accountState);
+    const auto panelGuard = QPointer<QObject>(this);
     // Wait for the keychain fetch: requests fired with empty credentials
     // never complete.
-    Sou::whenCredentialsReady(accountState, this, [this, accountGuard, accountState]() {
+    Sou::whenCredentialsReady(accountState, this, [this, panelGuard, accountGuard, accountState]() {
         if (!accountGuard || accountState != _accountState) return;
         MailLoginFlow::ensureCombinedPassword(accountState,
-            [this, accountGuard, accountState](const CombinedAppPassword &result) {
-                if (!accountGuard || accountState != _accountState) return;
+            [this, panelGuard, accountGuard, accountState](const CombinedAppPassword &result) {
+                // The mint reply outlives this panel in the worst case: guard
+                // every dereference of this.
+                if (!panelGuard || !accountGuard || accountState != _accountState) return;
                 startJmap(_mailUser, result.appPassword);
             },
-            [this, accountGuard](const QString &error) {
-                if (!accountGuard) return;
+            [this, panelGuard, accountGuard](const QString &error) {
+                if (!panelGuard || !accountGuard) return;
                 setStatus(error, true);
             });
     });
@@ -121,6 +126,15 @@ void MailPanel::startJmap(const QString &user, const QString &mailPassword)
             QMessageBox::warning(this, QStringLiteral("Senden fehlgeschlagen"),
                                  QStringLiteral("Die Nachricht konnte nicht gesendet werden:\n%1").arg(error));
         }
+        // A composer that stayed open during the send gets its draft back.
+        if (_activeComposer) {
+            if (success) {
+                _activeComposer->sendSucceeded();
+            } else {
+                _activeComposer->sendFailed(error);
+            }
+            _activeComposer.clear();
+        }
     });
 
     connect(_jmapClient, &JmapClient::sessionResolved, this, [this](const QString &, const QString &) {
@@ -145,12 +159,44 @@ void MailPanel::startJmap(const QString &user, const QString &mailPassword)
         qCInfo(lcMailPanel) << "Mailboxes fetched:" << boxes.size();
         _folderModel->setMailboxes(boxes);
         _folderView->expandAll();
-        // Always start in the inbox (Thunderbird-style), never in a random folder.
-        const auto inbox = _folderModel->inboxIndex();
-        if (inbox.isValid()) {
-            _folderView->setCurrentIndex(inbox);
+
+        _inboxMailboxId.clear();
+        for (const auto &box : boxes) {
+            if (box.role.compare(QLatin1String("inbox"), Qt::CaseInsensitive) == 0) {
+                _inboxMailboxId = box.id;
+                break;
+            }
+        }
+
+        // Keep the selected folder across refreshes; default to the inbox
+        // (Thunderbird-style). Re-selecting the same folder must not run
+        // onFolderSelected, which would clear the visible message list.
+        auto target = _currentMailboxId.isEmpty()
+            ? QModelIndex() : _folderModel->indexForMailboxId(_currentMailboxId);
+        if (!target.isValid()) target = _folderModel->inboxIndex();
+        if (target.isValid()) {
+            const auto targetId = _folderModel->mailboxIdForIndex(target);
+            if (!targetId.isEmpty() && targetId == _currentMailboxId) {
+                _folderReselect = true;
+                _folderView->setCurrentIndex(target);
+                _folderReselect = false;
+            } else {
+                _folderView->setCurrentIndex(target);
+            }
+        }
+
+        // The inbox unread total drives the sidebar badge.
+        if (!_inboxMailboxId.isEmpty()) {
+            _jmapClient->queryUnreadCount(_inboxMailboxId);
         }
         setStatus(QStringLiteral("Bereit \u2014 %1 Ordner").arg(boxes.size()));
+    });
+
+    connect(_jmapClient, &JmapClient::unreadCountChanged, this,
+            [this](int total, const QString &mailboxId) {
+        if (mailboxId == _inboxMailboxId) {
+            emit unreadCountChanged(total);
+        }
     });
 
     connect(_jmapClient, &JmapClient::emailsFetched, this, [this](const QList<JmapEmail> &emails, int total, const QString &mailboxId) {
@@ -161,11 +207,7 @@ void MailPanel::startJmap(const QString &user, const QString &mailPassword)
             return;
         }
         qCInfo(lcMailPanel) << "Emails fetched:" << emails.size() << "total:" << total;
-        _messageModel->setEmails(emails);
-        _messageModel->setTotal(total);
-        setStatus(total > static_cast<int>(emails.size())
-                      ? QStringLiteral("%1 von %2 Nachrichten").arg(emails.size()).arg(total)
-                      : QStringLiteral("%1 Nachrichten").arg(emails.size()));
+        applyEmails(emails, total);
     });
 
     connect(_jmapClient, &JmapClient::emailBodyFetched, this, [this](const JmapEmailBody &body, const QString &emailId) {
@@ -222,6 +264,8 @@ void MailPanel::startJmap(const QString &user, const QString &mailPassword)
         if (!_currentMailboxId.isEmpty()) {
             _jmapClient->queryEmails(_currentMailboxId, 50, 0, _searchEdit ? _searchEdit->text() : QString());
         }
+        // Read/unread/delete/move all change the folder counts.
+        refreshUnreadCounts();
     });
 
     connect(_jmapClient, &JmapClient::networkError, this, [this](const QString &err) {
@@ -230,6 +274,52 @@ void MailPanel::startJmap(const QString &user, const QString &mailPassword)
     });
 
     _jmapClient->resolveSession();
+}
+
+void MailPanel::applyEmails(const QList<JmapEmail> &emails, int total)
+{
+    _messageModel->setTotal(total);
+    if (_messageModel->matches(emails)) {
+        // Same content: keep list, selection and scroll position untouched.
+        setStatus(total > static_cast<int>(emails.size())
+                      ? QStringLiteral("%1 von %2 Nachrichten").arg(emails.size()).arg(total)
+                      : QStringLiteral("%1 Nachrichten").arg(emails.size()));
+        return;
+    }
+
+    const auto previousId = _selectedEmailId;
+    const auto previousScroll = _messageView->verticalScrollBar()->value();
+
+    _messageModel->setEmails(emails);
+
+    if (!previousId.isEmpty()) {
+        const auto row = _messageModel->rowForEmailId(previousId);
+        if (row >= 0) {
+            _restoringSelection = true;
+            _messageView->setCurrentIndex(_messageModel->index(row));
+            _restoringSelection = false;
+        } else {
+            // The selected mail vanished (e.g. deleted elsewhere).
+            _selectedEmailId.clear();
+            _replyBtn->setEnabled(false);
+            _deleteBtn->setEnabled(false);
+            _preview->clear();
+        }
+    }
+    auto *scrollBar = _messageView->verticalScrollBar();
+    scrollBar->setValue(qBound(0, previousScroll, scrollBar->maximum()));
+
+    setStatus(total > static_cast<int>(emails.size())
+                  ? QStringLiteral("%1 von %2 Nachrichten").arg(emails.size()).arg(total)
+                  : QStringLiteral("%1 Nachrichten").arg(emails.size()));
+}
+
+void MailPanel::refreshUnreadCounts()
+{
+    if (!_jmapClient) return;
+    // The folder tree counts come with Mailbox/get; the inbox Email/query
+    // total for the badge follows from the mailboxesFetched handler.
+    _jmapClient->fetchMailboxes();
 }
 
 void MailPanel::remintMailPassword()
@@ -246,13 +336,14 @@ void MailPanel::remintMailPassword()
     MailLoginFlow::clearCachedPassword(accountState);
 
     const auto accountGuard = QPointer<AccountState>(accountState);
+    const auto panelGuard = QPointer<QObject>(this);
     MailLoginFlow::ensureCombinedPassword(accountState,
-        [this, accountGuard, accountState](const CombinedAppPassword &result) {
-            if (!accountGuard || accountState != _accountState) return;
+        [this, panelGuard, accountGuard, accountState](const CombinedAppPassword &result) {
+            if (!panelGuard || !accountGuard || accountState != _accountState) return;
             startJmap(_mailUser, result.appPassword);
         },
-        [this, accountGuard](const QString &error) {
-            if (!accountGuard) return;
+        [this, panelGuard, accountGuard](const QString &error) {
+            if (!panelGuard || !accountGuard) return;
             setStatus(error, true);
         });
 }
@@ -450,12 +541,29 @@ void MailPanel::setupConnections()
 
     connect(_folderView->selectionModel(), &QItemSelectionModel::currentChanged,
             this, [this](const QModelIndex &cur, const QModelIndex &) {
+        if (_folderReselect) return;
         onFolderSelected(cur);
     });
     connect(_messageView->selectionModel(), &QItemSelectionModel::currentChanged,
             this, [this](const QModelIndex &cur, const QModelIndex &) {
         onMessageSelected(cur);
     });
+
+    // Mark as unread on the selected message.
+    _messageView->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(_messageView, &QWidget::customContextMenuRequested,
+            this, &MailPanel::showMessageContextMenu);
+
+    // Background refresh of the current folder: keeps new mail flowing in
+    // while the panel is visible without user interaction.
+    _autoRefreshTimer.setInterval(60 * 1000);
+    connect(&_autoRefreshTimer, &QTimer::timeout, this, [this]() {
+        if (!isVisible() || !_jmapClient || _currentMailboxId.isEmpty()) return;
+        qCInfo(lcMailPanel) << "Auto-refreshing current folder";
+        _jmapClient->queryEmails(_currentMailboxId, 50, 0,
+                                 _searchEdit ? _searchEdit->text().trimmed() : QString());
+    });
+    _autoRefreshTimer.start();
 
     // Attachment links from the preview; external links are handled by MailBodyView
     connect(_preview, &QTextBrowser::anchorClicked, this, [this](const QUrl &url) {
@@ -518,6 +626,7 @@ void MailPanel::onMessageSelected(const QModelIndex &index)
     const auto from = index.data(JmapEmailListModel::FromNameRole).toString();
     const auto email = index.data(JmapEmailListModel::FromAddressRole).toString();
     const auto date = index.data(JmapEmailListModel::ReceivedAtRole).toDateTime();
+    const auto wasRead = index.data(JmapEmailListModel::IsReadRole).toBool();
 
     qCInfo(lcMailPanel) << "Message selected:" << subject;
 
@@ -543,9 +652,20 @@ void MailPanel::onMessageSelected(const QModelIndex &index)
     _replyBtn->setEnabled(true);
     _deleteBtn->setEnabled(true);
 
+    // Instant visual feedback: the row is re-rendered as read right away.
+    _messageModel->setRead(index.row(), true);
+
+    if (_restoringSelection) {
+        // Auto-refresh re-selected the same mail: the body is already shown.
+        return;
+    }
+
     if (_jmapClient) {
         _jmapClient->fetchEmailBody(_selectedEmailId);
-        _jmapClient->markRead(_selectedEmailId, true);
+        if (!wasRead) {
+            _jmapClient->markRead(_selectedEmailId, true);
+            refreshUnreadCounts();
+        }
     }
 }
 
@@ -592,9 +712,11 @@ void MailPanel::onNewMessage()
     }
 
     auto *composer = new MailComposer(this);
+    const auto composerGuard = QPointer<MailComposer>(composer);
     connect(composer, &MailComposer::sendRequested, this,
-            [this](const QString &to, const QString &cc, const QString &bcc,
-                   const QString &subject, const QString &body) {
+            [this, composerGuard](const QString &to, const QString &cc, const QString &bcc,
+                    const QString &subject, const QString &body) {
+        _activeComposer = composerGuard;
         if (_jmapClient) {
             _jmapClient->sendEmail(to, cc, bcc, subject, body, QString());
         }
@@ -617,9 +739,11 @@ void MailPanel::onReply()
     composer->setTo(from);
     composer->setSubject(QStringLiteral("Re: %1").arg(subject));
 
+    const auto composerGuard = QPointer<MailComposer>(composer);
     connect(composer, &MailComposer::sendRequested, this,
-            [this](const QString &to, const QString &cc, const QString &bcc,
-                   const QString &subject, const QString &body) {
+            [this, composerGuard](const QString &to, const QString &cc, const QString &bcc,
+                    const QString &subject, const QString &body) {
+        _activeComposer = composerGuard;
         if (_jmapClient) {
             _jmapClient->sendEmail(to, cc, bcc, subject, body, _selectedEmailId);
         }
@@ -643,6 +767,36 @@ void MailPanel::onDelete()
     _replyBtn->setEnabled(false);
     _deleteBtn->setEnabled(false);
     _selectedEmailId.clear();
+}
+
+void MailPanel::onMarkUnread()
+{
+    if (_selectedEmailId.isEmpty() || !_jmapClient) return;
+
+    const auto row = _messageModel->rowForEmailId(_selectedEmailId);
+    if (row >= 0) {
+        _messageModel->setRead(row, false);
+    }
+    _jmapClient->markRead(_selectedEmailId, false);
+    setStatus(QStringLiteral("Als ungelesen markiert."));
+    // operationCompleted triggers the list refresh; the unread counts and
+    // badge are updated through refreshUnreadCounts().
+}
+
+void MailPanel::showMessageContextMenu(const QPoint &pos)
+{
+    const auto index = _messageView->indexAt(pos);
+    if (!index.isValid()) return;
+
+    if (_messageView->currentIndex() != index) {
+        _messageView->setCurrentIndex(index);
+    }
+    if (_selectedEmailId.isEmpty()) return;
+
+    QMenu menu(this);
+    auto *markUnreadAction = menu.addAction(QStringLiteral("Als ungelesen markieren"));
+    connect(markUnreadAction, &QAction::triggered, this, &MailPanel::onMarkUnread);
+    menu.exec(_messageView->viewport()->mapToGlobal(pos));
 }
 
 } // namespace OCC

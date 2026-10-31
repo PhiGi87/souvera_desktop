@@ -47,6 +47,8 @@ public:
     void fetchMailboxes();
     void queryEmails(const QString &mailboxId, int limit = 50, int offset = 0,
                      const QString &searchQuery = QString(), const QString &filterType = QString());
+    /** Queries Email/query with an isUnread filter and reports only the total. */
+    void queryUnreadCount(const QString &mailboxId);
     void fetchEmailBody(const QString &emailId);
     void downloadAttachment(const QString &blobId, const QString &fileName);
     void markRead(const QString &emailId, bool read);
@@ -63,6 +65,8 @@ signals:
 
     void mailboxesFetched(const QList<JmapMailbox> &mailboxes);
     void emailsFetched(const QList<JmapEmail> &emails, int total, const QString &mailboxId);
+    /** @param mailboxId the mailbox the count was queried for (empty = account-wide). */
+    void unreadCountChanged(int total, const QString &mailboxId);
     void emailBodyFetched(const JmapEmailBody &body, const QString &emailId);
     void attachmentDownloaded(const QString &fileName, const QString &localPath);
     void attachmentDownloadFailed(const QString &fileName, const QString &error);

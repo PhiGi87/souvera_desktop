@@ -12,6 +12,7 @@
 #include "creds/abstractcredentials.h"
 #include "theme/SouveraTheme.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -19,6 +20,20 @@
 namespace OCC {
 
 namespace Metrics = Sou::Metrics;
+
+namespace {
+constexpr QSize BadgeCircleSize(16, 16);
+constexpr QSize BadgeWideSize(24, 16); // "99+" needs a wider pill
+} // namespace
+
+QString badgeStyleSheet()
+{
+    const auto danger = SouveraTheme::instance()->color(SouveraTheme::Color::Danger).name();
+    return QStringLiteral(
+        "QLabel { background: %1; color: #FFFFFF; font-size: 10px; font-weight: bold;"
+        " border: none; border-radius: 8px; }")
+        .arg(danger);
+}
 
 LeftSidebar::LeftSidebar(QWidget *parent)
     : QWidget(parent)
@@ -48,6 +63,7 @@ LeftSidebar::LeftSidebar(QWidget *parent)
     connect(SouveraTheme::instance(), &SouveraTheme::themeChanged, this, [this]() {
         applyIconTints();
         updateThemeToggleIcon();
+        refreshBadgeStyles();
     });
 }
 
@@ -108,6 +124,66 @@ void LeftSidebar::setCurrentIndex(int index)
         _buttons[i].button->setChecked(i == index);
     }
     applyIconTints();
+}
+
+void LeftSidebar::setBadge(int index, int count)
+{
+    if (index < 0 || index >= _buttons.size()) return;
+    auto &entry = _buttons[index];
+    if (!entry.badge) {
+        entry.badge = new QLabel(entry.button);
+        entry.badge->setObjectName(QStringLiteral("SidebarBadge"));
+        entry.badge->setAlignment(Qt::AlignCenter);
+        entry.button->installEventFilter(this);
+    }
+
+    const auto clamped = qMax(0, count);
+    entry.badgeCount = clamped;
+    if (clamped == 0) {
+        entry.badge->hide();
+        return;
+    }
+
+    const auto text = clamped > 99 ? QStringLiteral("99+") : QString::number(clamped);
+    entry.badge->setText(text);
+    entry.badge->setStyleSheet(badgeStyleSheet());
+    entry.badge->setFixedSize(text == QLatin1String("99+") ? BadgeWideSize : BadgeCircleSize);
+    positionBadge(index);
+    entry.badge->raise();
+    entry.badge->show();
+}
+
+bool LeftSidebar::eventFilter(QObject *watched, QEvent *event)
+{
+    if (event->type() == QEvent::Resize) {
+        for (auto i = 0; i < _buttons.size(); ++i) {
+            if (_buttons.at(i).button == watched) {
+                positionBadge(i);
+                break;
+            }
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
+void LeftSidebar::positionBadge(int index)
+{
+    const auto &entry = _buttons.at(index);
+    if (!entry.badge || !entry.button) return;
+    // The icon is a fixed 32x32 label centered at the top of the button
+    // (see addItem()); the badge sits on its top-right corner.
+    const auto iconLeft = (entry.button->width() - entry.icon->width()) / 2;
+    const auto iconTop = 8; // top margin of the button's inner layout
+    entry.badge->move(iconLeft + entry.icon->width() - entry.badge->width() + 4, iconTop - 4);
+}
+
+void LeftSidebar::refreshBadgeStyles()
+{
+    for (const auto &entry : _buttons) {
+        if (entry.badge && entry.badgeCount > 0) {
+            entry.badge->setStyleSheet(badgeStyleSheet());
+        }
+    }
 }
 
 void LeftSidebar::setupAvatar()

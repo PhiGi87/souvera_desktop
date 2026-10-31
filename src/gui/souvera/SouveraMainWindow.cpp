@@ -160,6 +160,16 @@ void SouveraMainWindow::connectAccount(AccountState *accountState)
             dialog->deleteLater();
         }
     });
+    // Unread badge on the Mail tab: fed by the background poller and by the
+    // mail panel itself (e.g. directly after opening a message).
+    connect(_notificationService, &NotificationService::unreadMailCountChanged, this,
+            [this](int count) {
+        _sidebar->setBadge(_mailTabIndex, count);
+    });
+    connect(_mailPanel, &MailPanel::unreadCountChanged, this,
+            [this](int count) {
+        _sidebar->setBadge(_mailTabIndex, count);
+    });
 }
 
 void SouveraMainWindow::enforceWorkspaceSetup()
@@ -198,6 +208,9 @@ void SouveraMainWindow::setupUi()
 
     _sidebar = new LeftSidebar(root);
     _sidebar->addItem(QStringLiteral("mail"), QStringLiteral("Mail"));
+    // Mail is the first sidebar item and the first content stack page below,
+    // so both indexes are 0 by construction.
+    _mailTabIndex = 0;
     _sidebar->addItem(QStringLiteral("chat"), QStringLiteral("Link"));
     _sidebar->addItem(QStringLiteral("folder"), QStringLiteral("Dateien"));
     _sidebar->addItem(QStringLiteral("board"), QStringLiteral("Deck"));
@@ -264,6 +277,11 @@ void SouveraMainWindow::switchToTab(int index)
     if (index < 0 || index >= _contentStack->count()) return;
     _contentStack->setCurrentIndex(index);
     _sidebar->setCurrentIndex(index);
+    // Mail became visible: refresh the unread count right away instead of
+    // waiting for the next poll.
+    if (index == _mailTabIndex && _notificationService) {
+        _notificationService->refreshMail();
+    }
 }
 
 void SouveraMainWindow::showSettingsPage()

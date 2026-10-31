@@ -115,8 +115,39 @@ void MailComposer::setBody(const QString &body)
     _bodyEdit->setPlainText(body);
 }
 
+void MailComposer::sendSucceeded()
+{
+    _sendInProgress = false;
+    setSendInProgress(false);
+    accept();
+}
+
+void MailComposer::sendFailed(const QString &error)
+{
+    Q_UNUSED(error)
+    // The caller shows the error dialog; here the draft is reopened for
+    // editing so nothing the user typed is lost.
+    _sendInProgress = false;
+    setSendInProgress(false);
+    _sendButton->setFocus();
+}
+
+void MailComposer::setSendInProgress(bool inProgress)
+{
+    _sendButton->setEnabled(!inProgress);
+    _sendButton->setText(inProgress ? QStringLiteral("Wird gesendet\u2026")
+                                    : QStringLiteral("Senden"));
+    _toEdit->setEnabled(!inProgress);
+    _ccEdit->setEnabled(!inProgress);
+    _bccEdit->setEnabled(!inProgress);
+    _subjectEdit->setEnabled(!inProgress);
+    _bodyEdit->setEnabled(!inProgress);
+}
+
 void MailComposer::onSendClicked()
 {
+    if (_sendInProgress) return;
+
     if (_toEdit->text().trimmed().isEmpty()) {
         QMessageBox::warning(this, QStringLiteral("Hinweis"),
                              QStringLiteral("Bitte geben Sie mindestens einen Empfänger an."));
@@ -132,8 +163,11 @@ void MailComposer::onSendClicked()
     }
 
     qCInfo(lcMailComposer) << "Send requested to:" << _toEdit->text();
+    // The dialog stays open (and disabled) until sendSucceeded()/sendFailed()
+    // reports the outcome, so a failed send never loses the draft.
+    _sendInProgress = true;
+    setSendInProgress(true);
     emit sendRequested(to(), cc(), bcc(), subject(), body());
-    accept();
 }
 
 } // namespace OCC

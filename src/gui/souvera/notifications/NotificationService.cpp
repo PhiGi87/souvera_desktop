@@ -218,18 +218,32 @@ void NotificationService::startMailPolling()
     });
     connect(_jmapClient, &JmapClient::emailsFetched, this,
             [this](const QList<JmapEmail> &emails, int) {
+        // Only the first unseen mail of a poll raises a notification, and
+        // the baseline poll after startup never notifies.
+        JmapEmail firstUnseen;
+        auto haveUnseen = false;
         for (const auto &email : emails) {
             if (_seenMailIds.contains(email.id)) continue;
             _seenMailIds.insert(email.id);
-            // First poll after startup is a baseline only, no notification spam.
-            if (_mailBaselineDone && !email.isRead) {
-                const auto from = email.fromName.isEmpty() ? email.fromAddress : email.fromName;
-                showNotification(QStringLiteral("Neue E-Mail"),
-                                 QStringLiteral("%1: %2").arg(from, email.subject),
-                                 QSystemTrayIcon::Information);
+            if (_mailBaselineDone && !email.isRead && !haveUnseen) {
+                firstUnseen = email;
+                haveUnseen = true;
             }
         }
         _mailBaselineDone = true;
+        if (haveUnseen) {
+            const auto from = firstUnseen.fromName.isEmpty()
+                ? firstUnseen.fromAddress : firstUnseen.fromName;
+            showNotification(QStringLiteral("Neue E-Mail"),
+                             QStringLiteral("Von: %1 \u2014 %2").arg(from, firstUnseen.subject),
+                             QSystemTrayIcon::Information);
+        }
+    });
+    connect(_jmapClient, &JmapClient::unreadCountChanged, this,
+            [this](int total, const QString &mailboxId) {
+        if (mailboxId == _inboxId) {
+            emit unreadMailCountChanged(total);
+        }
     });
 
     _jmapClient->resolveSession();
@@ -244,10 +258,16 @@ void NotificationService::stopMailPolling()
     }
 }
 
+void NotificationService::refreshMail()
+{
+    pollMail();
+}
+
 void NotificationService::pollMail()
 {
     if (!_jmapClient || _inboxId.isEmpty()) return;
     _jmapClient->queryEmails(_inboxId, 5, 0);
+    _jmapClient->queryUnreadCount(_inboxId);
 }
 
 void NotificationService::showNotification(const QString &title, const QString &body,

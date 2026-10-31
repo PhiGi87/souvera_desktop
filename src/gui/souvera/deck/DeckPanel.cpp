@@ -10,12 +10,15 @@
 #include "DeckManager.h"
 #include "DeckModels.h"
 #include "DeckOcsApi.h"
+#include "DeckTodayView.h"
 #include "net/SouveraAccountGate.h"
 #include "theme/SouveraTheme.h"
 #include "account.h"
 #include "accountstate.h"
 
 #include <QAction>
+#include <QApplication>
+#include <QButtonGroup>
 #include <QComboBox>
 #include <QCursor>
 #include <QDialog>
@@ -26,6 +29,7 @@
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QJsonArray>
+#include <QKeyEvent>
 #include <QLineEdit>
 #include <QJsonObject>
 #include <QLabel>
@@ -35,7 +39,11 @@
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QScrollArea>
+#include <QShortcut>
+#include <QStackedWidget>
+#include <QTextBrowser>
 #include <QDateTime>
 #include <QGridLayout>
 #include <QToolButton>
@@ -49,6 +57,9 @@ Q_LOGGING_CATEGORY(lcDeckPanel, "souvera.deck.panel")
 
 namespace {
 constexpr auto DeckCardMimeType = "application/x-souvera-deck-card";
+// Concurrent cap for the Heute-view background stacks load; further boards
+// fire as earlier responses arrive.
+constexpr int MaxBackgroundStacksFetches = 4;
 }
 
 // ---------------------------------------------------------------------------
@@ -101,6 +112,36 @@ DeckColumnWidget::DeckColumnWidget(const QString &title, QWidget *parent)
     headerLayout->addWidget(addBtn);
 
     layout->addWidget(headerWidget);
+
+    // Inline add row between header and card scroll — deliberately NOT inside
+    // _cardsLayout: the drop-index and count math assumes cards-only content
+    // plus the trailing stretch item.
+    auto *inlineRow = new QWidget(this);
+    auto *inlineLayout = new QVBoxLayout(inlineRow);
+    inlineLayout->setContentsMargins(0, 0, 0, 0);
+    inlineLayout->setSpacing(0);
+
+    _inlineAddButton = new QPushButton(QStringLiteral("\uFF0B Karte hinzuf\u00FCgen\u2026"), inlineRow);
+    _inlineAddButton->setObjectName(QStringLiteral("DeckInlineAddBtn"));
+    _inlineAddButton->setCursor(Qt::PointingHandCursor);
+    connect(_inlineAddButton, &QPushButton::clicked, this, &DeckColumnWidget::showInlineEditor);
+    inlineLayout->addWidget(_inlineAddButton);
+
+    _inlineAddEdit = new QLineEdit(inlineRow);
+    _inlineAddEdit->setObjectName(QStringLiteral("DeckInlineAddEdit"));
+    _inlineAddEdit->setPlaceholderText(QStringLiteral("Kartentitel\u2026"));
+    _inlineAddEdit->setVisible(false);
+    _inlineAddEdit->installEventFilter(this);
+    connect(_inlineAddEdit, &QLineEdit::returnPressed, this, [this]() {
+        const auto title = _inlineAddEdit->text().trimmed();
+        if (!title.isEmpty()) {
+            emit inlineCardRequested(_stackId, title);
+        }
+        revertInlineEditor();
+    });
+    inlineLayout->addWidget(_inlineAddEdit);
+
+    layout->addWidget(inlineRow);
 
     // Vertical scroll area so long card lists never clip; drag&drop events
     // arrive on the scroll container and are forwarded via the event filter.
@@ -162,6 +203,12 @@ void DeckColumnWidget::updateCardCount()
     _countLabel->setText(QString::number(count));
 }
 
+void DeckColumnWidget::setBoardColor(const QColor &color)
+{
+    _boardColor = color;
+    applyColumnTheme();
+}
+
 void DeckColumnWidget::applyColumnTheme()
 {
     const auto *theme = SouveraTheme::instance();
@@ -170,22 +217,48 @@ void DeckColumnWidget::applyColumnTheme()
     const auto borderStrong = theme->color(SouveraTheme::Color::BorderStrong).name();
     const auto textMuted = theme->color(SouveraTheme::Color::TextMuted).name();
     const auto textPrimary = theme->color(SouveraTheme::Color::TextPrimary).name();
+    const auto surface = theme->color(SouveraTheme::Color::Surface).name();
     const auto surfaceHover = theme->color(SouveraTheme::Color::SurfaceHover).name();
     const auto accent = theme->color(SouveraTheme::Color::Accent).name();
+    const auto topBorder = _boardColor.isValid() ? _boardColor.name() : accent;
     // One widget-level stylesheet for the whole column: a widget stylesheet
     // replaces the app stylesheet for this subtree, so every style the column
     // relies on must be restated here.
     setStyleSheet(QStringLiteral(
-        "QFrame#DeckColumnFrame { background-color: %1; border-radius: 10px; border: 1px solid %2; }"
+        "QFrame#DeckColumnFrame { background-color: %1; border-radius: 10px; border: 1px solid %2;"
+        "  border-top: 3px solid %8; }"
         "QWidget#DeckColumnHeader { background: transparent; border: none;"
         "  border-bottom: 2px solid %3; }"
         "QLabel#DeckColumnTitle { color: %4; background: transparent; font-weight: 600; }"
         "QLabel#DeckColumnCount { color: %5; background: %6; }"
         "QPushButton#DeckColumnAddBtn { background: transparent;"
         "  border: 1px solid %2; border-radius: 6px; color: %5; font-size: 13px; }"
-        "QPushButton#DeckColumnAddBtn:hover { background: %6; border-color: %7; }")
-        .arg(bg, border, borderStrong, textPrimary, textMuted, surfaceHover, accent));
+        "QPushButton#DeckColumnAddBtn:hover { background: %6; border-color: %7; }"
+        "QPushButton#DeckInlineAddBtn { background: transparent; border: none;"
+        "  border-radius: 6px; color: %5; text-align: left; padding: 4px 8px; }"
+        "QPushButton#DeckInlineAddBtn:hover { background: %6; }"
+        "QLineEdit#DeckInlineAddEdit { background: %9; border: 1px solid %2; border-radius: 8px;"
+        "  color: %4; padding: 4px 8px; selection-background-color: %7; selection-color: %4; }"
+        "QLineEdit#DeckInlineAddEdit:focus { border-color: %7; }")
+        .arg(bg, border, borderStrong, textPrimary, textMuted, surfaceHover, accent, topBorder, surface));
     setAcceptDrops(true);
+}
+
+void DeckColumnWidget::showInlineEditor()
+{
+    _inlineEditing = true;
+    _inlineAddButton->setVisible(false);
+    _inlineAddEdit->setVisible(true);
+    _inlineAddEdit->setFocus();
+}
+
+void DeckColumnWidget::revertInlineEditor()
+{
+    if (!_inlineEditing) return;
+    _inlineEditing = false;
+    _inlineAddEdit->clear();
+    _inlineAddEdit->setVisible(false);
+    _inlineAddButton->setVisible(true);
 }
 
 void DeckColumnWidget::dragEnterEvent(QDragEnterEvent *event)
@@ -275,6 +348,21 @@ void DeckColumnWidget::hideDropIndicator()
 
 bool DeckColumnWidget::eventFilter(QObject *watched, QEvent *event)
 {
+    if (watched == _inlineAddEdit) {
+        switch (event->type()) {
+        case QEvent::FocusOut:
+            revertInlineEditor();
+            break;
+        case QEvent::KeyPress:
+            if (static_cast<QKeyEvent *>(event)->key() == Qt::Key_Escape) {
+                revertInlineEditor();
+                return true;
+            }
+            break;
+        default:
+            break;
+        }
+    }
     if (watched == _scrollContainer) {
         switch (event->type()) {
         case QEvent::DragEnter: {
@@ -320,6 +408,13 @@ DeckPanel::DeckPanel(QWidget *parent)
         qCInfo(lcDeckPanel) << "Boards received:" << boards.size();
         setStatus(QString{});
         _boards = boards;
+        _todayView->setBoards(_boards);
+        _todayView->rebuildFromCache();
+        // Boards arrived while the Heute view is open: load the stacks of all
+        // not-yet-cached boards so it can aggregate every board.
+        if (_viewStack->currentIndex() == 1) {
+            startBackgroundStacksLoad();
+        }
         if (_boards.isEmpty()) {
             _boardsButton->setText(QStringLiteral("Keine Boards \u2014 ist Deck aktiv?"));
             setStatus(QStringLiteral(
@@ -335,18 +430,56 @@ DeckPanel::DeckPanel(QWidget *parent)
         loadBoard(first.value(QStringLiteral("id")).toInt());
     });
 
-    connect(_ocsApi, &DeckOcsApi::stacksReceived, this, [this](const QJsonArray &stacks) {
-        qCInfo(lcDeckPanel) << "Stacks received:" << stacks.size();
-        DeckManager::instance()->storeStacksCache(_currentBoardId, stacks);
-        renderStacks(stacks);
-        setStatus(QString());
+    connect(_ocsApi, &DeckOcsApi::stacksReceived, this,
+            [this](int boardId, const QJsonArray &stacks) {
+        qCInfo(lcDeckPanel) << "Stacks received for board" << boardId << ":" << stacks.size();
+        DeckManager::instance()->storeStacksCache(boardId, stacks);
+        // Background responses for other boards only refresh the cache and the
+        // Heute view; rendering stays exclusive to the open board.
+        if (boardId == _currentBoardId) {
+            renderStacks(stacks);
+            setStatus(QString());
+        }
+        _todayView->rebuildFromCache();
+        if (_bgStacksFetching.remove(boardId)) {
+            pumpBackgroundStacksQueue();
+        }
     });
 
-    connect(_ocsApi, &DeckOcsApi::cardCreated, this, [this](const QJsonObject &, int boardId, int) {
+    // Mutations can originate from the Heute view's card dialog for a board
+    // that is not the open one — only refetch when the mutation really
+    // happened on the open board.
+    connect(_ocsApi, &DeckOcsApi::cardCreated, this,
+            [this](const QJsonObject &card, int boardId, int stackId) {
         qCInfo(lcDeckPanel) << "Card created in board" << boardId;
+        if (boardId != _currentBoardId) return;
+        if (_pendingExtras.active && _pendingExtras.boardId == boardId) {
+            // Two-phase quick capture: createCard cannot carry extras, so patch
+            // the fresh server card with a complete-body PUT; the resulting
+            // cardUpdated performs the refetch.
+            auto body = card;
+            auto labels = QJsonArray();
+            for (const auto labelId : _pendingExtras.labelIds) {
+                labels.append(labelId);
+            }
+            auto assignees = QJsonArray();
+            for (const auto &uid : _pendingExtras.assigneeUids) {
+                assignees.append(uid);
+            }
+            body.insert(QStringLiteral("labels"), labels);
+            body.insert(QStringLiteral("assignedUsers"), assignees);
+            body.insert(QStringLiteral("duedate"), _pendingExtras.due.isValid()
+                ? QJsonValue(_pendingExtras.due.toString(Qt::ISODate))
+                : QJsonValue(QString()));
+            _pendingExtras = {};
+            _ocsApi->updateCard(boardId, stackId,
+                                card.value(QStringLiteral("id")).toInt(), body);
+            return;
+        }
         _ocsApi->fetchStacks(boardId);
     });
     connect(_ocsApi, &DeckOcsApi::cardUpdated, this, [this](const QJsonObject &, int boardId, int) {
+        if (boardId != _currentBoardId) return;
         _ocsApi->fetchStacks(boardId);
     });
     connect(_ocsApi, &DeckOcsApi::cardMoved, this, [this]() {
@@ -358,21 +491,45 @@ DeckPanel::DeckPanel(QWidget *parent)
         if (_currentBoardId >= 0) _ocsApi->fetchStacks(_currentBoardId);
     });
     connect(_ocsApi, &DeckOcsApi::stackCreated, this, [this](const QJsonObject &, int boardId) {
+        if (boardId != _currentBoardId) return;
         _ocsApi->fetchStacks(boardId);
     });
     connect(_ocsApi, &DeckOcsApi::stackUpdated, this, [this](int boardId, int) {
+        if (boardId != _currentBoardId) return;
         _ocsApi->fetchStacks(boardId);
     });
     connect(_ocsApi, &DeckOcsApi::stackDeleted, this, [this](int boardId, int) {
+        if (boardId != _currentBoardId) return;
         _ocsApi->fetchStacks(boardId);
     });
     connect(_ocsApi, &DeckOcsApi::cardDeleted, this, [this](int boardId, int, int) {
+        if (boardId != _currentBoardId) return;
         _ocsApi->fetchStacks(boardId);
     });
 
     connect(_ocsApi, &DeckOcsApi::apiError, this, [this](const QString &message) {
         qCWarning(lcDeckPanel) << "API error:" << message;
         setStatus(message, true);
+    });
+
+    connect(_ocsApi, &DeckOcsApi::stacksFetchFailed, this, [this](int boardId) {
+        // A failed background fetch must free its slot, or the queue stalls.
+        if (_bgStacksFetching.remove(boardId)) {
+            pumpBackgroundStacksQueue();
+        }
+    });
+
+    connect(_todayView, &DeckTodayView::cardActivated, this,
+            [this](int boardId, int stackId, int cardId, const QJsonObject &cardJson) {
+        if (boardId == _currentBoardId && findCard(cardId)) {
+            onEditCard(cardId, stackId);
+            return;
+        }
+        openCardDialog(boardId, cardJson);
+    });
+    connect(_todayView, &DeckTodayView::doneToggleRequested, this,
+            [this](int boardId, int stackId, int cardId, const QJsonObject &cardJson) {
+        _ocsApi->updateCard(boardId, stackId, cardId, cardJson);
     });
 }
 
@@ -381,6 +538,7 @@ void DeckPanel::setAccountState(AccountState *state)
     _ocsApi->setAccountState(state);
     DeckManager::instance()->setAccountState(state);
     if (state && state->account()) {
+        _todayView->setCurrentUser(state->account()->davUser());
         setStatus(QStringLiteral("Lade Boards\u2026"));
         // Wait for the keychain fetch: requests fired with empty credentials
         // never complete.
@@ -404,6 +562,27 @@ void DeckPanel::setStatus(const QString &message, bool isError)
 void DeckPanel::loadBoards()
 {
     _ocsApi->fetchBoards();
+}
+
+void DeckPanel::startBackgroundStacksLoad()
+{
+    const auto manager = DeckManager::instance();
+    for (const auto &boardVal : _boards) {
+        const auto boardId = boardVal.toObject().value(QStringLiteral("id")).toInt();
+        if (_bgStacksQueue.contains(boardId) || _bgStacksFetching.contains(boardId)) continue;
+        if (!manager->cachedStacks(boardId).isEmpty()) continue;
+        _bgStacksQueue.enqueue(boardId);
+    }
+    pumpBackgroundStacksQueue();
+}
+
+void DeckPanel::pumpBackgroundStacksQueue()
+{
+    while (_bgStacksFetching.size() < MaxBackgroundStacksFetches && !_bgStacksQueue.isEmpty()) {
+        const auto boardId = _bgStacksQueue.dequeue();
+        _bgStacksFetching.insert(boardId);
+        _ocsApi->fetchStacks(boardId);
+    }
 }
 
 void DeckPanel::setupUi()
@@ -439,6 +618,34 @@ void DeckPanel::setupUi()
     _boardsButton->setMenu(buildBoardsMenu());
     toolbarLayout->addWidget(_boardsButton);
 
+    _viewSwitch = new QWidget(toolbar);
+    _viewSwitch->setObjectName(QStringLiteral("DeckViewSwitch"));
+    auto *switchLayout = new QHBoxLayout(_viewSwitch);
+    switchLayout->setContentsMargins(2, 2, 2, 2);
+    switchLayout->setSpacing(0);
+
+    _boardViewButton = new QPushButton(QStringLiteral("Board"), _viewSwitch);
+    _boardViewButton->setObjectName(QStringLiteral("DeckViewSwitchBtn"));
+    _boardViewButton->setCheckable(true);
+    _boardViewButton->setChecked(true);
+    _todayViewButton = new QPushButton(QStringLiteral("Heute"), _viewSwitch);
+    _todayViewButton->setObjectName(QStringLiteral("DeckViewSwitchBtn"));
+    _todayViewButton->setCheckable(true);
+    auto *viewGroup = new QButtonGroup(_viewSwitch);
+    viewGroup->setExclusive(true);
+    viewGroup->addButton(_boardViewButton);
+    viewGroup->addButton(_todayViewButton);
+    switchLayout->addWidget(_boardViewButton);
+    switchLayout->addWidget(_todayViewButton);
+    toolbarLayout->addWidget(_viewSwitch);
+
+    _searchEdit = new QLineEdit(toolbar);
+    _searchEdit->setObjectName(QStringLiteral("DeckSearchEdit"));
+    _searchEdit->setPlaceholderText(QStringLiteral("Karten durchsuchen\u2026"));
+    _searchEdit->setClearButtonEnabled(true);
+    _searchEdit->setFixedWidth(220);
+    toolbarLayout->addWidget(_searchEdit);
+
     _filterButton = new QToolButton(toolbar);
     _filterButton->setObjectName(QStringLiteral("DeckFilterButton"));
     _filterButton->setText(QStringLiteral("\U0001F50D Filter"));
@@ -468,7 +675,7 @@ void DeckPanel::setupUi()
                 } else {
                     _filterLabelIds.remove(label.id);
                 }
-                refreshFromServer();
+                rerenderStacks();
             });
         }
         filterMenu->addSection(QStringLiteral("Nach F\u00E4lligkeit"));
@@ -484,7 +691,7 @@ void DeckPanel::setupUi()
             action->setChecked(_dueFilter == i);
             connect(action, &QAction::triggered, this, [this, i]() {
                 _dueFilter = i;
-                refreshFromServer();
+                rerenderStacks();
             });
         }
         filterMenu->addSeparator();
@@ -493,7 +700,7 @@ void DeckPanel::setupUi()
             _filterLabelIds.clear();
             _filterAssignees.clear();
             _dueFilter = 0;
-            refreshFromServer();
+            rerenderStacks();
         });
     });
     toolbarLayout->addWidget(_filterButton);
@@ -511,6 +718,31 @@ void DeckPanel::setupUi()
     toolbarLayout->addWidget(_newCardButton);
 
     layout->addWidget(toolbar);
+
+    _quickCaptureBar = new QWidget(this);
+    _quickCaptureBar->setObjectName(QStringLiteral("DeckQuickCaptureBar"));
+    auto *captureLayout = new QHBoxLayout(_quickCaptureBar);
+    captureLayout->setContentsMargins(Metrics::CardMargin, Metrics::SpacingXS, Metrics::CardMargin, Metrics::SpacingXS);
+    captureLayout->setSpacing(Metrics::SpacingS);
+
+    _quickCaptureEdit = new QLineEdit(_quickCaptureBar);
+    _quickCaptureEdit->setObjectName(QStringLiteral("DeckQuickCapture"));
+    _quickCaptureEdit->setPlaceholderText(
+        QStringLiteral("z. B. Bugfix Login #bug @anna morgen"));
+    connect(_quickCaptureEdit, &QLineEdit::returnPressed, this, &DeckPanel::submitQuickCapture);
+    captureLayout->addWidget(_quickCaptureEdit, 1);
+
+    _stackCombo = new QComboBox(_quickCaptureBar);
+    _stackCombo->setObjectName(QStringLiteral("DeckStackCombo"));
+    _stackCombo->setMinimumWidth(180);
+    captureLayout->addWidget(_stackCombo);
+
+    _quickCaptureButton = new QPushButton(QStringLiteral("Hinzuf\u00FCgen"), _quickCaptureBar);
+    _quickCaptureButton->setObjectName(QStringLiteral("PanelPrimaryBtn"));
+    connect(_quickCaptureButton, &QPushButton::clicked, this, &DeckPanel::submitQuickCapture);
+    captureLayout->addWidget(_quickCaptureButton);
+
+    layout->addWidget(_quickCaptureBar);
 
     _scrollArea = new QScrollArea(this);
     _scrollArea->setWidgetResizable(true);
@@ -532,7 +764,97 @@ void DeckPanel::setupUi()
     _columnsLayout->addWidget(_addStackButton);
 
     _scrollArea->setWidget(_columnsContainer);
-    layout->addWidget(_scrollArea, 1);
+
+    _viewStack = new QStackedWidget(this);
+    _viewStack->addWidget(_scrollArea);
+    _todayView = new DeckTodayView(this);
+    _viewStack->addWidget(_todayView);
+    layout->addWidget(_viewStack, 1);
+
+    connect(_boardViewButton, &QPushButton::clicked, this, [this]() {
+        _viewStack->setCurrentIndex(0);
+    });
+    connect(_todayViewButton, &QPushButton::clicked, this, [this]() {
+        _viewStack->setCurrentIndex(1);
+        _todayView->rebuildFromCache();
+        // Top up the cache for boards never opened so the Heute view
+        // aggregates every board, not only the ones seen before.
+        startBackgroundStacksLoad();
+    });
+
+    connect(_searchEdit, &QLineEdit::textChanged, this, [this](const QString &text) {
+        _searchText = text;
+        _todayView->setSearchText(text);
+        rerenderStacks();
+    });
+
+    applyHeaderTheme();
+    connect(SouveraTheme::instance(), &SouveraTheme::themeChanged,
+            this, &DeckPanel::applyHeaderTheme);
+
+    updateQuickCaptureEnabled();
+
+    auto *findShortcut = new QShortcut(QKeySequence::Find, this);
+    findShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(findShortcut, &QShortcut::activated, this, [this]() {
+        _searchEdit->setFocus();
+        _searchEdit->selectAll();
+    });
+
+    auto *captureShortcut = new QShortcut(QKeySequence(Qt::Key_N), this);
+    captureShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(captureShortcut, &QShortcut::activated, this, [this]() {
+        auto *focus = QApplication::focusWidget();
+        if (qobject_cast<QLineEdit *>(focus) || qobject_cast<QPlainTextEdit *>(focus)
+            || qobject_cast<QTextEdit *>(focus) || qobject_cast<QTextBrowser *>(focus)) {
+            return;
+        }
+        _quickCaptureEdit->setFocus();
+    });
+
+    auto *escapeShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+    escapeShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(escapeShortcut, &QShortcut::activated, this, [this]() {
+        if (auto *focus = qobject_cast<QLineEdit *>(QApplication::focusWidget())) {
+            if (focus != _searchEdit && focus != _quickCaptureEdit) {
+                focus->clearFocus();
+                return;
+            }
+        }
+        if (!_searchEdit->text().isEmpty()) {
+            _searchEdit->clear();
+        } else if (!_quickCaptureEdit->text().isEmpty()) {
+            _quickCaptureEdit->clear();
+        }
+    });
+}
+
+void DeckPanel::applyHeaderTheme()
+{
+    const auto *theme = SouveraTheme::instance();
+    const auto surface = theme->color(SouveraTheme::Color::Surface).name();
+    const auto border = theme->color(SouveraTheme::Color::Border).name();
+    const auto surfaceHover = theme->color(SouveraTheme::Color::SurfaceHover).name();
+    const auto textPrimary = theme->color(SouveraTheme::Color::TextPrimary).name();
+    const auto textSecondary = theme->color(SouveraTheme::Color::TextSecondary).name();
+    const auto accent = theme->color(SouveraTheme::Color::Accent).name();
+    const auto onAccent = theme->color(SouveraTheme::Color::OnAccent).name();
+
+    _viewSwitch->setStyleSheet(QStringLiteral(
+        "QWidget#DeckViewSwitch { background: %1; border: 1px solid %2; border-radius: 8px; }"
+        "QPushButton#DeckViewSwitchBtn { background: transparent; border: none;"
+        "  border-radius: 8px; color: %3; padding: 4px 14px; font-weight: 600; font-size: 12px; }"
+        "QPushButton#DeckViewSwitchBtn:hover:!checked { background: %4; }"
+        "QPushButton#DeckViewSwitchBtn:checked { background: %5; color: %6; }")
+        .arg(surface, border, textSecondary, surfaceHover, accent, onAccent));
+
+    const auto editStyle = QStringLiteral(
+        "QLineEdit { background: %1; border: 1px solid %2; border-radius: 8px;"
+        "  padding: 6px 10px; color: %3; selection-background-color: %4; selection-color: %5; }"
+        "QLineEdit:focus { border-color: %4; }")
+        .arg(surface, border, textPrimary, accent, onAccent);
+    _searchEdit->setStyleSheet(editStyle);
+    _quickCaptureEdit->setStyleSheet(editStyle);
 }
 
 void DeckPanel::clearColumns()
@@ -551,7 +873,18 @@ void DeckPanel::clearColumns()
 
 void DeckPanel::renderStacks(const QJsonArray &stacks)
 {
+    _lastStacks = stacks;
     clearColumns();
+
+    auto boardColor = QColor();
+    for (const auto &boardVal : _boards) {
+        const auto boardObj = boardVal.toObject();
+        if (boardObj.value(QStringLiteral("id")).toInt() == _currentBoardId) {
+            boardColor = QColor(boardObj.value(QStringLiteral("color")).toString());
+            break;
+        }
+    }
+
     for (const auto &stackVal : stacks) {
         const auto stackObj = stackVal.toObject();
         const auto stackId = stackObj[QStringLiteral("id")].toInt();
@@ -559,11 +892,12 @@ void DeckPanel::renderStacks(const QJsonArray &stacks)
 
         auto *column = new DeckColumnWidget(title, _columnsContainer);
         column->setStackId(stackId);
+        column->setBoardColor(boardColor);
 
         const auto cards = stackObj[QStringLiteral("cards")].toArray();
         for (const auto &cardVal : cards) {
             const auto cardObj = cardVal.toObject();
-            if (boardFilterActive() && !cardMatchesFilter(cardObj)) continue;
+            if (!cardMatchesFilter(cardObj)) continue;
             auto *card = new DeckCardWidget(cardObj, stackId, column);
             connectCard(card);
             column->addCardWidget(card);
@@ -577,6 +911,11 @@ void DeckPanel::renderStacks(const QJsonArray &stacks)
             _newCardTargetStackId = stackId;
             onNewCard();
         });
+        connect(column, &DeckColumnWidget::inlineCardRequested, this,
+                [this](int stackId, const QString &title) {
+            if (_currentBoardId <= 0 || title.trimmed().isEmpty()) return;
+            _ocsApi->createCard(_currentBoardId, stackId, title, QString{});
+        });
 
         _columnsLayout->addWidget(column);
         _columns.append(column);
@@ -587,6 +926,128 @@ void DeckPanel::renderStacks(const QJsonArray &stacks)
         _addStackButton->setVisible(true);
     }
     _columnsLayout->addStretch();
+
+    if (_currentBoardId < 0) {
+        updateQuickCaptureEnabled();
+    } else {
+        refreshStackCombo(stacks);
+    }
+}
+
+void DeckPanel::refreshStackCombo(const QJsonArray &stacks)
+{
+    if (!_stackCombo) return;
+    const auto previous = _stackCombo->currentData().toInt();
+    _stackCombo->clear();
+    auto selectIndex = 0;
+    for (const auto &stackVal : stacks) {
+        const auto stackObj = stackVal.toObject();
+        const auto stackId = stackObj.value(QStringLiteral("id")).toInt();
+        _stackCombo->addItem(stackObj.value(QStringLiteral("title")).toString(), stackId);
+        if (stackId == previous) selectIndex = _stackCombo->count() - 1;
+    }
+    _stackCombo->setCurrentIndex(selectIndex);
+    _stackCombo->setEnabled(true);
+    _quickCaptureEdit->setEnabled(true);
+    _quickCaptureButton->setEnabled(true);
+}
+
+void DeckPanel::rerenderStacks()
+{
+    renderStacks(_lastStacks);
+}
+
+void DeckPanel::submitQuickCapture()
+{
+    if (_currentBoardId < 0 || !_quickCaptureEdit->isEnabled()) return;
+    const auto targetStackId = _stackCombo->currentData().toInt();
+    if (targetStackId <= 0) return;
+
+    const auto input = _quickCaptureEdit->text();
+    if (input.trimmed().isEmpty()) return;
+
+    const auto boardLabels = boardLabelsOfCurrent();
+    const auto boardMembers = boardMembersOfCurrent();
+
+    auto labelIds = QVector<int>();
+    auto assigneeUids = QStringList();
+    auto keptTokens = QStringList();
+    for (const auto &token : input.simplified().split(QLatin1Char(' '), Qt::SkipEmptyParts)) {
+        auto consumed = false;
+        if (token.startsWith(QLatin1Char('#'))) {
+            const auto name = token.mid(1);
+            for (const auto &label : boardLabels) {
+                if (QString::compare(label.title, name, Qt::CaseInsensitive) == 0) {
+                    if (!labelIds.contains(label.id)) labelIds.append(label.id);
+                    consumed = true;
+                    break;
+                }
+            }
+        } else if (token.startsWith(QLatin1Char('@'))) {
+            const auto name = token.mid(1);
+            for (const auto &member : boardMembers) {
+                if (member.uid.startsWith(name, Qt::CaseInsensitive)
+                    || member.displayName.startsWith(name, Qt::CaseInsensitive)) {
+                    if (!assigneeUids.contains(member.uid)) assigneeUids.append(member.uid);
+                    consumed = true;
+                    break;
+                }
+            }
+        }
+        if (!consumed) keptTokens.append(token);
+    }
+
+    auto title = keptTokens.join(QLatin1Char(' '));
+    auto due = QDateTime();
+    // Whole-word due keywords anywhere in the text; "übermorgen" must come
+    // first so its "morgen" part cannot win the alternation. Unicode word
+    // properties are required or the \b before "ü" never matches.
+    static const QRegularExpression dueRx(
+        QStringLiteral("\\b(\u00FCbermorgen|morgen|heute)\\b"),
+        QRegularExpression::CaseInsensitiveOption
+            | QRegularExpression::UseUnicodePropertiesOption);
+    auto keywordDays = -1;
+    auto matchIt = dueRx.globalMatch(title);
+    while (matchIt.hasNext()) {
+        const auto match = matchIt.next();
+        if (keywordDays >= 0) continue;
+        const auto keyword = match.captured(1).toLower();
+        if (keyword == QLatin1String("heute")) {
+            keywordDays = 0;
+        } else if (keyword == QLatin1String("morgen")) {
+            keywordDays = 1;
+        } else if (keyword == QLatin1String("\u00FCbermorgen")) {
+            keywordDays = 2;
+        }
+    }
+    if (keywordDays >= 0) {
+        title.remove(dueRx);
+        due = QDateTime(QDate::currentDate().addDays(keywordDays), QTime(17, 0));
+    }
+    title = title.simplified();
+    if (title.isEmpty()) return;
+
+    _pendingExtras.active = !labelIds.isEmpty() || !assigneeUids.isEmpty() || due.isValid();
+    _pendingExtras.boardId = _currentBoardId;
+    _pendingExtras.labelIds = labelIds;
+    _pendingExtras.assigneeUids = assigneeUids;
+    _pendingExtras.due = due;
+
+    _ocsApi->createCard(_currentBoardId, targetStackId, title, QString{});
+    _quickCaptureEdit->clear();
+    _quickCaptureEdit->setFocus();
+}
+
+void DeckPanel::updateQuickCaptureEnabled()
+{
+    const auto enabled = _currentBoardId >= 0;
+    _quickCaptureEdit->setEnabled(enabled);
+    _stackCombo->setEnabled(enabled);
+    _quickCaptureButton->setEnabled(enabled);
+    if (!enabled) {
+        _stackCombo->clear();
+        _stackCombo->addItem(QStringLiteral("Board ausw\u00E4hlen"));
+    }
 }
 
 void DeckPanel::loadBoard(int boardId)
@@ -651,7 +1112,7 @@ QMenu *DeckPanel::buildFilterMenu()
             } else {
                 _filterLabelIds.remove(label.id);
             }
-            refreshFromServer();
+            rerenderStacks();
         });
     }
     labelsMenu->setEnabled(!boardLabels.isEmpty());
@@ -669,7 +1130,7 @@ QMenu *DeckPanel::buildFilterMenu()
         action->setChecked(_dueFilter == i);
         connect(action, &QAction::triggered, this, [this, i]() {
             _dueFilter = i;
-            refreshFromServer();
+            rerenderStacks();
         });
     }
 
@@ -679,16 +1140,16 @@ QMenu *DeckPanel::buildFilterMenu()
         _filterLabelIds.clear();
         _filterAssignees.clear();
         _dueFilter = 0;
-        refreshFromServer();
+        rerenderStacks();
     });
     return menu;
 }
 
-QVector<DeckUser> DeckPanel::boardMembersOfCurrent() const
+QVector<DeckUser> DeckPanel::boardMembersOf(int boardId) const
 {
     for (const auto &boardVal : _boards) {
         const auto boardObj = boardVal.toObject();
-        if (boardObj.value(QStringLiteral("id")).toInt() == _currentBoardId) {
+        if (boardObj.value(QStringLiteral("id")).toInt() == boardId) {
             QVector<DeckUser> members;
             for (const auto &v : boardObj.value(QStringLiteral("users")).toArray()) {
                 members.append(DeckUser::fromJson(v.toObject()
@@ -700,11 +1161,16 @@ QVector<DeckUser> DeckPanel::boardMembersOfCurrent() const
     return {};
 }
 
-QVector<DeckLabel> DeckPanel::boardLabelsOfCurrent() const
+QVector<DeckUser> DeckPanel::boardMembersOfCurrent() const
+{
+    return boardMembersOf(_currentBoardId);
+}
+
+QVector<DeckLabel> DeckPanel::boardLabelsOf(int boardId) const
 {
     for (const auto &boardVal : _boards) {
         const auto boardObj = boardVal.toObject();
-        if (boardObj.value(QStringLiteral("id")).toInt() == _currentBoardId) {
+        if (boardObj.value(QStringLiteral("id")).toInt() == boardId) {
             QVector<DeckLabel> labels;
             for (const auto &v : boardObj.value(QStringLiteral("labels")).toArray()) {
                 labels.append(DeckLabel::fromJson(v.toObject()));
@@ -713,6 +1179,11 @@ QVector<DeckLabel> DeckPanel::boardLabelsOfCurrent() const
         }
     }
     return {};
+}
+
+QVector<DeckLabel> DeckPanel::boardLabelsOfCurrent() const
+{
+    return boardLabelsOf(_currentBoardId);
 }
 
 void DeckPanel::refreshFromServer()
@@ -730,6 +1201,14 @@ bool DeckPanel::boardFilterActive() const
 bool DeckPanel::cardMatchesFilter(const QJsonObject &card) const
 {
     const auto cardObj = DeckCard::fromJson(card);
+
+    const auto needle = _searchText.trimmed();
+    if (!needle.isEmpty()) {
+        if (!cardObj.title.contains(needle, Qt::CaseInsensitive)
+            && !cardObj.description.contains(needle, Qt::CaseInsensitive)) {
+            return false;
+        }
+    }
 
     if (!_filterLabelIds.isEmpty()) {
         auto match = false;
@@ -800,23 +1279,31 @@ void DeckPanel::onDoneToggleRequested(int cardId, int stackId, bool done)
     _ocsApi->updateCard(_currentBoardId, stackId, cardId, body);
 }
 
-void DeckPanel::onEditCard(int cardId, int stackId)
+void DeckPanel::openCardDialog(int boardId, const QJsonObject &cardJson)
 {
-    auto *card = findCard(cardId);
-    if (!card || _currentBoardId < 0) return;
-
     // Premium detail dialog: markdown description, comments, attachments,
     // labels, dates and color. Saving performs the complete-card PUT.
     const auto manager = DeckManager::instance();
-    DeckCardDetailDialog dialog(_ocsApi, _currentBoardId, card->cardData(),
-                                boardLabelsOfCurrent(), boardMembersOfCurrent(),
+    DeckCardDetailDialog dialog(_ocsApi, boardId, cardJson,
+                                boardLabelsOf(boardId), boardMembersOf(boardId),
                                 manager->supportsStartDate(), manager->supportsCardColor(),
                                 this);
-    connect(&dialog, &DeckCardDetailDialog::cardSaved, this,
-            [this](int boardId, int stackId, int cardId, const QJsonObject &updatedJson) {
-        _ocsApi->updateCard(boardId, stackId, cardId, updatedJson);
-    });
+    connect(&dialog, &DeckCardDetailDialog::cardSaved, this, &DeckPanel::onCardSaved);
     dialog.exec();
+}
+
+void DeckPanel::onCardSaved(int boardId, int stackId, int cardId, const QJsonObject &updatedJson)
+{
+    _ocsApi->updateCard(boardId, stackId, cardId, updatedJson);
+}
+
+void DeckPanel::onEditCard(int cardId, int stackId)
+{
+    Q_UNUSED(stackId);
+    auto *card = findCard(cardId);
+    if (!card || _currentBoardId < 0) return;
+
+    openCardDialog(_currentBoardId, card->cardData());
 }
 
 void DeckPanel::onDeleteCard(int cardId, int stackId)

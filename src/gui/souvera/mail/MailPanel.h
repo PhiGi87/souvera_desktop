@@ -28,6 +28,7 @@ namespace OCC {
 class AccountState;
 class EmailListDelegate;
 class MailBodyView;
+class MailComposer;
 
 class MailPanel : public QWidget
 {
@@ -39,6 +40,10 @@ public:
     void setAccountState(AccountState *accountState);
     void applyViewSettings();
 
+signals:
+    /** Unread count of the inbox, updated after mailbox/unread queries. */
+    void unreadCountChanged(int count);
+
 private:
     void setupUi();
     void setupToolbar();
@@ -48,12 +53,17 @@ private:
     void remintMailPassword();
     void setStatus(const QString &text, bool isError = false);
 
+    /** Applies a fresh email list, resetting the model only on real changes. */
+    void applyEmails(const QList<JmapEmail> &emails, int total);
+    void refreshUnreadCounts();
     void onFolderSelected(const QModelIndex &index);
     void onMessageDoubleClicked(const QModelIndex &index);
     void onMessageSelected(const QModelIndex &index);
     void onNewMessage();
     void onReply();
     void onDelete();
+    void onMarkUnread();
+    void showMessageContextMenu(const QPoint &pos);
     void onRefresh();
     void runSearch();
 
@@ -66,6 +76,7 @@ private:
     QLabel *_statusLabel = nullptr;
     QLineEdit *_searchEdit = nullptr;
     QTimer _searchTimer;
+    QTimer _autoRefreshTimer; //!< periodic re-query of the current folder while visible
     QPushButton *_newMsgBtn = nullptr;
     QPushButton *_replyBtn = nullptr;
     QPushButton *_deleteBtn = nullptr;
@@ -84,6 +95,10 @@ private:
 
     QString _selectedEmailId;
     QString _currentMailboxId;
+    QString _inboxMailboxId;
+    bool _restoringSelection = false; //!< suppresses re-fetch while auto-refresh restores the selection
+    QPointer<MailComposer> _activeComposer; //!< composer awaiting its send result
+    bool _folderReselect = false; //!< suppresses onFolderSelected during folder-tree refresh
 };
 
 } // namespace OCC

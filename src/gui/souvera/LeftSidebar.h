@@ -24,20 +24,29 @@ public:
     void addItem(const QString &iconName, const QString &label);
     void setCurrentIndex(int index);
     [[nodiscard]] int currentIndex() const { return _currentIndex; }
+    /** Shows a small unread counter on the button's icon; hidden when count is 0. */
+    void setBadge(int index, int count);
 
 signals:
     void currentChanged(int index);
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     void setupAvatar();
     void setupThemeToggle();
     void updateThemeToggleIcon();
     void applyIconTints();
+    void refreshBadgeStyles();
+    void positionBadge(int index);
 
     struct SidebarButton {
         QPushButton *button = nullptr;
         QLabel *icon = nullptr;
         QLabel *text = nullptr;
+        QLabel *badge = nullptr; //!< unread overlay, created lazily by setBadge()
+        int badgeCount = 0;      //!< last count set on badge, drives theme restyle
         QString iconName;
     };
 

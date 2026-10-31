@@ -112,6 +112,7 @@ void MailBodyView::setMailBody(const QString &html, bool allowRemote)
 
     _rawHtml = html;
     _remoteLoaded = allowRemote;
+    _remoteLoadInProgress = false;
     render(html, allowRemote);
 }
 
@@ -280,11 +281,16 @@ void MailBodyView::render(const QString &html, bool allowRemote)
         const auto count = (blocked == 1)
             ? QStringLiteral("<b>1 externes Element</b> blockiert")
             : QStringLiteral("<b>%1 externe Elemente</b> blockiert").arg(blocked);
+        // While the fetches run, the trigger is plain text — repeated clicks
+        // must not restart the load.
+        const auto action = _remoteLoadInProgress
+            ? QStringLiteral("Lade externe Inhalte\u2026")
+            : QStringLiteral("<a href='souvera-loadremote:1' style='color:%1;'>Inhalte laden</a>").arg(accent);
         banner = QStringLiteral(
             "<div style='background:%1; color:%2; border:1px solid %3;"
             " border-radius:8px; padding:8px 12px; margin-bottom:10px; font-size:12px;'>"
-            "\U0001F512 %4 \u2014 <a href='souvera-loadremote:1' style='color:%5;'>Inhalte laden</a></div>")
-            .arg(bannerBg, ink, bannerBorder, count, accent);
+            "\U0001F512 %4 \u2014 %5</div>")
+            .arg(bannerBg, ink, bannerBorder, count, action);
     }
 
     const auto wrapped = QStringLiteral(
@@ -307,7 +313,7 @@ void MailBodyView::onAnchorClicked(const QUrl &url)
 
 void MailBodyView::loadRemoteImages(const QString &html)
 {
-    if (_remoteLoaded) {
+    if (_remoteLoaded || _remoteLoadInProgress) {
         return;
     }
     if (!_nam) {
@@ -322,6 +328,7 @@ void MailBodyView::loadRemoteImages(const QString &html)
         return;
     }
 
+    _remoteLoadInProgress = true;
     const auto generation = _generation;
     _pendingImages = urls.size();
     for (const auto &imageUrl : urls) {

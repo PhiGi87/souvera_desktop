@@ -32,8 +32,11 @@ DeckOcsApi::DeckOcsApi(QObject *parent)
 void DeckOcsApi::setAccountState(AccountState *state)
 {
     _accountState = state;
-    // Invalidate all in-flight stacks fetches of the previous account.
-    ++_stacksFetchGeneration;
+    // Invalidate all in-flight stacks fetches of the previous account: every
+    // per-board generation moves out of reach of any old response.
+    for (auto &generation : _stacksFetchGeneration) {
+        ++generation;
+    }
 }
 
 QString DeckOcsApi::apiUrl(const QString &path) const
@@ -67,26 +70,30 @@ void DeckOcsApi::fetchStacks(int boardId)
     const auto url = apiUrl(QStringLiteral("/boards/%1/stacks").arg(boardId));
     if (url.isEmpty()) return;
 
-    // Monotonic generation: a slow, stale response from an earlier fetch must
-    // never overwrite the state of a newer one (cards "flip back" otherwise).
-    const auto generation = ++_stacksFetchGeneration;
+    // Monotonic generation PER BOARD: a slow, stale response from an earlier
+    // fetch must never overwrite the state of a newer one (cards "flip back"
+    // otherwise). Background fetches of other boards must not invalidate the
+    // open board's in-flight response, hence the board-keyed counter.
+    const auto generation = ++_stacksFetchGeneration[boardId];
 
     OcsDavClient::jsonRequest(_accountState, "GET", QUrl(url), {},
         [this, boardId, generation](const QJsonDocument &doc, int) {
-            if (generation != _stacksFetchGeneration) {
-                qCInfo(lcDeckOcsApi) << "Dropping stale stacks response (gen"
-                                     << generation << "!=" << _stacksFetchGeneration << ")";
+            if (generation != _stacksFetchGeneration.value(boardId)) {
+                qCInfo(lcDeckOcsApi) << "Dropping stale stacks response for board" << boardId
+                                     << "(gen" << generation
+                                     << "!=" << _stacksFetchGeneration.value(boardId) << ")";
                 return;
             }
             if (!doc.isArray() || doc.array().isEmpty()) {
                 qCWarning(lcDeckOcsApi) << "Boards response is not a non-empty array; head:"
                                         << QString::fromUtf8(doc.toJson(QJsonDocument::Compact).left(200));
             }
-            emit stacksReceived(doc.array());
+            emit stacksReceived(boardId, doc.array());
         },
-        [this, generation](int status, const QString &message) {
-            if (generation != _stacksFetchGeneration) return;
+        [this, boardId, generation](int status, const QString &message) {
+            if (generation != _stacksFetchGeneration.value(boardId)) return;
             qCWarning(lcDeckOcsApi) << "fetchStacks failed:" << status << message;
+            emit stacksFetchFailed(boardId);
             emit apiError(message);
         });
 }

@@ -38,8 +38,12 @@ public:
     void setTotal(int total) { _total = total; }
     int total() const { return _total; }
 
+    /** True when the model holds the same ids, read/flag states and subjects. */
+    [[nodiscard]] bool matches(const QList<JmapEmail> &emails) const;
+
     QString emailIdForRow(int row) const;
-    void markRead(int row);
+    [[nodiscard]] int rowForEmailId(const QString &emailId) const;
+    void setRead(int row, bool read);
 
 private:
     QList<JmapEmail> _emails;

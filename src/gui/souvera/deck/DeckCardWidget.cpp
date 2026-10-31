@@ -4,22 +4,27 @@
  */
 
 #include "DeckCardWidget.h"
+#include "DeckModels.h"
 #include "theme/SouveraMetrics.h"
 #include "theme/SouveraTheme.h"
 
 #include <QContextMenuEvent>
-#include <QJsonArray>
 #include <QDate>
 #include <QDateTime>
 #include <QDrag>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLocale>
 #include <QMenu>
 #include <QEnterEvent>
 #include <QToolButton>
 #include <QMetaType>
 #include <QMouseEvent>
 #include <QMimeData>
+#include <QResizeEvent>
+#include <QTextLayout>
+#include <QTextOption>
 #include <QVBoxLayout>
 
 namespace OCC {
@@ -28,6 +33,83 @@ namespace Metrics = Sou::Metrics;
 
 namespace {
 constexpr auto DeckCardMimeType = "application/x-souvera-deck-card";
+
+constexpr int TitlePixelSize = 13;
+constexpr int BodyPixelSize = 11; //!< meta row, due chip, counters and snippet
+constexpr int AvatarPixelSize = 10;
+constexpr int AvatarSize = 18; //!< circle diameter, matches the 9px radius
+constexpr int AvatarOverlap = 6; //!< neighbouring avatars overlap by this much
+constexpr qsizetype MaxVisibleAvatars = 3;
+constexpr int MaxDescriptionLines = 2;
+
+// The 1px QSS card border plus a small safety gap so elided text can never
+// wrap back into an additional line inside the label.
+constexpr int ElideWidthSlack = 4;
+
+// Leading letters of the first two words of the name, uppercased.
+QString avatarInitials(const QString &name)
+{
+    const auto words = name.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    QString initials;
+    if (!words.isEmpty()) {
+        initials += words.first().left(1);
+    }
+    if (words.size() > 1) {
+        initials += words.at(1).left(1);
+    }
+    return initials.toUpper();
+}
+
+// "Heute"/"Morgen" for those days, otherwise a short localized date.
+QString dueChipText(const QDate &dueDate)
+{
+    const auto today = QDate::currentDate();
+    if (dueDate == today) {
+        return QStringLiteral("Heute");
+    }
+    if (dueDate == today.addDays(1)) {
+        return QStringLiteral("Morgen");
+    }
+    return QLocale().toString(dueDate, QStringLiteral("d. MMM"));
+}
+
+// Word-wraps the text and returns it unchanged while it fits into two lines;
+// otherwise the second line is shortened until it ends with an ellipsis.
+QString elidedTwoLines(const QString &text, const QFont &font, const QFontMetrics &fm, int width)
+{
+    if (width <= 0) {
+        return text;
+    }
+
+    QTextLayout layout(text, font);
+    QTextOption option;
+    option.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+    layout.setTextOption(option);
+
+    QVector<int> lineStarts;
+    layout.beginLayout();
+    while (lineStarts.size() <= MaxDescriptionLines) {
+        auto line = layout.createLine();
+        if (!line.isValid()) {
+            break;
+        }
+        line.setLineWidth(width);
+        lineStarts.append(line.textStart());
+    }
+    layout.endLayout();
+
+    if (lineStarts.size() <= MaxDescriptionLines) {
+        return text;
+    }
+
+    const auto firstLine = text.mid(lineStarts.at(0), lineStarts.at(1) - lineStarts.at(0));
+    auto lastLine = text.mid(lineStarts.at(1), lineStarts.at(2) - lineStarts.at(1));
+    while (!lastLine.isEmpty()
+           && fm.horizontalAdvance(lastLine + QStringLiteral("\u2026")) > width) {
+        lastLine.chop(1);
+    }
+    return firstLine + lastLine.trimmed() + QStringLiteral("\u2026");
+}
 }
 
 DeckCardWidget::DeckCardWidget(const QJsonObject &cardData, int stackId, QWidget *parent)
@@ -42,6 +124,10 @@ DeckCardWidget::DeckCardWidget(const QJsonObject &cardData, int stackId, QWidget
     layout->setContentsMargins(Metrics::SpacingM, Metrics::SpacingS, Metrics::SpacingM, Metrics::SpacingS);
     layout->setSpacing(Metrics::SpacingS);
 
+    _titleLabel = new QLabel(this);
+    _titleLabel->setWordWrap(false);
+    layout->addWidget(_titleLabel);
+
     _labelsContainer = new QWidget(this);
     _labelsLayout = new QHBoxLayout(_labelsContainer);
     _labelsLayout->setContentsMargins(0, 0, 0, 0);
@@ -50,22 +136,10 @@ DeckCardWidget::DeckCardWidget(const QJsonObject &cardData, int stackId, QWidget
     _labelsContainer->setVisible(false);
     layout->addWidget(_labelsContainer);
 
-    _titleLabel = new QLabel(this);
-    _titleLabel->setWordWrap(true);
-    layout->addWidget(_titleLabel);
-
-    const auto description = cardData.value(QStringLiteral("description")).toString();
-    if (!description.isEmpty()) {
-        _descriptionLabel = new QLabel(this);
-        _descriptionLabel->setWordWrap(true);
-        layout->addWidget(_descriptionLabel);
-    }
-
     _metaContainer = new QWidget(this);
     _metaLayout = new QHBoxLayout(_metaContainer);
     _metaLayout->setContentsMargins(0, 0, 0, 0);
     _metaLayout->setSpacing(Metrics::SpacingS);
-    _metaLayout->setAlignment(Qt::AlignLeft);
     layout->addWidget(_metaContainer);
 
     // Round done toggle at the card bottom-left (rendered in renderMeta).
@@ -96,8 +170,8 @@ DeckCardWidget::DeckCardWidget(const QJsonObject &cardData, int stackId, QWidget
         "QToolButton { border: none; border-radius: 6px; background: transparent; font-size: 11px; }"
         "QToolButton:hover { background: rgba(128,128,128,50); }"));
 
+    setDescription(cardData.value(QStringLiteral("description")).toString());
     setTitle(cardData.value(QStringLiteral("title")).toString());
-    setDescription(description);
     renderLabels();
     renderMeta();
 
@@ -112,23 +186,37 @@ void DeckCardWidget::setTitle(const QString &title)
     // "Done" is expressed via strikethrough + dimmed colors — a
     // QGraphicsOpacityEffect would force offscreen rendering and blur text.
     const auto isDone = _cardData.value(QStringLiteral("done")).toBool();
-    _titleLabel->setText(title);
+    _titleFull = title;
     QFont f = _titleLabel->font();
     f.setStrikeOut(isDone);
     _titleLabel->setFont(f);
+    updateElides();
 }
 
 void DeckCardWidget::setDescription(const QString &description)
 {
-    if (_descriptionLabel) {
-        // Qt wraps at spaces only — long slash-joined tokens (paths like
-        // "Kommune/Position/Stadtentwässerung") would overflow and get cut
-        // mid-glyph. Zero-width break opportunities make them wrap cleanly.
-        QString display = description;
-        display.replace(QLatin1Char('/'), QStringLiteral("/\u200B"));
-        _descriptionLabel->setText(display);
-        _descriptionLabel->setVisible(!description.isEmpty());
+    // Qt wraps at spaces only — long slash-joined tokens (paths like
+    // "Kommune/Position/Stadtentwässerung") would overflow and get cut
+    // mid-glyph. Zero-width break opportunities make them wrap cleanly.
+    _descriptionFull = description;
+    _descriptionFull.replace(QLatin1Char('/'), QStringLiteral("/\u200B"));
+    if (_descriptionFull.isEmpty()) {
+        if (_descriptionLabel) {
+            _descriptionLabel->setText(QString());
+            _descriptionLabel->hide();
+        }
+        return;
     }
+    if (!_descriptionLabel) {
+        _descriptionLabel = new QLabel(this);
+        _descriptionLabel->setWordWrap(true);
+        // The snippet sits between title and label chips row.
+        if (auto *box = qobject_cast<QVBoxLayout *>(layout())) {
+            box->insertWidget(1, _descriptionLabel);
+        }
+    }
+    _descriptionLabel->show();
+    updateElides();
 }
 
 void DeckCardWidget::updateFrom(const QJsonObject &cardData)
@@ -139,6 +227,7 @@ void DeckCardWidget::updateFrom(const QJsonObject &cardData)
     setDescription(cardData.value(QStringLiteral("description")).toString());
     renderLabels();
     renderMeta();
+    applyTheme();
 }
 
 void DeckCardWidget::renderLabels()
@@ -150,37 +239,40 @@ void DeckCardWidget::renderLabels()
         delete item;
     }
 
-    const auto labels = _cardData.value(QStringLiteral("labels")).toArray();
-    for (const auto &labelVal : labels) {
-        const auto labelObj = labelVal.toObject();
-        const auto color = QColor(labelObj.value(QStringLiteral("color")).toString());
-        if (!color.isValid()) continue;
+    const auto card = DeckCard::fromJson(_cardData);
+    for (const auto &label : card.labels) {
+        if (!label.color.isValid()) continue;
 
-        auto *chip = new QLabel(labelObj.value(QStringLiteral("title")).toString(), _labelsContainer);
+        auto *chip = new QLabel(label.title, _labelsContainer);
         // Dark text on bright label colors, light text on dark ones.
-        const auto isBright = color.lightness() > 140;
+        const auto isBright = label.color.lightness() > 140;
         chip->setStyleSheet(QStringLiteral(
             "background-color: %1; color: %2; border-radius: 4px;"
             "font-size: 10px; font-weight: bold; padding: 1px 6px;")
-            .arg(color.name(),
+            .arg(label.color.name(),
                  isBright ? QStringLiteral("#1c2430") : QStringLiteral("#ffffff")));
-        chip->setVisible(!chip->text().isEmpty() || true);
         _labelsLayout->addWidget(chip);
     }
-    _labelsContainer->setVisible(!labels.isEmpty());
+    _labelsContainer->setVisible(!card.labels.isEmpty());
 }
 
 void DeckCardWidget::renderMeta()
 {
     while (auto *item = _metaLayout->takeAt(0)) {
-        if (auto *w = item->widget()) {
+        // The done toggle persists across rebuilds, everything else is recreated.
+        if (auto *w = item->widget(); w && w != _doneCircle) {
             w->deleteLater();
         }
         delete item;
     }
     _dueLabel = nullptr;
+    _attachLabel = nullptr;
+    _commentLabel = nullptr;
+    _avatarContainer = nullptr;
 
-    // Round done toggle
+    const auto card = DeckCard::fromJson(_cardData);
+
+    // Round done toggle — click emits doneToggleRequested with the flipped state.
     if (!_doneCircle) {
         _doneCircle = new QWidget(_metaContainer);
         auto *doneLayout = new QHBoxLayout(_doneCircle);
@@ -195,86 +287,147 @@ void DeckCardWidget::renderMeta()
         _doneCircle->setProperty("doneButton", QVariant::fromValue<QToolButton *>(doneBtn));
     }
     if (auto *doneBtn = _doneCircle->property("doneButton").value<QToolButton *>()) {
-        const auto isDone = _cardData.value(QStringLiteral("done")).toBool();
-        doneBtn->setText(isDone ? QStringLiteral("\u2713") : QString());
-        doneBtn->setStyleSheet(QStringLiteral(
-            "QToolButton { border: 2px solid %1; border-radius: 9px; background: %2;"
-            "  color: #ffffff; font-weight: bold; font-size: 11px; }")
-            .arg(SouveraTheme::instance()->color(SouveraTheme::Color::Border).name(),
-                 isDone ? SouveraTheme::instance()->color(SouveraTheme::Color::Success).name()
-                        : QStringLiteral("transparent")));
+        doneBtn->setText(card.done ? QStringLiteral("\u2713") : QString());
     }
     _metaLayout->addWidget(_doneCircle);
 
-    // Due date badge — red when overdue, muted otherwise. The Deck API has
-    // shipped both an ISO date string and an object with a timestamp.
-    QDateTime due;
-    const auto dueVal = _cardData.value(QStringLiteral("duedate"));
-    if (dueVal.isObject()) {
-        const auto dueMs = static_cast<qint64>(dueVal.toObject().value(QStringLiteral("timestamp")).toDouble());
-        if (dueMs > 0) due = QDateTime::fromMSecsSinceEpoch(dueMs * 1000);
-    } else if (dueVal.isString() && !dueVal.toString().isEmpty()) {
-        due = QDateTime::fromString(dueVal.toString(), Qt::ISODate);
-    }
-    if (due.isValid()) {
-        const auto overdue = due < QDateTime::currentDateTime();
-        _dueLabel = new QLabel(QStringLiteral("\u23F0 ") + due.toString(QStringLiteral("dd.MM. HH:mm")),
-                               _metaContainer);
-        _dueLabel->setStyleSheet(QStringLiteral(
-            "font-size: 10px; font-weight: bold; color: %1; padding: 1px 6px;"
-            "background-color: %2; border-radius: 4px;")
-            .arg(overdue ? QStringLiteral("#fecaca") : SouveraTheme::instance()->color(SouveraTheme::Color::TextMuted).name(),
-                 overdue ? QStringLiteral("#b91c1c") : "rgba(128,128,128,40)"));
+    // Due pill — colored by styleMeta (overdue / due today / future).
+    _dueDate = card.dueDate;
+    if (_dueDate.isValid()) {
+        _dueLabel = new QLabel(dueChipText(_dueDate.date()), _metaContainer);
+        _dueLabel->setToolTip(QLocale().toString(_dueDate, QLocale::ShortFormat));
         _metaLayout->addWidget(_dueLabel);
     }
 
-    const auto description = _cardData.value(QStringLiteral("description")).toString();
-    if (!description.isEmpty()) {
-        auto *descIcon = new QLabel(QStringLiteral("\u2261"), _metaContainer);
-        descIcon->setStyleSheet(QStringLiteral(
-            "font-size: 12px; color: rgba(128,128,128,160); background: transparent;"));
-        _metaLayout->addWidget(descIcon);
+    // Assignee initials, overlapping, capped with a "+N" overflow circle.
+    if (!card.assignees.isEmpty()) {
+        _avatarContainer = new QWidget(_metaContainer);
+        auto *avatarLayout = new QHBoxLayout(_avatarContainer);
+        avatarLayout->setContentsMargins(0, 0, 0, 0);
+        avatarLayout->setSpacing(-AvatarOverlap);
+        const auto visibleCount = qMin(MaxVisibleAvatars, card.assignees.size());
+        for (qsizetype i = 0; i < visibleCount; ++i) {
+            const auto &user = card.assignees.at(i);
+            const auto name = user.displayName.isEmpty() ? user.uid : user.displayName;
+            auto *avatar = new QLabel(avatarInitials(name), _avatarContainer);
+            avatar->setFixedSize(AvatarSize, AvatarSize);
+            avatar->setAlignment(Qt::AlignCenter);
+            avatar->setToolTip(name);
+            avatarLayout->addWidget(avatar);
+        }
+        if (card.assignees.size() > MaxVisibleAvatars) {
+            auto *more = new QLabel(
+                QStringLiteral("+%1").arg(card.assignees.size() - MaxVisibleAvatars),
+                _avatarContainer);
+            more->setFixedSize(AvatarSize, AvatarSize);
+            more->setAlignment(Qt::AlignCenter);
+            more->setProperty("moreAvatar", true);
+            avatarLayout->addWidget(more);
+        }
+        _metaLayout->addWidget(_avatarContainer);
     }
 
-    // Attachment + comment counters
-    const auto attachmentCount = _cardData.value(QStringLiteral("attachmentCount")).toInt(
-        _cardData.value(QStringLiteral("attachments")).toArray().size());
+    _metaLayout->addStretch(1);
+
+    // The list endpoints ship an empty attachments array plus a count field
+    // (both "attachmentcount" and "attachmentCount" occur), so take the max.
+    const auto jsonAttachmentCount = _cardData.value(QStringLiteral("attachmentcount"))
+                                         .toInt(_cardData.value(QStringLiteral("attachmentCount")).toInt(0));
+    const auto attachmentCount = qMax<qsizetype>(card.attachments.count(), jsonAttachmentCount);
     if (attachmentCount > 0) {
-        auto *attachIcon = new QLabel(QStringLiteral("\U0001F4CE ") + QString::number(attachmentCount),
-                                      _metaContainer);
-        attachIcon->setStyleSheet(QStringLiteral(
-            "font-size: 11px; color: rgba(128,128,128,180); background: transparent;"));
-        _metaLayout->addWidget(attachIcon);
+        _attachLabel = new QLabel(QStringLiteral("\U0001F4CE ") + QString::number(attachmentCount),
+                                  _metaContainer);
+        _metaLayout->addWidget(_attachLabel);
     }
-    const auto commentCount = _cardData.value(QStringLiteral("commentsUnread")).toInt(0);
-    if (commentCount > 0) {
-        auto *commentIcon = new QLabel(QStringLiteral("\U0001F4AC ") + QString::number(commentCount),
-                                       _metaContainer);
-        commentIcon->setStyleSheet(QStringLiteral(
-            "font-size: 11px; color: rgba(128,128,128,180); background: transparent;"));
-        _metaLayout->addWidget(commentIcon);
+    if (card.commentCount > 0) {
+        _commentLabel = new QLabel(QStringLiteral("\U0001F4AC ") + QString::number(card.commentCount),
+                                   _metaContainer);
+        _metaLayout->addWidget(_commentLabel);
+    }
+}
+
+void DeckCardWidget::styleMeta()
+{
+    const auto *theme = SouveraTheme::instance();
+
+    if (_doneCircle) {
+        if (auto *doneBtn = _doneCircle->property("doneButton").value<QToolButton *>()) {
+            const auto isDone = _cardData.value(QStringLiteral("done")).toBool();
+            doneBtn->setStyleSheet(QStringLiteral(
+                "QToolButton { border: 2px solid %1; border-radius: 9px; background: %2;"
+                "  color: #ffffff; font-weight: bold; font-size: %3px; }")
+                .arg(theme->color(SouveraTheme::Color::Border).name(),
+                     isDone ? theme->color(SouveraTheme::Color::Success).name()
+                            : QStringLiteral("transparent"),
+                     QString::number(BodyPixelSize)));
+        }
     }
 
-    // Assignee initial avatars
-    const auto assignees = _cardData.value(QStringLiteral("assignedUsers")).toArray();
-    for (const auto &assigneeVal : assignees) {
-        const auto participant = assigneeVal.toObject().value(QStringLiteral("participant")).toObject();
-        const auto displayName = participant.value(QStringLiteral("displayName")).toString();
-        const auto uid = participant.value(QStringLiteral("primaryKey")).toString(
-            participant.value(QStringLiteral("uid")).toString());
-        const auto initial = (displayName.isEmpty() ? uid : displayName).left(1).toUpper();
-        auto *avatar = new QLabel(initial, _metaContainer);
-        avatar->setFixedSize(18, 18);
-        avatar->setAlignment(Qt::AlignCenter);
-        const auto hue = qHash(uid.isEmpty() ? displayName : uid) % 360;
-        avatar->setStyleSheet(QStringLiteral(
-            "background-color: %1; color: #ffffff; border-radius: 9px;"
-            "font-size: 10px; font-weight: bold;")
-            .arg(QColor::fromHsl(hue, 120, 110).name()));
-        avatar->setToolTip(displayName);
-        _metaLayout->addWidget(avatar);
+    if (_dueLabel) {
+        // Overdue wins over "due today": a card due earlier today is overdue.
+        const auto isDone = _cardData.value(QStringLiteral("done")).toBool();
+        const auto overdue = !isDone && _dueDate < QDateTime::currentDateTime();
+        const auto dueToday = _dueDate.date() == QDate::currentDate();
+        const auto background = overdue ? theme->color(SouveraTheme::Color::Danger)
+                             : dueToday ? theme->color(SouveraTheme::Color::Warning)
+                                        : theme->color(SouveraTheme::Color::Surface);
+        const auto foreground = overdue ? QStringLiteral("#ffffff")
+                              : dueToday ? QStringLiteral("#1f2937")
+                                         : theme->color(SouveraTheme::Color::TextSecondary).name();
+        _dueLabel->setStyleSheet(QStringLiteral(
+            "font-size: %3px; font-weight: 600; color: %1; background-color: %2;"
+            "border-radius: 999px; padding: 1px 8px;")
+            .arg(foreground, background.name(), QString::number(BodyPixelSize)));
     }
-    _metaContainer->setVisible(_metaLayout->count() > 0);
+
+    if (_avatarContainer) {
+        const auto makeAvatarStyle = [&theme](const QColor &textColor) {
+            return QStringLiteral(
+                       "background-color: %1; color: %2; border: 1px solid %3; border-radius: 9px;"
+                       "font-size: %4px; font-weight: bold;")
+                .arg(theme->color(SouveraTheme::Color::Surface).name(),
+                     textColor.name(),
+                     theme->color(SouveraTheme::Color::BorderStrong).name(),
+                     QString::number(AvatarPixelSize));
+        };
+        const auto primaryStyle = makeAvatarStyle(theme->color(SouveraTheme::Color::TextPrimary));
+        const auto mutedStyle = makeAvatarStyle(theme->color(SouveraTheme::Color::TextSecondary));
+        for (auto *avatar : _avatarContainer->findChildren<QLabel *>()) {
+            avatar->setStyleSheet(avatar->property("moreAvatar").toBool() ? mutedStyle : primaryStyle);
+        }
+    }
+
+    const auto counterStyle = QStringLiteral(
+        "font-size: %1px; color: %2; background: transparent;")
+        .arg(QString::number(BodyPixelSize),
+             theme->color(SouveraTheme::Color::TextMuted).name());
+    if (_attachLabel) {
+        _attachLabel->setStyleSheet(counterStyle);
+    }
+    if (_commentLabel) {
+        _commentLabel->setStyleSheet(counterStyle);
+    }
+}
+
+void DeckCardWidget::updateElides()
+{
+    const auto available = qMax(0, width() - 2 * Metrics::SpacingM - ElideWidthSlack);
+
+    auto titleFont = _titleLabel->font();
+    titleFont.setPixelSize(TitlePixelSize);
+    titleFont.setWeight(QFont::DemiBold);
+    const QFontMetrics titleMetrics(titleFont);
+    _titleLabel->setText(available > 0
+            ? titleMetrics.elidedText(_titleFull, Qt::ElideRight, available)
+            : _titleFull);
+
+    if (_descriptionLabel && !_descriptionFull.isEmpty()) {
+        auto descriptionFont = _descriptionLabel->font();
+        descriptionFont.setPixelSize(BodyPixelSize);
+        const QFontMetrics descriptionMetrics(descriptionFont);
+        _descriptionLabel->setText(
+            elidedTwoLines(_descriptionFull, descriptionFont, descriptionMetrics, available));
+    }
 }
 
 void DeckCardWidget::applyTheme()
@@ -290,13 +443,16 @@ void DeckCardWidget::applyTheme()
              QString::number(Metrics::CardRadius)));
 
     _titleLabel->setStyleSheet(QStringLiteral(
-        "font-weight: 600; font-size: 13px; color: %1; background: transparent;")
-        .arg(theme->color(SouveraTheme::Color::TextPrimary).name()));
+        "font-weight: 600; font-size: %2px; color: %1; background: transparent;")
+        .arg(theme->color(SouveraTheme::Color::TextPrimary).name(),
+             QString::number(TitlePixelSize)));
     if (_descriptionLabel) {
         _descriptionLabel->setStyleSheet(QStringLiteral(
-            "font-size: 11px; color: %1; background: transparent;")
-            .arg(theme->color(SouveraTheme::Color::TextSecondary).name()));
+            "font-size: %2px; color: %1; background: transparent;")
+            .arg(theme->color(SouveraTheme::Color::TextSecondary).name(),
+                 QString::number(BodyPixelSize)));
     }
+    styleMeta();
 }
 
 void DeckCardWidget::mousePressEvent(QMouseEvent *event)
@@ -356,6 +512,12 @@ void DeckCardWidget::leaveEvent(QEvent *event)
 {
     if (_hoverActions) _hoverActions->hide();
     QFrame::leaveEvent(event);
+}
+
+void DeckCardWidget::resizeEvent(QResizeEvent *event)
+{
+    QFrame::resizeEvent(event);
+    updateElides();
 }
 
 void DeckCardWidget::contextMenuEvent(QContextMenuEvent *event)

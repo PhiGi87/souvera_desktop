@@ -37,6 +37,9 @@ public:
     /** Stops all polling timers — used during application shutdown. */
     void stop();
 
+    /** Runs one mail poll immediately (new-mail check + unread count). */
+    void refreshMail();
+
     static bool notificationsEnabled();
     static void setNotificationsEnabled(bool enabled);
     static bool mailNotificationsEnabled();
@@ -47,6 +50,8 @@ signals:
     void incomingCall(const QString &roomToken, const QString &callerName);
     /** The call for roomToken was cancelled or answered elsewhere. */
     void incomingCallGone(const QString &roomToken);
+    /** Unread mail count of the inbox, updated on every mail poll. */
+    void unreadMailCountChanged(int count);
 
 private slots:
     void pollNextcloud();

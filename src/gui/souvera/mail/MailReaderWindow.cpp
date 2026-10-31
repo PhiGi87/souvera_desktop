@@ -203,9 +203,10 @@ void MailReaderWindow::onReply()
     auto *composer = new MailComposer(this);
     composer->setTo(_email.fromAddress);
     composer->setSubject(QStringLiteral("Re: %1").arg(_email.subject));
+    const auto composerGuard = QPointer<MailComposer>(composer);
     connect(composer, &MailComposer::sendRequested, this,
-            [this](const QString &to, const QString &cc, const QString &bcc,
-                   const QString &subject, const QString &body) {
+            [this, composerGuard](const QString &to, const QString &cc, const QString &bcc,
+                    const QString &subject, const QString &body) {
         const auto mailPassword = MailLoginFlow::cachedPassword(_accountState);
         if (_accountState && !mailPassword.isEmpty()) {
             auto *sender = new JmapClient(_accountState, this);
@@ -218,14 +219,23 @@ void MailReaderWindow::onReply()
             // Send failures were previously invisible; also release the
             // client once its single send is done.
             connect(sender, &JmapClient::emailSent, sender,
-                    [this, sender](bool success, const QString &error) {
+                    [this, composerGuard, sender](bool success, const QString &error) {
                 if (!success) {
                     QMessageBox::warning(this, QStringLiteral("Senden fehlgeschlagen"),
                         QStringLiteral("Die Antwort konnte nicht gesendet werden:\n%1").arg(error));
                 }
+                if (composerGuard) {
+                    if (success) {
+                        composerGuard->sendSucceeded();
+                    } else {
+                        composerGuard->sendFailed(error);
+                    }
+                }
                 sender->deleteLater();
             });
             sender->resolveSession();
+        } else if (composerGuard) {
+            composerGuard->sendFailed(QStringLiteral("Keine Mail-Anmeldedaten."));
         }
     });
     composer->setAttribute(Qt::WA_DeleteOnClose);
@@ -242,9 +252,10 @@ void MailReaderWindow::onForward()
         .arg(_email.fromAddress,
              _email.receivedAt.toString(QStringLiteral("dd.MM.yyyy HH:mm")),
              _email.subject, _body.plainBody));
+    const auto composerGuard = QPointer<MailComposer>(composer);
     connect(composer, &MailComposer::sendRequested, this,
-            [this](const QString &to, const QString &cc, const QString &bcc,
-                   const QString &subject, const QString &body) {
+            [this, composerGuard](const QString &to, const QString &cc, const QString &bcc,
+                    const QString &subject, const QString &body) {
         const auto mailPassword = MailLoginFlow::cachedPassword(_accountState);
         if (_accountState && !mailPassword.isEmpty()) {
             auto *sender = new JmapClient(_accountState, this);
@@ -253,7 +264,26 @@ void MailReaderWindow::onForward()
                     [sender, to, cc, bcc, subject, body](const QString &, const QString &) {
                 sender->sendEmail(to, cc, bcc, subject, body, QString());
             });
+            // Release the client after its single send and surface errors —
+            // previously the forward client leaked until the window closed.
+            connect(sender, &JmapClient::emailSent, sender,
+                    [this, composerGuard, sender](bool success, const QString &error) {
+                if (!success) {
+                    QMessageBox::warning(this, QStringLiteral("Senden fehlgeschlagen"),
+                        QStringLiteral("Die Weiterleitung konnte nicht gesendet werden:\n%1").arg(error));
+                }
+                if (composerGuard) {
+                    if (success) {
+                        composerGuard->sendSucceeded();
+                    } else {
+                        composerGuard->sendFailed(error);
+                    }
+                }
+                sender->deleteLater();
+            });
             sender->resolveSession();
+        } else if (composerGuard) {
+            composerGuard->sendFailed(QStringLiteral("Keine Mail-Anmeldedaten."));
         }
     });
     composer->setAttribute(Qt::WA_DeleteOnClose);

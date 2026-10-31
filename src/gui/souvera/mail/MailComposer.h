@@ -31,6 +31,11 @@ public:
     void setSubject(const QString &subject);
     void setBody(const QString &body);
 
+    /** The send succeeded: closes the dialog (accept). */
+    void sendSucceeded();
+    /** The send failed: re-enables the dialog with the draft intact. */
+    void sendFailed(const QString &error);
+
 signals:
     void sendRequested(const QString &to, const QString &cc,
                        const QString &bcc, const QString &subject,
@@ -39,6 +44,7 @@ signals:
 private:
     void setupUi();
     void onSendClicked();
+    void setSendInProgress(bool inProgress);
 
     QLineEdit *_toEdit = nullptr;
     QLineEdit *_ccEdit = nullptr;
@@ -46,6 +52,7 @@ private:
     QLineEdit *_subjectEdit = nullptr;
     QTextEdit *_bodyEdit = nullptr;
     QPushButton *_sendButton = nullptr;
+    bool _sendInProgress = false;
 };
 
 } // namespace OCC

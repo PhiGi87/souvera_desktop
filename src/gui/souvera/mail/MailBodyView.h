@@ -51,6 +51,7 @@ private:
     QNetworkAccessManager *_nam = nullptr;
     QString _rawHtml;
     bool _remoteLoaded = false;
+    bool _remoteLoadInProgress = false; //!< blocks re-entry while image fetches run; banner becomes non-clickable
     int _generation = 0; //!< bumped on every setMailBody; stale async completions are dropped
     int _pendingImages = 0;
     QList<QNetworkReply *> _activeReplies; //!< running image fetches, aborted by the next setMailBody

@@ -51,6 +51,21 @@ QHash<int, QByteArray> JmapEmailListModel::roleNames() const
     };
 }
 
+bool JmapEmailListModel::matches(const QList<JmapEmail> &emails) const
+{
+    if (emails.size() != _emails.size()) return false;
+    for (auto row = 0; row < _emails.size(); ++row) {
+        const auto &a = _emails.at(row);
+        const auto &b = emails.at(row);
+        if (a.id != b.id || a.isRead != b.isRead || a.isFlagged != b.isFlagged
+            || a.subject != b.subject || a.receivedAt != b.receivedAt
+            || a.hasAttachments != b.hasAttachments) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void JmapEmailListModel::setEmails(const QList<JmapEmail> &emails)
 {
     beginResetModel();
@@ -76,10 +91,19 @@ QString JmapEmailListModel::emailIdForRow(int row) const
     return _emails.at(row).id;
 }
 
-void JmapEmailListModel::markRead(int row)
+int JmapEmailListModel::rowForEmailId(const QString &emailId) const
+{
+    for (auto row = 0; row < _emails.size(); ++row) {
+        if (_emails.at(row).id == emailId) return row;
+    }
+    return -1;
+}
+
+void JmapEmailListModel::setRead(int row, bool read)
 {
     if (row < 0 || row >= _emails.size()) return;
-    _emails[row].isRead = true;
+    if (_emails[row].isRead == read) return;
+    _emails[row].isRead = read;
     emit dataChanged(index(row), index(row), {IsReadRole});
 }
 

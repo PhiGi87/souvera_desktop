@@ -6,6 +6,7 @@
 #ifndef DECKCARDWIDGET_H
 #define DECKCARDWIDGET_H
 
+#include <QDateTime>
 #include <QFrame>
 #include <QJsonObject>
 
@@ -15,6 +16,7 @@ class QVBoxLayout;
 
 namespace OCC {
 
+/** A single Kanban card as rendered inside a Deck column. */
 class DeckCardWidget : public QFrame
 {
     Q_OBJECT
@@ -43,15 +45,22 @@ protected:
     void contextMenuEvent(QContextMenuEvent *event) override;
     void enterEvent(QEnterEvent *event) override;
     void leaveEvent(QEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
     void applyTheme();
+    void styleMeta();
+    void updateElides();
     void renderLabels();
     void renderMeta();
 
     QJsonObject _cardData;
     int _cardId = -1;
     int _stackId = -1;
+
+    QString _titleFull; //!< untruncated title, elided into the label on resize
+    QString _descriptionFull; //!< untruncated description, clamped to two lines
+    QDateTime _dueDate; //!< parsed card due date, invalid when the card has none
 
     QLabel *_titleLabel = nullptr;
     QLabel *_descriptionLabel = nullptr;
@@ -60,6 +69,9 @@ private:
     QWidget *_metaContainer = nullptr;
     QHBoxLayout *_metaLayout = nullptr;
     QLabel *_dueLabel = nullptr;
+    QLabel *_attachLabel = nullptr;
+    QLabel *_commentLabel = nullptr;
+    QWidget *_avatarContainer = nullptr;
     QWidget *_doneCircle = nullptr;
     QWidget *_hoverActions = nullptr;
 

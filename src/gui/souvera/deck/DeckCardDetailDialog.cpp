@@ -23,6 +23,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSet>
+#include <QShortcut>
 #include <QTextBrowser>
 #include <QToolButton>
 #include <QUrl>
@@ -276,6 +277,11 @@ void DeckCardDetailDialog::buildUi()
     buttonLayout->addWidget(cancelBtn);
     buttonLayout->addWidget(saveBtn);
     rootLayout->addWidget(buttonRow);
+
+    auto *saveShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Return")), this);
+    connect(saveShortcut, &QShortcut::activated, this, &DeckCardDetailDialog::saveAll);
+    auto *saveEnterShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Enter")), this);
+    connect(saveEnterShortcut, &QShortcut::activated, this, &DeckCardDetailDialog::saveAll);
 }
 
 void DeckCardDetailDialog::renderLabels()

@@ -69,6 +69,7 @@ private:
 
     FilesPanel *_filesPanel = nullptr;
     MailPanel *_mailPanel = nullptr;
+    int _mailTabIndex = 0; //!< sidebar/content position of the Mail panel
     TalkPanel *_talkPanel = nullptr;
     DeckPanel *_deckPanel = nullptr;
     CalendarPanel *_calendarPanel = nullptr;

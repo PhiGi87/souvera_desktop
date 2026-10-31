@@ -9,6 +9,7 @@
 #include <QObject>
 
 #include "DeckModels.h"
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
 
@@ -54,7 +55,9 @@ public:
 
 signals:
     void boardsReceived(const QJsonArray &boards);
-    void stacksReceived(const QJsonArray &stacks);
+    void stacksReceived(int boardId, const QJsonArray &stacks);
+    /** A fetchStacks() failed; lets throttled background loads free their slot. */
+    void stacksFetchFailed(int boardId);
     void cardCreated(const QJsonObject &card, int boardId, int stackId);
     void cardMoved();
     void reorderFailed();
@@ -77,7 +80,8 @@ private:
     [[nodiscard]] QString apiUrl(const QString &path) const;
 
     AccountState *_accountState = nullptr;
-    int _stacksFetchGeneration = 0;
+    /** Last issued generation per board — cross-board responses cannot interfere. */
+    QHash<int, int> _stacksFetchGeneration;
 };
 
 } // namespace OCC

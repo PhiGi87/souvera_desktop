@@ -187,6 +187,12 @@ void JmapClient::fetchMailboxes()
 {
     QJsonObject args;
     args[QLatin1String("accountId")] = _accountId;
+    // Ask for the count properties explicitly so servers that only return
+    // requested properties still deliver unreadEmails/totalEmails.
+    args[QLatin1String("properties")] = QJsonArray{
+        QLatin1String("id"), QLatin1String("name"), QLatin1String("role"),
+        QLatin1String("parentId"), QLatin1String("sortOrder"),
+        QLatin1String("totalEmails"), QLatin1String("unreadEmails")};
     jmapCall(QLatin1String("Mailbox/get"), args, [this](const QJsonObject &resp) {
         const auto data = resp.value(QLatin1String("data")).toObject();
         const auto list = data.value(QLatin1String("list")).toArray();
@@ -266,6 +272,26 @@ void JmapClient::queryEmails(const QString &mailboxId, int limit, int offset,
             }
             emit emailsFetched(emails, total, _pendingMailboxId);
         });
+    });
+}
+
+void JmapClient::queryUnreadCount(const QString &mailboxId)
+{
+    QJsonObject filter;
+    if (!mailboxId.isEmpty()) filter[QLatin1String("inMailbox")] = mailboxId;
+    filter[QLatin1String("isUnread")] = true;
+
+    QJsonObject args;
+    args[QLatin1String("accountId")] = _accountId;
+    args[QLatin1String("filter")] = filter;
+
+    // Only the "total" of the Email/query response is used; the ids list is
+    // capped by the server default limit and ignored.
+    jmapCall(QLatin1String("Email/query"), args, [this, mailboxId](const QJsonObject &resp) {
+        const auto data = resp.value(QLatin1String("data")).toObject();
+        const auto total = data.value(QLatin1String("total")).toInt(-1);
+        if (total < 0) return;
+        emit unreadCountChanged(total, mailboxId);
     });
 }
 
